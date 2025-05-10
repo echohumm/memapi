@@ -40,6 +40,7 @@ use core::{
     ptr::{self, NonNull},
 };
 
+/// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
 const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
     let (sz, align) = (size_of::<T>(), align_of::<T>());
 
@@ -77,8 +78,8 @@ pub trait Alloc: Sized {
     #[track_caller]
     #[inline]
     fn alloc_count<T>(&self, count: usize) -> Result<NonNull<T>, AllocError> {
-        let layout =
-            layout_or_sz_align::<T>(count).map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+        let layout = layout_or_sz_align::<T>(count)
+            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc(layout)
             .map(NonNull::cast)
             .map_err(|_| AllocError::AllocFailed(layout))
@@ -101,8 +102,8 @@ pub trait Alloc: Sized {
     #[track_caller]
     #[inline]
     fn alloc_count_zeroed<T>(&self, count: usize) -> Result<NonNull<T>, AllocError> {
-        let layout =
-            layout_or_sz_align::<T>(count).map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+        let layout = layout_or_sz_align::<T>(count)
+            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_zeroed(layout)
             .map(NonNull::cast)
             .map_err(|_| AllocError::AllocFailed(layout))
@@ -127,8 +128,8 @@ pub trait Alloc: Sized {
     #[track_caller]
     #[inline]
     fn alloc_count_filled<T>(&self, count: usize, n: u8) -> Result<NonNull<T>, AllocError> {
-        let layout =
-            layout_or_sz_align::<T>(count).map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+        let layout = layout_or_sz_align::<T>(count)
+            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_filled(layout, n)
             .map(NonNull::cast)
             .map_err(|_| AllocError::AllocFailed(layout))
@@ -156,9 +157,13 @@ pub trait Alloc: Sized {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[track_caller]
     #[inline]
-    fn alloc_count_patterned<T, F: Fn(usize) -> u8>(&self, count: usize, pattern: F) -> Result<NonNull<T>, AllocError> {
-        let layout =
-            layout_or_sz_align::<T>(count).map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+    fn alloc_count_patterned<T, F: Fn(usize) -> u8>(
+        &self,
+        count: usize,
+        pattern: F,
+    ) -> Result<NonNull<T>, AllocError> {
+        let layout = layout_or_sz_align::<T>(count)
+            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_patterned(layout, pattern)
             .map(NonNull::cast)
             .map_err(|_| AllocError::AllocFailed(layout))
@@ -515,6 +520,7 @@ pub(crate) mod nightly {
 }
 
 #[cfg(not(feature = "nightly"))]
+/// The fallback module for stable Rust.
 pub(crate) mod fallback {
     use super::{Alloc, AllocError};
     use alloc::alloc::{
@@ -565,8 +571,9 @@ pub(crate) mod fallback {
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum AllocError {
+    /// The layout computed with the given size and alignment is invalid.
     LayoutError(usize, usize),
-    /// Underlying allocator failed to allocate.
+    /// The underlying allocator failed to allocate using the given layout.
     AllocFailed(Layout),
     /// Attempted to grow to a smaller layout.
     GrowSmallerNewLayout(usize, usize),
@@ -595,6 +602,8 @@ impl Display for AllocError {
 
 impl Error for AllocError {}
 
+/// Internal helper to grow the allocation at `ptr` by deallocating using `old_layout` and
+/// reallocating using `new_layout`, filling new bytes using `pattern.`
 #[inline]
 #[track_caller]
 fn grow<A: Alloc, F: Fn(usize) -> u8>(
@@ -614,6 +623,8 @@ fn grow<A: Alloc, F: Fn(usize) -> u8>(
     }
 }
 
+/// Internal helper to shrink the allocation at `ptr` by deallocating using `old_layout` and
+/// reallocating using `new_layout`.
 #[inline]
 #[track_caller]
 fn shrink<A: Alloc>(
@@ -632,6 +643,13 @@ fn shrink<A: Alloc>(
     }
 }
 
+/// Internal helper to grow the allocation at `ptr` by deallocating using `old_layout` and
+/// reallocating using `new_layout`.
+///
+/// # Safety
+///
+/// This function does not check for layout validity. `new_layout.size()` should be greater than
+/// `old_layout.size()`.
 #[inline]
 #[track_caller]
 unsafe fn grow_unchecked<A: Alloc, F: Fn(usize) -> u8>(
@@ -654,6 +672,13 @@ unsafe fn grow_unchecked<A: Alloc, F: Fn(usize) -> u8>(
     Ok(new_ptr)
 }
 
+/// Internal helper to shrink the allocation at `ptr` by deallocating using `old_layout` and
+/// reallocating using `new_layout`.
+///
+/// # Safety
+///
+/// This function does not check for layout validity. `new_layout.size()` should be greater than
+/// `old_layout.size()`.
 #[inline]
 #[track_caller]
 unsafe fn shrink_unchecked<A: Alloc>(
@@ -670,9 +695,14 @@ unsafe fn shrink_unchecked<A: Alloc>(
     Ok(new_ptr)
 }
 
+/// The pattern to fill new bytes with.
 enum AllocPattern<F: Fn(usize) -> u8> {
+    /// Don't fill bytes at all.
     None,
+    /// Zero all bytes.
     Zero,
+    /// Set all bytes to a specific value.
     All(u8),
+    /// Get the value of the byte using the given predicate.
     Fn(F),
 }
