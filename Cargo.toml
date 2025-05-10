@@ -1,0 +1,13 @@
+[package]
+name = "memapi"
+version = "0.3.3"
+edition = "2024"
+description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with some error handling."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/barely-a-dev/memapi"
+keywords = ["allocator", "no_std", "memory", "allocation"]
+categories = ["no-std", "memory-management"]
+exclude = ["src/tests.rs"]
+
+[features]
+nightly = []
