@@ -15,9 +15,11 @@
 //! # use core::ptr::NonNull;
 //!
 //! let allocator = DefaultAlloc;
+//! // Make the layout for the block.
 //! let layout = Layout::from_size_align(64, 8).unwrap();
 //! // Allocate 64 bytes
 //! let ptr: NonNull<u8> = allocator.alloc(layout).expect("alloc failed");
+//! // Deallocate the block.
 //! unsafe { allocator.dealloc(ptr, layout) };
 //! ```
 
