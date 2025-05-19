@@ -14,22 +14,36 @@
 //! # use core::alloc::Layout;
 //! # use core::ptr::NonNull;
 //! let allocator = DefaultAlloc;
-//! // Make the layout for the block.
-//! let layout = Layout::from_size_align(64, 8).unwrap();
-//! // Allocate 64 bytes.
-//! let ptr: NonNull<u8> = allocator.alloc(layout).expect("alloc failed");
+//! // Allocate 4 usizes.
+//! let ptr: NonNull<usize> = allocator.alloc_count::<usize>(4).expect("alloc failed");
+//! unsafe {
+//!     for i in 0..4 {
+//!         ptr.add(i).write(17384 * i + 8923)
+//!     }
+//! }
 //! // Deallocate the block.
-//! unsafe { allocator.dealloc(ptr, layout) };
+//! unsafe { allocator.dealloc_n(ptr, 4) };
 //! ```
 
-#![no_std]
+#![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
+#![cfg_attr(feature = "alloc_ext", feature(ptr_metadata))]
 #![allow(unsafe_op_in_unsafe_fn)]
 
 extern crate alloc;
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(feature = "alloc_ext")]
+mod marker;
+#[cfg(feature = "alloc_ext")]
+mod alloc_ext;
+
+#[cfg(feature = "alloc_ext")]
+pub use marker::*;
+#[cfg(feature = "alloc_ext")]
+pub use alloc_ext::*;
 
 use core::{
     alloc::Layout,
@@ -84,23 +98,6 @@ pub trait Alloc: Sized {
             .map_err(|_| AllocError::AllocFailed(layout))
     }
 
-    /// Attempts to allocate a block of memory for `count` instances of `T`, including the layout used
-    /// in the successful return value.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
-    #[inline]
-    fn get_layout_and_alloc_count<T>(&self, count: usize) -> Result<(NonNull<T>, Layout), AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
-            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        self.alloc(layout)
-            .map(NonNull::cast)
-            .map_err(|_| AllocError::AllocFailed(layout)).map(|ptr| (ptr, layout))
-    }
-
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
     ///
     /// # Errors
@@ -123,23 +120,6 @@ pub trait Alloc: Sized {
         self.alloc_zeroed(layout)
             .map(NonNull::cast)
             .map_err(|_| AllocError::AllocFailed(layout))
-    }
-
-    /// Attempts to allocate a zeroed block of memory for `count` instances of `T`, including the 
-    /// layout used in the successful return value.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
-    #[inline]
-    fn get_layout_and_alloc_count_zeroed<T>(&self, count: usize) -> Result<(NonNull<T>, Layout), AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
-            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        self.alloc_zeroed(layout)
-            .map(NonNull::cast)
-            .map_err(|_| AllocError::AllocFailed(layout)).map(|ptr| (ptr, layout))
     }
 
     /// Attempts to allocate a block of memory fitting the given [`Layout`], filled with bytes
@@ -166,23 +146,6 @@ pub trait Alloc: Sized {
         self.alloc_filled(layout, n)
             .map(NonNull::cast)
             .map_err(|_| AllocError::AllocFailed(layout))
-    }
-
-    /// Attempts to allocate a block of memory for `count` instances of `T`, filled with bytes
-    /// initialized to `n`, including the layout used in the successful return value.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
-    #[inline]
-    fn get_layout_and_alloc_count_filled<T>(&self, count: usize, n: u8) -> Result<(NonNull<T>, Layout), AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
-            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        self.alloc_filled(layout,n )
-            .map(NonNull::cast)
-            .map_err(|_| AllocError::AllocFailed(layout)).map(|ptr| (ptr, layout))
     }
 
     /// Attempts to allocate a block of memory fitting the given [`Layout`] and
@@ -219,24 +182,6 @@ pub trait Alloc: Sized {
             .map_err(|_| AllocError::AllocFailed(layout))
     }
 
-    /// Attempts to allocate a block of memory for `count` instances of `T` and
-    /// fill it by calling `pattern(i)` for each byte index `i`, including the layout used
-    /// in the successful return value.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
-    #[inline]
-    fn get_layout_and_alloc_count_patterned<T, F: Fn(usize) -> u8>(&self, count: usize, pattern: F) -> Result<(NonNull<T>, Layout), AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
-            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        self.alloc_patterned(layout, pattern)
-            .map(NonNull::cast)
-            .map_err(|_| AllocError::AllocFailed(layout)).map(|ptr| (ptr, layout))
-    }
-
     /// Deallocates a previously allocated block.
     ///
     /// # Safety
@@ -245,6 +190,47 @@ pub trait Alloc: Sized {
     /// - `layout` must describe exactly the same block.
     #[track_caller]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout);
+
+    /// Deallocates a previously allocated block.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// - `n` must be the exact number of `T` held in that block.
+    #[track_caller]
+    #[inline]
+    unsafe fn dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
+        // Here, we assume the layout is valid as it was presumably used to allocate previously.
+        self.dealloc(ptr.cast(), Layout::from_size_align_unchecked(size_of::<T>() * n, align_of::<T>()));
+    }
+
+    /// Drops the data at a pointer and deallocates its previously allocated block.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads 
+    ///   and writes, aligned, and a valid `T`.
+    #[track_caller]
+    #[inline]
+    unsafe fn drop_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
+        ptr.drop_in_place();
+        //                             This is a bit of a hack, but for_value_raw is unstable, so...
+        self.dealloc(ptr.cast::<u8>(), Layout::for_value(&*ptr.as_ptr()));
+    }
+
+    /// Drops the data at a pointer and deallocates its previously allocated block.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads 
+    ///   and writes, aligned, and contain `n` valid `T`.
+    /// - `n` must be the exact number of `T` held in that block.
+    #[track_caller]
+    #[inline]
+    unsafe fn drop_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
+        NonNull::slice_from_raw_parts(ptr, n).drop_in_place();
+        self.dealloc_n(ptr, n);
+    }
 
     /// Grow the given block to a new, larger layout.
     ///
