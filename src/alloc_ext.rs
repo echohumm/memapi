@@ -28,7 +28,8 @@ pub trait AllocExt: Alloc {
 			Err(e) => Err(e),
 		}
 	}
-
+	
+	// FIXME: switch to CloneToUninit when stable
 	/// Allocates uninitialized memory for a single `T` and clones `data` into it.
 	///
 	/// # Errors
@@ -83,7 +84,7 @@ pub trait AllocExt: Alloc {
 	/// # Safety
 	///
 	/// - `slice_ptr` must point to a block of memory allocated using this allocator, be valid for 
-	/// reads and writes, aligned, and a valid `T`.
+	///   reads and writes, aligned, and a valid `T`.
 	#[track_caller]
 	#[inline]
 	unsafe fn drop_and_dealloc_slice<T>(&self, slice_ptr: NonNull<[T]>) {
@@ -106,15 +107,17 @@ pub trait AllocExt: Alloc {
 	}
 
 	/// Allocates and copies an unsized `T` by raw pointer, returning a `NonNull<T>`.
-	///
-	/// This is a safe wrapper around [`alloc_copy_ptr_to_unchecked`].
+	/// 
+	/// # Safety
+	/// 
+	/// - The caller must ensure `data` is a valid pointer to copy from.
 	///
 	/// # Errors
 	///
 	/// - [`AllocError::AllocFailed`] if allocation fails.
 	#[track_caller]
 	#[inline]
-	fn alloc_copy_ptr_to<T: ?Sized + UnsizedCopy>(
+	unsafe fn alloc_copy_ptr_to<T: ?Sized + UnsizedCopy>(
 		&self,
 		data: *const T,
 	) -> Result<NonNull<T>, AllocError> {
@@ -122,7 +125,7 @@ pub trait AllocExt: Alloc {
 	}
 
 	/// Allocates and copies an unsized `T` by reference without requiring 
-	/// `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy), returning a `NonNull<T>`.
+	/// `T: `[`UnsizedCopy`](UnsizedCopy), returning a `NonNull<T>`.
 	///
 	/// # Safety
 	///
@@ -139,7 +142,7 @@ pub trait AllocExt: Alloc {
 	) -> Result<NonNull<T>, AllocError> {
 		match self.alloc(Layout::for_value(data)) {
 			Ok(ptr) => Ok({
-				ptr.copy_from_nonoverlapping(*ptr::from_ref(data).cast(), core::mem::size_of_val::<T>(data));
+				ptr.copy_from_nonoverlapping(*ptr::from_ref(data).cast(), size_of_val::<T>(data));
 				NonNull::from_raw_parts(ptr, metadata(&raw const *data))
 			}),
 			Err(e) => Err(e),
@@ -147,7 +150,7 @@ pub trait AllocExt: Alloc {
 	}
 
 	/// Allocates and copies an unsized `T` by raw pointer without requiring 
-	/// `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy), returning a `NonNull<T>`.
+	/// `T: `[`UnsizedCopy`](UnsizedCopy), returning a `NonNull<T>`.
 	///
 	/// # Safety
 	///
@@ -164,7 +167,7 @@ pub trait AllocExt: Alloc {
 	) -> Result<NonNull<T>, AllocError> {
 		match self.alloc(Layout::for_value(&*data)) {
 			Ok(ptr) => Ok({
-				ptr.copy_from_nonoverlapping(*data.cast(), core::mem::size_of_val::<T>(&*data));
+				ptr.copy_from_nonoverlapping(*data.cast(), size_of_val::<T>(&*data));
 				NonNull::from_raw_parts(ptr, metadata(data))
 			}),
 			Err(e) => Err(e),

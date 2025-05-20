@@ -208,7 +208,7 @@ pub trait Alloc: Sized {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads 
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
     #[track_caller]
     #[inline]
