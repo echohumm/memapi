@@ -171,3 +171,5 @@ pub trait AllocExt: Alloc {
 		}
 	}
 }
+
+impl<A: Alloc> AllocExt for A {}
