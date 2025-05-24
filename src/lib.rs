@@ -6,9 +6,15 @@
 //! - [`Alloc`], a trait defining basic allocate, deallocate, grow, and shrink operations.
 //! - [`DefaultAlloc`], a zero-cost wrapper delegating to the global allocator.
 //! - [`AllocError`], an enum of possible error cases.
+//! 
+//! And, if the `alloc_ext` feature is on:
+//!
+//! - `AllocExt`, defining abstractions over Alloc's API.
+//! - `UnsizedCopy`, a marker trait indicating a value can be copied safely even if unsized.
 //!
 //! # Examples
 //!
+// TODO: alloc_slice_with function to allocate n items and fill them using a predicate (like alloc_patterned but with values instead of bytes)
 //! ```rust
 //! # use memapi::{Alloc, DefaultAlloc, AllocError};
 //! # use core::alloc::Layout;

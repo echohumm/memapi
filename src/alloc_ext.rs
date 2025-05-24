@@ -1,4 +1,4 @@
-use crate::{Alloc, AllocError, UnsizedCopy};
+use crate::{layout_or_sz_align, Alloc, AllocError, UnsizedCopy};
 use core::{
 	alloc::Layout,
 	ptr::{self, NonNull, metadata},
@@ -63,6 +63,28 @@ pub trait AllocExt: Alloc {
 					ptr.add(i).write(elem.clone());
 				}
 				NonNull::slice_from_raw_parts(ptr, data.len())
+			}),
+			Err(e) => Err(e),
+		}
+	}
+
+	/// Allocates uninitialized memory for a slice of `T` of length `len` and fills each element 
+	/// with the result of `f(elem_idx)`.
+	///
+	/// # Errors
+	///
+	/// - [`AllocError::AllocFailed`] if allocation fails.
+	/// - [`AllocError::LayoutError`] if the computed layout is invalid.
+	#[track_caller]
+	#[inline]
+	fn alloc_slice_with<T, F: Fn(usize) -> T>(&self, len: usize, f: F) -> Result<NonNull<[T]>, AllocError> {
+		match self.alloc(layout_or_sz_align::<T>(len).map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?) {
+			Ok(ptr) => Ok(unsafe {
+				let ptr = ptr.cast();
+				for i in 0..len {
+					ptr.add(i).write(f(i));
+				}
+				NonNull::slice_from_raw_parts(ptr, len)
 			}),
 			Err(e) => Err(e),
 		}

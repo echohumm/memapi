@@ -1,6 +1,6 @@
 [package]
 name = "memapi"
-version = "0.4.8"
+version = "0.4.9"
 edition = "2024"
 description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with some error handling."
 license = "MIT OR Apache-2.0"
@@ -9,7 +9,11 @@ keywords = ["allocator", "no_std", "memory", "allocation"]
 categories = ["no-std", "memory-management"]
 exclude = ["src/tests.rs"]
 
+[package.metadata.docs.rs]
+features = ["alloc_ext"]
+
 [features]
 nightly = []
 alloc_ext = []
 std = []
+unstable = []

@@ -28,3 +28,6 @@ unsafe impl UnsizedCopy for OsStr {} //        |
 // `Path == OsStr == [u8]` and `u8: Copy`.     ┘
 unsafe impl UnsizedCopy for Path {}
 
+// TODO: determine whether this is safe
+#[cfg(feature = "unstable")]
+impl UnsizedCopy for dyn UnsizedCopy {}
