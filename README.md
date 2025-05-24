@@ -24,14 +24,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.4.9"
+memapi = "0.4.10"
 ```
 
 To enable the nightly allocator API integration:
 
 ```toml
 [dependencies.memapi]
-version = "0.4.9"
+version = "0.4.10"
 features = ["nightly"]
 ```
 
@@ -39,7 +39,7 @@ To enable the alloc extension methods:
 
 ```toml
 [dependencies.memapi]
-version = "0.4.9"
+version = "0.4.10"
 features = ["alloc_ext"]
 ```
 
@@ -100,6 +100,9 @@ Extension methods built on top of `Alloc` for common allocation patterns:
 * `alloc_clone_slice_to<T: Clone>(&[T]) -> Result<NonNull<[T]>, AllocError>`
   Allocates and clones each element of a slice.
   **Errors:** `AllocError::AllocFailed` on allocation failure.
+* `alloc_slice_with<T, F: Fn(usize) -> T>(usize, F) -> Result<NonNull<[T]>, AllocError>`
+  Allocates a slice and fills each element with the result of `F(elem_idx)`.
+* **Errors:** `AllocError::AllocFailed` on allocation failure or `AllocError::LayoutError` if the length is too large.
 * `dealloc_slice<T>(NonNull<[T]>)`
   Deallocates a previously allocated slice.
   **Safety:** Must match one of the clone/write methods.
