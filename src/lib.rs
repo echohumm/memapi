@@ -6,6 +6,9 @@
 //! - [`Alloc`], a trait defining basic allocate, deallocate, grow, and shrink operations.
 //! - [`DefaultAlloc`], a zero-cost wrapper delegating to the global allocator.
 //! - [`AllocError`], an enum of possible error cases.
+//! - [`PtrProps`](type_props::PtrProps), properties getters for pointers to values.
+//! - [`SizedProps`], properties for sized types. Similar to the unstable 
+//!   [`SizedTypeProperties`](core::mem::SizedTypeProperties).
 //! 
 //! And, if the `alloc_ext` feature is on:
 //!
@@ -45,6 +48,7 @@ mod tests;
 mod marker;
 #[cfg(feature = "alloc_ext")]
 mod alloc_ext;
+pub mod type_props;
 
 #[cfg(feature = "alloc_ext")]
 pub use marker::*;

@@ -24,14 +24,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.4.10"
+memapi = "0.5.10"
 ```
 
 To enable the nightly allocator API integration:
 
 ```toml
 [dependencies.memapi]
-version = "0.4.10"
+version = "0.5.10"
 features = ["nightly"]
 ```
 
@@ -39,7 +39,7 @@ To enable the alloc extension methods:
 
 ```toml
 [dependencies.memapi]
-version = "0.4.10"
+version = "0.5.10"
 features = ["alloc_ext"]
 ```
 
@@ -85,7 +85,7 @@ Defines the minimal allocation interface. Methods include:
   Reallocate, growing or shrinking in one step.
   **Errors:** See grow/shrink variants.
 
-All methods are `#[track_caller]` for better diagnostics.
+---
 
 ### Trait: `AllocExt` (feature = `alloc_ext`)
 
@@ -121,6 +121,50 @@ Extension methods built on top of `Alloc` for common allocation patterns:
 * `alloc_copy_ptr_to_unchecked<T: ?Sized + UnsizedCopy>(*const T) -> Result<NonNull<T>, AllocError>`
   Unsafe version copying unsized data by pointer.
   **Safety:** Caller ensures validity.
+
+---
+
+### Trait: `SizedProps`
+
+Defines compile-time constants for all `Sized` types:
+
+* **`const SZ: usize`**
+  The byte-size of `Self` (equivalent to `size_of::<Self>()`).
+
+* **`const ALIGN: usize`**
+  The alignment requirement of `Self` (equivalent to `align_of::<Self>()`).
+
+* **`const LAYOUT: Layout`**
+  A `Layout` constructed from `SZ` and `ALIGN` via `from_size_align_unchecked`.
+
+* **`const IS_ZST: bool`**
+  `true` if `SZ == 0`, i.e. `Self` is zero-sized.
+
+* **`const MAX_SLICE_LEN: usize`**
+  The maximum safe length for a `[Self]` slice without overflowing
+  (for `SZ == 0`, this is `usize::MAX`; otherwise `(isize::MAX as usize) / SZ`).
+
+---
+
+### Trait: `PtrProps<T: ?Sized>`
+
+Gives pointer‐types a way to query the layout of the **pointee**:
+
+* **`unsafe fn size(&self) -> usize`**
+  Returns the byte-size of the value behind the pointer.
+
+* **`unsafe fn align(&self) -> usize`**
+  Returns the alignment requirement of the value behind the pointer.
+
+* **`unsafe fn layout(&self) -> Layout`**
+  Builds a `Layout` for the pointee from `size(self)` and `align(self)`.
+
+* **`unsafe fn is_zst(&self) -> bool`**
+  Returns true if the value is zero-sized.
+
+* **`unsafe fn max_slice_len(&self) -> usize`**
+  Max safe slice length for copies of the pointee
+  (for `SZ == 0`, this is `usize::MAX`; otherwise `(isize::MAX as usize) / SZ`).
 
 ---
 
