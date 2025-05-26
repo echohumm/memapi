@@ -4,7 +4,9 @@ use alloc::{
 	rc::Rc,
 	sync::Arc
 };
-use core::ptr::NonNull;
+use core::ptr::{NonNull};
+#[cfg(feature = "metadata")]
+use core::ptr::{metadata, Pointee};
 
 /// A trait containing constants for sized types.
 pub trait SizedProps: Sized {
@@ -35,6 +37,9 @@ pub trait PtrProps<T: ?Sized> {
     unsafe fn align(&self) -> usize;
     /// Get the memory layout for the value.
     unsafe fn layout(&self) -> Layout;
+
+	#[cfg(feature = "metadata")]
+	unsafe fn metadata(&self) -> <T as Pointee>::Metadata;
 	
 	/// Checks whether the value is zero-sized.
 	unsafe fn is_zst(&self) -> bool {
@@ -57,7 +62,7 @@ macro_rules! impl_ptr_props {
 		$(
 		impl<T: ?Sized> PtrProps<T> for $name {
 			unsafe fn size(&self) -> usize {
-				// We use &*(*val) to convert any primitive pointer type to a reference.
+				// We use &*(*val) (?.to_ptr()?) to convert any primitive pointer type to a reference.
 				// This is kind of a hack, but it lets us avoid *_of_val_raw, which is unstable.
 				size_of_val::<T>(&*(*self)$(.$to_ptr())?)
 			}
@@ -71,6 +76,11 @@ macro_rules! impl_ptr_props {
 					self.size(),
 					self.align()
 				)
+			}
+			
+			#[cfg(feature = "metadata")]
+			unsafe fn metadata(&self) -> <T as Pointee>::Metadata {
+				metadata(&*(*self)$(.$to_ptr())?)
 			}
 		}
 		)*

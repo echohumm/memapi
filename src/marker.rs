@@ -1,4 +1,6 @@
 use core::ffi::CStr;
+#[cfg(feature = "metadata")]
+use core::ptr::Pointee;
 #[cfg(feature = "std")]
 use std::{
 	path::Path,
@@ -27,3 +29,19 @@ unsafe impl UnsizedCopy for OsStr {} //        |
 #[cfg(feature = "std")]
 // `Path == OsStr == [u8]` and `u8: Copy`.     ┘
 unsafe impl UnsizedCopy for Path {}
+
+/// Trait indicating that a type has no metadata.
+///
+/// This usually means `Self: Sized` or `Self` is `extern`.
+///
+/// # Example
+///
+/// ```rust
+/// # use memapi::{SizedProps, Thin};
+///
+/// fn safe<T: Thin>() {
+///     assert_eq!(<&T>::SZ, usize::SZ)
+/// }
+/// ```
+#[cfg(feature = "metadata")]
+pub trait Thin: Pointee<Metadata = ()> {}

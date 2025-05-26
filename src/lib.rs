@@ -6,25 +6,27 @@
 //! - [`Alloc`], a trait defining basic allocate, deallocate, grow, and shrink operations.
 //! - [`DefaultAlloc`], a zero-cost wrapper delegating to the global allocator.
 //! - [`AllocError`], an enum of possible error cases.
-//! - [`PtrProps`](type_props::PtrProps), properties getters for pointers to values.
+//! 
+//! - [`PtrProps`](PtrProps), properties getters for pointers to values.
 //! - [`SizedProps`], properties for sized types. Similar to the unstable 
 //!   [`SizedTypeProperties`](core::mem::SizedTypeProperties).
+//! 
+//! - [`UnsizedCopy`], a marker trait indicating a value can be copied safely even if unsized.
+//! - [`Thin`], a marker trait indicating a pointer to a type has no metadata.
 //! 
 //! And, if the `alloc_ext` feature is on:
 //!
 //! - `AllocExt`, defining abstractions over Alloc's API.
-//! - `UnsizedCopy`, a marker trait indicating a value can be copied safely even if unsized.
 //!
 //! # Examples
 //!
-// TODO: alloc_slice_with function to allocate n items and fill them using a predicate (like alloc_patterned but with values instead of bytes)
 //! ```rust
 //! # use memapi::{Alloc, DefaultAlloc, AllocError};
 //! # use core::alloc::Layout;
 //! # use core::ptr::NonNull;
 //! let allocator = DefaultAlloc;
 //! // Allocate 4 usizes.
-//! let ptr: NonNull<usize> = allocator.alloc_count::<usize>(4).expect("alloc failed");
+//! let ptr = allocator.alloc_count::<usize>(4).expect("alloc failed");
 //! unsafe {
 //!     for i in 0..4 {
 //!         ptr.add(i).write(17384 * i + 8923)
@@ -36,7 +38,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
-#![cfg_attr(feature = "alloc_ext", feature(ptr_metadata))]
+#![cfg_attr(feature = "metadata", feature(ptr_metadata))]
+#![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![allow(unsafe_op_in_unsafe_fn)]
 
 extern crate alloc;
@@ -45,15 +48,16 @@ extern crate alloc;
 mod tests;
 
 #[cfg(feature = "alloc_ext")]
-mod marker;
-#[cfg(feature = "alloc_ext")]
 mod alloc_ext;
-pub mod type_props;
 
 #[cfg(feature = "alloc_ext")]
-pub use marker::*;
-#[cfg(feature = "alloc_ext")]
 pub use alloc_ext::*;
+
+mod marker;
+pub mod type_props;
+
+pub use marker::*;
+pub use type_props::*;
 
 use core::{
     alloc::Layout,
@@ -492,10 +496,14 @@ pub(crate) mod nightly {
     use core::ptr::NonNull;
 
     unsafe impl Allocator for DefaultAlloc {
+        #[track_caller]
+        #[inline]
         fn allocate(&self, layout: Layout) -> Result<NonNull<[u8]>, core::alloc::AllocError> {
             Allocator::allocate(&Global, layout)
         }
 
+        #[track_caller]
+        #[inline]
         fn allocate_zeroed(
             &self,
             layout: Layout,
@@ -503,10 +511,14 @@ pub(crate) mod nightly {
             Allocator::allocate_zeroed(&Global, layout)
         }
 
+        #[track_caller]
+        #[inline]
         unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: Layout) {
             Allocator::deallocate(&Global, ptr.cast(), layout);
         }
 
+        #[track_caller]
+        #[inline]
         unsafe fn grow(
             &self,
             ptr: NonNull<u8>,
@@ -516,6 +528,8 @@ pub(crate) mod nightly {
             Allocator::grow(&Global, ptr.cast(), old_layout, new_layout)
         }
 
+        #[track_caller]
+        #[inline]
         unsafe fn grow_zeroed(
             &self,
             ptr: NonNull<u8>,
@@ -525,6 +539,8 @@ pub(crate) mod nightly {
             Allocator::grow_zeroed(&Global, ptr.cast(), old_layout, new_layout)
         }
 
+        #[track_caller]
+        #[inline]
         unsafe fn shrink(
             &self,
             ptr: NonNull<u8>,
@@ -536,18 +552,24 @@ pub(crate) mod nightly {
     }
 
     impl<A: Allocator> Alloc for A {
+        #[track_caller]
+        #[inline]
         fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
             Allocator::allocate(self, layout)
                 .map_err(|_| AllocError::AllocFailed(layout))
                 .map(NonNull::cast)
         }
 
+        #[track_caller]
+        #[inline]
         fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
             Allocator::allocate_zeroed(self, layout)
                 .map_err(|_| AllocError::AllocFailed(layout))
                 .map(NonNull::cast)
         }
 
+        #[track_caller]
+        #[inline]
         fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
             Allocator::allocate(self, layout)
                 .map_err(|_| AllocError::AllocFailed(layout))
@@ -560,6 +582,8 @@ pub(crate) mod nightly {
                 })
         }
 
+        #[track_caller]
+        #[inline]
         fn alloc_patterned<F: Fn(usize) -> u8>(
             &self,
             layout: Layout,
@@ -578,6 +602,8 @@ pub(crate) mod nightly {
                 })
         }
 
+        #[track_caller]
+        #[inline]
         unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
             Allocator::deallocate(self, ptr.cast(), layout);
         }
@@ -594,14 +620,20 @@ pub(crate) mod fallback {
     use core::ptr::NonNull;
 
     impl Alloc for super::DefaultAlloc {
+        #[track_caller]
+        #[inline]
         fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
             NonNull::new(unsafe { raw_alloc(layout) }).ok_or(AllocError::AllocFailed(layout))
         }
 
+        #[track_caller]
+        #[inline]
         fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
             NonNull::new(unsafe { raw_alloc_zeroed(layout) }).ok_or(AllocError::AllocFailed(layout))
         }
 
+        #[track_caller]
+        #[inline]
         fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
             let ptr = NonNull::new(unsafe { raw_alloc(layout).cast::<u8>() })
                 .ok_or(AllocError::AllocFailed(layout))?;
@@ -611,6 +643,8 @@ pub(crate) mod fallback {
             Ok(ptr)
         }
 
+        #[track_caller]
+        #[inline]
         fn alloc_patterned<F: Fn(usize) -> u8>(
             &self,
             layout: Layout,
@@ -626,6 +660,8 @@ pub(crate) mod fallback {
             Ok(ptr)
         }
 
+        #[track_caller]
+        #[inline]
         unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
             raw_dealloc(ptr.as_ptr(), layout);
         }

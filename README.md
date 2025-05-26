@@ -24,14 +24,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.5.10"
+memapi = "0.6.11"
 ```
 
 To enable the nightly allocator API integration:
 
 ```toml
 [dependencies.memapi]
-version = "0.5.10"
+version = "0.6.11"
 features = ["nightly"]
 ```
 
@@ -39,7 +39,7 @@ To enable the alloc extension methods:
 
 ```toml
 [dependencies.memapi]
-version = "0.5.10"
+version = "0.6.11"
 features = ["alloc_ext"]
 ```
 
@@ -124,6 +124,18 @@ Extension methods built on top of `Alloc` for common allocation patterns:
 
 ---
 
+### Trait: `Thin`
+
+Marker trait indicating a pointer to a type has no metadata.
+
+---
+
+### Trait: `UnsizedCopy`
+
+Marker trait indicating a type's raw memory can be safely copied.
+
+---
+
 ### Trait: `SizedProps`
 
 Defines compile-time constants for all `Sized` types:
@@ -157,14 +169,17 @@ Gives pointer‐types a way to query the layout of the **pointee**:
   Returns the alignment requirement of the value behind the pointer.
 
 * **`unsafe fn layout(&self) -> Layout`**
-  Builds a `Layout` for the pointee from `size(self)` and `align(self)`.
+  Builds a `Layout` for the pointee from `self.size()` and `self.align()`.
 
 * **`unsafe fn is_zst(&self) -> bool`**
   Returns true if the value is zero-sized.
 
 * **`unsafe fn max_slice_len(&self) -> usize`**
-  Max safe slice length for copies of the pointee
+  Returns the max safe slice length for copies of the pointee.
   (for `SZ == 0`, this is `usize::MAX`; otherwise `(isize::MAX as usize) / SZ`).
+
+* **`unsafe fn metadata(&self) -> <T as Pointee>::Metadata`**
+  Returns the metadata of the pointer.
 
 ---
 
