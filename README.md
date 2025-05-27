@@ -24,14 +24,14 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.6.11"
+memapi = "0.6.12"
 ```
 
 To enable the nightly allocator API integration:
 
 ```toml
 [dependencies.memapi]
-version = "0.6.11"
+version = "0.6.12"
 features = ["nightly"]
 ```
 
@@ -39,7 +39,7 @@ To enable the alloc extension methods:
 
 ```toml
 [dependencies.memapi]
-version = "0.6.11"
+version = "0.6.12"
 features = ["alloc_ext"]
 ```
 

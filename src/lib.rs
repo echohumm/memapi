@@ -6,14 +6,14 @@
 //! - [`Alloc`], a trait defining basic allocate, deallocate, grow, and shrink operations.
 //! - [`DefaultAlloc`], a zero-cost wrapper delegating to the global allocator.
 //! - [`AllocError`], an enum of possible error cases.
-//! 
+//!
 //! - [`PtrProps`](PtrProps), properties getters for pointers to values.
-//! - [`SizedProps`], properties for sized types. Similar to the unstable 
+//! - [`SizedProps`], properties for sized types. Similar to the unstable
 //!   [`SizedTypeProperties`](core::mem::SizedTypeProperties).
-//! 
+//!
 //! - [`UnsizedCopy`], a marker trait indicating a value can be copied safely even if unsized.
 //! - [`Thin`], a marker trait indicating a pointer to a type has no metadata.
-//! 
+//!
 //! And, if the `alloc_ext` feature is on:
 //!
 //! - `AllocExt`, defining abstractions over Alloc's API.
@@ -41,6 +41,7 @@
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![allow(unsafe_op_in_unsafe_fn)]
+#![deny(missing_docs)]
 
 extern crate alloc;
 
@@ -54,7 +55,10 @@ mod alloc_ext;
 pub use alloc_ext::*;
 
 mod marker;
-pub mod type_props;
+mod type_props;
+
+/// Small alternatives to Rust functions which are currently unstable.
+pub mod unstable_util;
 
 pub use marker::*;
 pub use type_props::*;
@@ -215,7 +219,10 @@ pub trait Alloc: Sized {
     #[inline]
     unsafe fn dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
         // Here, we assume the layout is valid as it was presumably used to allocate previously.
-        self.dealloc(ptr.cast(), Layout::from_size_align_unchecked(size_of::<T>() * n, align_of::<T>()));
+        self.dealloc(
+            ptr.cast(),
+            Layout::from_size_align_unchecked(size_of::<T>() * n, align_of::<T>()),
+        );
     }
 
     /// Drops the data at a pointer and deallocates its previously allocated block.
@@ -236,7 +243,7 @@ pub trait Alloc: Sized {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads 
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and contain `n` valid `T`.
     /// - `n` must be the exact number of `T` held in that block.
     #[track_caller]
@@ -672,6 +679,8 @@ pub(crate) mod fallback {
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum AllocError {
+    /// A basic arithmetic operation overflowed.
+    ArithmeticOverflow,
     /// The layout computed with the given size and alignment is invalid.
     LayoutError(usize, usize),
     /// The underlying allocator failed to allocate using the given layout.
@@ -685,6 +694,7 @@ pub enum AllocError {
 impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> core::fmt::Result {
         match self {
+            AllocError::ArithmeticOverflow => write!(f, "arithmetic overflow"),
             AllocError::LayoutError(sz, align) => {
                 write!(f, "computed invalid layout: size: {sz}, align: {align}")
             }

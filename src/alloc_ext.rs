@@ -1,6 +1,6 @@
-#[cfg(feature = "metadata")]
-use crate::{UnsizedCopy, PtrProps};
 use crate::{Alloc, AllocError, layout_or_sz_align};
+#[cfg(feature = "metadata")]
+use crate::{PtrProps, UnsizedCopy};
 #[cfg(feature = "clone_to_uninit")]
 use core::clone::CloneToUninit;
 #[cfg(feature = "metadata")]
