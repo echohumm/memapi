@@ -70,18 +70,24 @@ use core::{
     fmt::{Display, Formatter},
     ptr::{self, NonNull},
 };
+use crate::helpers::layout_or_sz_align;
 
-/// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
-const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
-    let (sz, align) = (size_of::<T>(), align_of::<T>());
+/// Helpers which tend to be useful in other libraries as well.
+pub mod helpers {
+    use core::alloc::Layout;
+    
+    /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
+    pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
+        let (sz, align) = (size_of::<T>(), align_of::<T>());
 
-    if sz != 0 && n > unsafe { (isize::MAX as usize + 1).unchecked_sub(align) } / sz {
-        return Err((sz, align));
+        if sz != 0 && n > unsafe { (isize::MAX as usize + 1).unchecked_sub(align) } / sz {
+            return Err((sz, align));
+        }
+
+        let arr_sz = unsafe { sz.unchecked_mul(n) };
+
+        unsafe { Ok(Layout::from_size_align_unchecked(arr_sz, align)) }
     }
-
-    let arr_sz = unsafe { sz.unchecked_mul(n) };
-
-    unsafe { Ok(Layout::from_size_align_unchecked(arr_sz, align)) }
 }
 
 /// Default allocator, delegating to the global allocator.
