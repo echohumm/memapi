@@ -162,7 +162,7 @@ pub trait AllocExt: Alloc {
     #[inline]
     unsafe fn drop_and_dealloc_slice<T>(&self, slice_ptr: NonNull<[T]>) {
         slice_ptr.drop_in_place();
-        self.dealloc_slice(slice_ptr);
+        self.dealloc_n(slice_ptr);
     }
 
     #[cfg(feature = "metadata")]

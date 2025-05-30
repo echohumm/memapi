@@ -1,6 +1,6 @@
 [package]
 name = "memapi"
-version = "0.6.13"
+version = "0.7.13"
 edition = "2024"
 description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with some error handling."
 license = "MIT OR Apache-2.0"
@@ -14,8 +14,9 @@ features = ["alloc_ext"]
 
 [features]
 nightly = []
-alloc_ext = ["metadata"]
 std = []
 
 metadata = ["nightly"]
 clone_to_uninit = ["nightly"]
+
+alloc_ext = ["metadata"]

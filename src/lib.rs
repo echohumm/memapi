@@ -26,7 +26,7 @@
 //! # use core::ptr::NonNull;
 //! let allocator = DefaultAlloc;
 //! // Allocate 4 usizes.
-//! let ptr = allocator.alloc_count::<usize>(4).expect("alloc failed");
+//! let ptr = allocator.alloc_slice::<usize>(4).expect("alloc failed");
 //! unsafe {
 //!     for i in 0..4 {
 //!         ptr.add(i).write(17384 * i + 8923)
@@ -94,7 +94,7 @@ pub mod helpers {
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DefaultAlloc;
 
-/// A minimal memory allocation interface.
+/// A memory allocation interface.
 ///
 /// This trait does _not_ require `Self: Allocator` and is `no_std`-compatible.
 pub trait Alloc: Sized {
@@ -106,7 +106,7 @@ pub trait Alloc: Sized {
     #[track_caller]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError>;
 
-    /// Attempts to allocate a block of memory for `count` instances of `T`.
+    /// Attempts to allocate a block of memory for `len` instances of `T`.
     ///
     /// # Errors
     ///
@@ -114,8 +114,8 @@ pub trait Alloc: Sized {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[track_caller]
     #[inline]
-    fn alloc_count<T>(&self, count: usize) -> Result<NonNull<T>, AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
+    fn alloc_slice<T>(&self, len: usize) -> Result<NonNull<T>, AllocError> {
+        let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc(layout)
             .map(NonNull::cast)
@@ -130,7 +130,7 @@ pub trait Alloc: Sized {
     #[track_caller]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError>;
 
-    /// Attempts to allocate a zeroed block of memory for `count` instances of `T`.
+    /// Attempts to allocate a zeroed block of memory for `len` instances of `T`.
     ///
     /// # Errors
     ///
@@ -138,8 +138,8 @@ pub trait Alloc: Sized {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[track_caller]
     #[inline]
-    fn alloc_count_zeroed<T>(&self, count: usize) -> Result<NonNull<T>, AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
+    fn alloc_slice_zeroed<T>(&self, len: usize) -> Result<NonNull<T>, AllocError> {
+        let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_zeroed(layout)
             .map(NonNull::cast)
@@ -155,7 +155,7 @@ pub trait Alloc: Sized {
     #[track_caller]
     fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError>;
 
-    /// Attempts to allocate a block of memory for `count` instances of `T`, filled with bytes
+    /// Attempts to allocate a block of memory for `len` instances of `T`, filled with bytes
     /// initialized to `n`.
     ///
     /// # Errors
@@ -164,8 +164,8 @@ pub trait Alloc: Sized {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[track_caller]
     #[inline]
-    fn alloc_count_filled<T>(&self, count: usize, n: u8) -> Result<NonNull<T>, AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
+    fn alloc_slice_filled<T>(&self, len: usize, n: u8) -> Result<NonNull<T>, AllocError> {
+        let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_filled(layout, n)
             .map(NonNull::cast)
@@ -185,7 +185,7 @@ pub trait Alloc: Sized {
         pattern: F,
     ) -> Result<NonNull<u8>, AllocError>;
 
-    /// Attempts to allocate a block of memory for `count` instances of `T` and
+    /// Attempts to allocate a block of memory for `len` instances of `T` and
     /// fill it by calling `pattern(i)` for each byte index `i`.
     ///
     /// # Errors
@@ -194,12 +194,12 @@ pub trait Alloc: Sized {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[track_caller]
     #[inline]
-    fn alloc_count_patterned<T, F: Fn(usize) -> u8>(
+    fn alloc_slice_patterned<T, F: Fn(usize) -> u8>(
         &self,
-        count: usize,
+        len: usize,
         pattern: F,
     ) -> Result<NonNull<T>, AllocError> {
-        let layout = layout_or_sz_align::<T>(count)
+        let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_patterned(layout, pattern)
             .map(NonNull::cast)
