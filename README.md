@@ -69,7 +69,7 @@ Defines the minimal allocation interface. Methods include:
 * Convenience helpers:
 
     * `alloc_count<T>(count) -> Result<NonNull<T>, AllocError>`
-      **Errors:** `AllocError::LayoutError` if size too large, or `AllocError::AllocFailed(layout)`.
+      **Errors:** `AllocError::LayoutError` if size is too large, or `AllocError::AllocFailed(layout)`.
     * `alloc_count_zeroed<T>(count)`
     * `alloc_count_filled<T>(count, u8)`
     * `alloc_count_patterned<T, F>(count, pattern)`
@@ -85,7 +85,7 @@ Defines the minimal allocation interface. Methods include:
   Contracts a block.
   **Errors:** `AllocError::ShrinkBiggerNewLayout` if new > old, or `AllocError::AllocFailed(layout)`.
 * `realloc` / `realloc_zeroed` / `realloc_filled` / `realloc_patterned`
-  Reallocate, growing or shrinking in one step.
+  Reallocate, growing, or shrinking in one step.
   **Errors:** See grow/shrink variants.
 
 ---

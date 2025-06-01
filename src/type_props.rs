@@ -27,22 +27,46 @@ impl<T> SizedProps for T {}
 /// A trait providing methods for pointers to provide the properties of their pointees.
 pub trait PtrProps<T: ?Sized> {
     /// Gets the size of the value.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be valid.
     unsafe fn size(&self) -> usize;
     /// Gets the alignment of the value.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be valid.
     unsafe fn align(&self) -> usize;
     /// Gets the memory layout for the value.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be valid.
     unsafe fn layout(&self) -> Layout;
 
     #[cfg(feature = "metadata")]
     /// Gets the metadata of the value.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be valid.
     unsafe fn metadata(&self) -> <T as Pointee>::Metadata;
 
     /// Checks whether the value is zero-sized.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be valid.
     unsafe fn is_zst(&self) -> bool {
         self.size() == 0
     }
 
     /// Gets the largest safe length for a slice containing copies of `self`.
+    ///
+    /// # Safety
+    ///
+    /// The pointer must be valid.
     // this has almost no real use case as far as i can tell
     unsafe fn max_slice_len(&self) -> usize {
         match self.size() {

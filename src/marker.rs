@@ -20,11 +20,11 @@ unsafe impl<T: Copy> UnsizedCopy for [T] {} // |
 unsafe impl UnsizedCopy for str {} //          |
 // `CStr == [u8]` and `u8: Copy`               ┤
 unsafe impl UnsizedCopy for CStr {} //         |
-#[cfg(feature = "std")]
-// `OsStr == [u8]` and `u8: Copy`              ┤
+#[cfg(feature = "std")] //                     |
+// `OsStr == [u8]` and `[u8]: UnsizedCopy`     ┤
 unsafe impl UnsizedCopy for OsStr {} //        |
-#[cfg(feature = "std")]
-// `Path == OsStr == [u8]` and `u8: Copy`.     ┘
+#[cfg(feature = "std")] //                     |
+// `Path == OsStr` and `OsStr: UnsizedCopy`.   ┘
 unsafe impl UnsizedCopy for Path {}
 
 #[cfg(feature = "metadata")]
