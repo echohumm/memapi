@@ -1,6 +1,6 @@
 [package]
 name = "memapi"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2024"
 description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with some error handling."
 license = "MIT OR Apache-2.0"
@@ -19,11 +19,17 @@ std = []
 metadata = ["nightly"]
 clone_to_uninit = ["nightly"]
 
-alloc_ext = ["metadata"]
+alloc_ext = []
 resize_in_place = []
 
 stats = []
+owned = []
+
+bytemuck = ["dep:bytemuck"]
 
 [[test]]
 name = "test"
 path = "tests/test.rs"
+
+[dependencies]
+bytemuck = { version = "1.23.0", optional = true }

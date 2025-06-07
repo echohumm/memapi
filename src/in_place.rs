@@ -28,7 +28,7 @@ pub trait ResizeInPlace: Alloc {
 
     #[track_caller]
     #[inline]
-    unsafe fn grow_in_place_patterned<F: Fn(usize) -> u8>(
+    unsafe fn grow_in_place_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
@@ -99,7 +99,7 @@ pub trait ResizeInPlace: Alloc {
 
     #[track_caller]
     #[inline]
-    unsafe fn realloc_in_place_patterned<F: Fn(usize) -> u8>(
+    unsafe fn realloc_in_place_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,

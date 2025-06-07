@@ -302,7 +302,6 @@ mod stats_gathering_tests {
     };
     use memapi::stats::FmtLog;
     use memapi::{Alloc, DefaultAlloc, stats::Stats};
-    use std::ops::Deref;
 
     #[test]
     fn test_stats_counts_correct() {

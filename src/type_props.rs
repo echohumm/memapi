@@ -82,7 +82,8 @@ macro_rules! impl_ptr_props {
 		$(
 		impl<T: ?Sized> PtrProps<T> for $name {
 			unsafe fn size(&self) -> usize {
-				// We use &*(*val) (?.to_ptr()?) to convert any primitive pointer type to a reference.
+				// We use &*(*val) (?.to_ptr()?) to convert any primitive pointer type to a 
+                //  reference.
 				// This is kind of a hack, but it lets us avoid *_of_val_raw, which is unstable.
 				size_of_val::<T>(&*(*self)$(.$to_ptr())?)
 			}

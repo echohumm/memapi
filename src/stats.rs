@@ -51,14 +51,14 @@ macro_rules! atomic_total_ops {
                 self$(.$field)?.store(res, Release);
                 res
             }
-        
+
             #[inline]
             fn dec_total_bytes_allocated(&self, bytes: usize) -> usize {
                 let res = self$(.$field)?.load(Acquire) - bytes;
                 self$(.$field)?.store(res, Release);
                 res
             }
-        
+
             #[inline]
             fn total(&self) -> usize {
                 self$(.$field)?.load(Acquire)
@@ -147,7 +147,7 @@ impl<W: Write> StatsLogger for IOLog<W> {
             .write_all(format!("{stat}\n").as_bytes())
             .expect("failed to write to inner `W` of `WrittenLog`");
     }
-    
+
     atomic_total_ops!(self, total);
 }
 
@@ -161,7 +161,7 @@ impl<W: fmt::Write> StatsLogger for FmtLog<W> {
             .write_fmt(format_args!("{stat}\n"))
             .expect("failed to write to inner `W` of `FmtLog`");
     }
-    
+
     atomic_total_ops!(self, total);
 }
 
@@ -232,15 +232,17 @@ impl<W: fmt::Write> FmtLog<W> {
             total: AtomicUsize::new(0),
         }
     }
-    
+
     /// Gets a reference to the log.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This function will panic if the inner [`Mutex`] is poisoned.
     #[inline]
     pub fn get_log(&self) -> MutexGuard<'_, W> {
-        self.buf.lock().expect("inner `Mutex<W>` for `FmtLog` was poisoned")
+        self.buf
+            .lock()
+            .expect("inner `Mutex<W>` for `FmtLog` was poisoned")
     }
 }
 
@@ -262,7 +264,7 @@ pub type StrLog<'s> = FmtLog<&'s str>;
 
 /// Trait for logging statistics.
 ///
-/// This requires that `Self` allows safe mutable access via an immutable reference, such as the 
+/// This requires that `Self` allows safe mutable access via an immutable reference, such as the
 /// std-only `IOLog` struct:
 ///
 /// ```rust,no_run
@@ -315,7 +317,8 @@ impl Display for AllocRes {
                 } => {
                     write!(
                         f,
-                        "Successful initial allocation of {} bytes with alignment {} at {:p}, and newly allocated bytes being {}. ({total} total bytes allocated)",
+                        "Successful initial allocation of {} bytes with alignment {} at {:p}, and \
+                        newly allocated bytes being {}. ({total} total bytes allocated)",
                         region.size,
                         region.align,
                         region.ptr,
@@ -331,7 +334,8 @@ impl Display for AllocRes {
                 AllocStat::Realloc { info, kind, total } => {
                     write!(
                         f,
-                        "Successful reallocation from {}->{} bytes with alignment {}->{}. Allocation moved {:p}->{:p} and {}. ({total} total bytes allocated)",
+                        "Successful reallocation from {}->{} bytes with alignment {}->{}. \
+                        Allocation moved {:p}->{:p} and {}. ({total} total bytes allocated)",
                         info.old.size,
                         info.new.size,
                         info.old.align,
@@ -353,7 +357,8 @@ impl Display for AllocRes {
                 AllocStat::Free { region, total } => {
                     write!(
                         f,
-                        "Deallocation of {} bytes with alignment {} at {:p}. ({total} total bytes allocated)",
+                        "Deallocation of {} bytes with alignment {} at {:p}. ({total} total bytes \
+                        allocated)",
                         region.size, region.align, region.ptr
                     )
                 }
@@ -370,7 +375,8 @@ impl Display for AllocRes {
                 AllocStat::Realloc { info, .. } => {
                     write!(
                         f,
-                        "Failed reallocation from {}->{} bytes with alignment {}->{}. Original allocation at {:p}.",
+                        "Failed reallocation from {}->{} bytes with alignment {}->{}. Original \
+                        allocation at {:p}.",
                         info.old.size, info.new.size, info.old.align, info.new.align, info.old.ptr
                     )
                 }
@@ -411,6 +417,34 @@ pub enum AllocStat {
     },
 }
 
+impl AllocStat {
+    fn new_realloc(
+        old_ptr: NonNull<u8>,
+        new_ptr: *mut u8,
+        old_layout: Layout,
+        new_layout: Layout,
+        kind: AllocKind,
+        total: usize,
+    ) -> AllocStat {
+        AllocStat::Realloc {
+            info: ResizeInfo {
+                old: MemoryRegion {
+                    ptr: old_ptr.as_ptr(),
+                    size: old_layout.size(),
+                    align: old_layout.align(),
+                },
+                new: MemoryRegion {
+                    ptr: new_ptr,
+                    size: new_layout.size(),
+                    align: new_layout.align(),
+                },
+            },
+            kind,
+            total,
+        }
+    }
+}
+
 /// A contiguous region of memory.
 #[derive(Debug)]
 pub struct MemoryRegion {
@@ -447,137 +481,120 @@ pub enum AllocKind {
     Shrink,
 }
 
+#[track_caller]
+#[inline]
+fn allocate<A: Alloc, L: StatsLogger, F: Fn(&A, Layout) -> Result<NonNull<u8>, AllocError>>(
+    slf: &Stats<A, L>,
+    allocate: F,
+    layout: Layout,
+    kind: AllocKind,
+) -> Result<NonNull<u8>, AllocError> {
+    let size = layout.size();
+    match allocate(&slf.0, layout) {
+        Ok(ptr) => {
+            let total = slf.1.inc_total_bytes_allocated(size);
+            slf.1.log(Succ(AllocStat::Alloc {
+                region: MemoryRegion {
+                    ptr: ptr.as_ptr(),
+                    size,
+                    align: layout.align(),
+                },
+                kind,
+                total,
+            }));
+            Ok(ptr)
+        }
+        Err(e) => {
+            slf.1.log(Fail(AllocStat::Alloc {
+                region: MemoryRegion {
+                    ptr: null_mut(),
+                    size,
+                    align: layout.align(),
+                },
+                kind,
+                total: slf.1.total(),
+            }));
+            Err(e)
+        }
+    }
+}
+
+#[track_caller]
+#[inline]
+fn grow<
+    A: Alloc,
+    L: StatsLogger,
+    F: Fn(&A, NonNull<u8>, Layout, Layout) -> Result<NonNull<u8>, AllocError>,
+>(
+    slf: &Stats<A, L>,
+    grow: F,
+    ptr: NonNull<u8>,
+    old_layout: Layout,
+    new_layout: Layout,
+    kind: AllocKind,
+) -> Result<NonNull<u8>, AllocError> {
+    match grow(&slf.0, ptr, old_layout, new_layout) {
+        Ok(new_ptr) => {
+            let total = slf
+                .1
+                .inc_total_bytes_allocated(new_layout.size().saturating_sub(old_layout.size()));
+            slf.1.log(Succ(AllocStat::new_realloc(
+                ptr,
+                new_ptr.as_ptr(),
+                old_layout,
+                new_layout,
+                kind,
+                total,
+            )));
+            Ok(new_ptr)
+        }
+        Err(e) => {
+            slf.1.log(Fail(AllocStat::new_realloc(
+                ptr,
+                null_mut(),
+                old_layout,
+                new_layout,
+                kind,
+                slf.1.total(),
+            )));
+            Err(e)
+        }
+    }
+}
+
 impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
     #[track_caller]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        let size = layout.size();
-        match self.0.alloc(layout) {
-            Ok(ptr) => {
-                let total = self.1.inc_total_bytes_allocated(size);
-                self.1.log(Succ(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: ptr.as_ptr(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Uninitialized,
-                    total,
-                }));
-                Ok(ptr)
-            }
-            Err(e) => {
-                self.1.log(Fail(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: null_mut(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Uninitialized,
-                    total: self.1.total(),
-                }));
-                Err(e)
-            }
-        }
+        allocate(self, A::alloc, layout, AllocKind::Uninitialized)
     }
 
     #[track_caller]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        let size = layout.size();
-        match self.0.alloc_zeroed(layout) {
-            Ok(ptr) => {
-                let total = self.1.inc_total_bytes_allocated(size);
-                self.1.log(Succ(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: ptr.as_ptr(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Zeroed,
-                    total,
-                }));
-                Ok(ptr)
-            }
-            Err(e) => {
-                self.1.log(Fail(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: null_mut(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Zeroed,
-                    total: self.1.total(),
-                }));
-                Err(e)
-            }
-        }
+        allocate(self, A::alloc_zeroed, layout, AllocKind::Zeroed)
     }
 
     #[track_caller]
     fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-        let size = layout.size();
-        match self.0.alloc_filled(layout, n) {
-            Ok(ptr) => {
-                let total = self.1.inc_total_bytes_allocated(size);
-                self.1.log(Succ(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: ptr.as_ptr(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Filled(n),
-                    total,
-                }));
-                Ok(ptr)
-            }
-            Err(e) => {
-                self.1.log(Fail(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: null_mut(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Filled(n),
-                    total: self.1.total(),
-                }));
-                Err(e)
-            }
-        }
+        allocate(
+            self,
+            |alloc, layout| alloc.alloc_filled(layout, n),
+            layout,
+            AllocKind::Filled(n),
+        )
     }
 
     #[track_caller]
-    fn alloc_patterned<F: Fn(usize) -> u8>(
+    fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         layout: Layout,
         pattern: F,
     ) -> Result<NonNull<u8>, AllocError> {
-        let size = layout.size();
-        match self.0.alloc_patterned(layout, pattern) {
-            Ok(ptr) => {
-                let total = self.1.inc_total_bytes_allocated(size);
-                self.1.log(Succ(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: ptr.as_ptr(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Patterned,
-                    total,
-                }));
-                Ok(ptr)
-            }
-            Err(e) => {
-                self.1.log(Fail(AllocStat::Alloc {
-                    region: MemoryRegion {
-                        ptr: null_mut(),
-                        size,
-                        align: layout.align(),
-                    },
-                    kind: AllocKind::Patterned,
-                    total: self.1.total(),
-                }));
-                Err(e)
-            }
-        }
+        allocate(
+            self,
+            |alloc, layout| alloc.alloc_patterned(layout, pattern.clone()),
+            layout,
+            AllocKind::Patterned,
+        )
     }
 
     #[track_caller]
@@ -603,52 +620,14 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        let old_size = old_layout.size();
-        let new_size = new_layout.size();
-        let delta = new_size.saturating_sub(old_size);
-        let total = self.1.inc_total_bytes_allocated(delta);
-        match self.0.grow(ptr, old_layout, new_layout) {
-            Ok(new_ptr) => {
-                self.1.log(Succ(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: new_ptr.as_ptr(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Uninitialized,
-                    total,
-                }));
-                Ok(new_ptr)
-            }
-            Err(e) => {
-                // growth failure means its inner allocation failed, NOT its dealloc; thus, there are fewer bytes allocated.
-                let total = self.1.dec_total_bytes_allocated(new_size);
-                self.1.log(Fail(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: null_mut(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Uninitialized,
-                    total,
-                }));
-                Err(e)
-            }
-        }
+        grow(
+            self,
+            |a, ptr, old, new| a.grow(ptr, old, new),
+            ptr,
+            old_layout,
+            new_layout,
+            AllocKind::Uninitialized,
+        )
     }
 
     #[track_caller]
@@ -658,106 +637,32 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        let old_size = old_layout.size();
-        let new_size = new_layout.size();
-        let delta = new_size.saturating_sub(old_size);
-        let total = self.1.inc_total_bytes_allocated(delta);
-        match self.0.grow_zeroed(ptr, old_layout, new_layout) {
-            Ok(new_ptr) => {
-                self.1.log(Succ(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: new_ptr.as_ptr(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Zeroed,
-                    total,
-                }));
-                Ok(new_ptr)
-            }
-            Err(e) => {
-                let total = self.1.dec_total_bytes_allocated(new_size);
-                self.1.log(Fail(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: null_mut(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Zeroed,
-                    total,
-                }));
-                Err(e)
-            }
-        }
+        grow(
+            self,
+            |a, ptr, old, new| a.grow_zeroed(ptr, old, new),
+            ptr,
+            old_layout,
+            new_layout,
+            AllocKind::Zeroed,
+        )
     }
 
     #[track_caller]
-    unsafe fn grow_patterned<F: Fn(usize) -> u8>(
+    unsafe fn grow_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
         pattern: F,
     ) -> Result<NonNull<u8>, AllocError> {
-        let old_size = old_layout.size();
-        let new_size = new_layout.size();
-        let delta = new_size.saturating_sub(old_size);
-        let total = self.1.inc_total_bytes_allocated(delta);
-        match self.0.grow_patterned(ptr, old_layout, new_layout, pattern) {
-            Ok(new_ptr) => {
-                self.1.log(Succ(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: new_ptr.as_ptr(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Patterned,
-                    total,
-                }));
-                Ok(new_ptr)
-            }
-            Err(e) => {
-                let total = self.1.dec_total_bytes_allocated(new_size);
-                self.1.log(Fail(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: null_mut(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Patterned,
-                    total,
-                }));
-                Err(e)
-            }
-        }
+        grow(
+            self,
+            |a, ptr, old, new| a.grow_patterned(ptr, old, new, pattern.clone()),
+            ptr,
+            old_layout,
+            new_layout,
+            AllocKind::Patterned,
+        )
     }
 
     #[track_caller]
@@ -768,51 +673,14 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         new_layout: Layout,
         n: u8,
     ) -> Result<NonNull<u8>, AllocError> {
-        let old_size = old_layout.size();
-        let new_size = new_layout.size();
-        let delta = new_size.saturating_sub(old_size);
-        let total = self.1.inc_total_bytes_allocated(delta);
-        match self.0.grow_filled(ptr, old_layout, new_layout, n) {
-            Ok(new_ptr) => {
-                self.1.log(Succ(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: new_ptr.as_ptr(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Filled(n),
-                    total,
-                }));
-                Ok(new_ptr)
-            }
-            Err(e) => {
-                let total = self.1.dec_total_bytes_allocated(new_size);
-                self.1.log(Fail(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: null_mut(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Filled(n),
-                    total,
-                }));
-                Err(e)
-            }
-        }
+        grow(
+            self,
+            |a, ptr, old, new| a.grow_filled(ptr, old, new, n),
+            ptr,
+            old_layout,
+            new_layout,
+            AllocKind::Filled(n),
+        )
     }
 
     #[track_caller]
@@ -822,48 +690,30 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        let old_size = old_layout.size();
-        let new_size = new_layout.size();
-        let delta = old_size.saturating_sub(new_size);
-        let total = self.1.dec_total_bytes_allocated(delta);
         match self.0.shrink(ptr, old_layout, new_layout) {
             Ok(new_ptr) => {
-                self.1.log(Succ(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: new_ptr.as_ptr(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Shrink,
+                let total = self
+                    .1
+                    .dec_total_bytes_allocated(old_layout.size().saturating_sub(new_layout.size()));
+                self.1.log(Succ(AllocStat::new_realloc(
+                    ptr,
+                    new_ptr.as_ptr(),
+                    old_layout,
+                    new_layout,
+                    AllocKind::Shrink,
                     total,
-                }));
+                )));
                 Ok(new_ptr)
             }
             Err(e) => {
-                self.1.dec_total_bytes_allocated(new_size - delta);
-                self.1.log(Fail(AllocStat::Realloc {
-                    info: ResizeInfo {
-                        old: MemoryRegion {
-                            ptr: ptr.as_ptr(),
-                            size: old_size,
-                            align: old_layout.align(),
-                        },
-                        new: MemoryRegion {
-                            ptr: null_mut(),
-                            size: new_size,
-                            align: new_layout.align(),
-                        },
-                    },
-                    kind: AllocKind::Shrink,
-                    total,
-                }));
+                self.1.log(Fail(AllocStat::new_realloc(
+                    ptr,
+                    null_mut(),
+                    old_layout,
+                    new_layout,
+                    AllocKind::Shrink,
+                    self.1.total(),
+                )));
                 Err(e)
             }
         }

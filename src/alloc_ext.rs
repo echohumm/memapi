@@ -1,15 +1,19 @@
 #[cfg(feature = "metadata")]
 use crate::UnsizedCopy;
 use crate::{
-    Alloc, AllocError, PtrProps, SizedProps,
-    helpers::{AllocGuard, SliceAllocGuard},
-    layout_or_sz_align,
+    helpers::{AllocGuard, SliceAllocGuard}, layout_or_sz_align, Alloc, AllocError,
+    PtrProps,
+    SizedProps,
 };
 #[cfg(feature = "clone_to_uninit")]
 use core::clone::CloneToUninit;
 #[cfg(feature = "metadata")]
 use core::ptr::metadata;
-use core::{alloc::Layout, ptr::NonNull};
+use core::{
+    alloc::Layout,
+    mem::MaybeUninit,
+    ptr::NonNull,
+};
 
 /// Extension methods for the core [`Alloc`] trait, providing convenient
 /// routines to allocate, initialize, clone, copy, and deallocate sized
@@ -288,30 +292,6 @@ pub trait AllocExt: Alloc {
         self.dealloc_typed(ptr);
     }
 
-    /// Deallocates a previously cloned or written slice of `T`.
-    ///
-    /// # Safety
-    ///
-    /// - `slice_ptr` must point to a block of memory allocated using this allocator.
-    #[track_caller]
-    #[inline]
-    unsafe fn dealloc_slice<T>(&self, slice_ptr: NonNull<[T]>) {
-        self.dealloc_typed(slice_ptr);
-    }
-
-    /// Drops and deallocates a previously cloned or written slice of `T`.
-    ///
-    /// # Safety
-    ///
-    /// - `slice_ptr` must point to a block of memory allocated using this allocator, be valid for
-    ///   reads and writes, aligned, and a valid `T`.
-    #[track_caller]
-    #[inline]
-    unsafe fn drop_and_dealloc_slice<T>(&self, slice_ptr: NonNull<[T]>) {
-        slice_ptr.drop_in_place();
-        self.dealloc_slice(slice_ptr);
-    }
-
     /// Drops the value at the given pointer, then zeroes and deallocates its memory.
     ///
     /// # Safety
@@ -323,6 +303,55 @@ pub trait AllocExt: Alloc {
     unsafe fn drop_zero_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
         ptr.drop_in_place();
         self.zero_and_dealloc_typed(ptr);
+    }
+
+    /// Zeroes and deallocates `n` elements at the given pointer.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
+    ///   and writes, aligned, and a valid `T`.
+    #[track_caller]
+    #[inline]
+    unsafe fn zero_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
+        ptr.as_ptr().write_bytes(0, n);
+        self.dealloc_n(ptr, n);
+    }
+    
+    /// Drops `init` elements from partially initialized slice and deallocates it.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
+    ///   and writes, aligned, and a valid `T`.
+    #[track_caller]
+    #[inline]
+    unsafe fn drop_and_dealloc_uninit_slice<T>(
+        &self,
+        ptr: NonNull<[MaybeUninit<T>]>,
+        init: usize,
+    ) {
+        NonNull::slice_from_raw_parts(ptr.cast::<T>(), init).drop_in_place();
+        self.dealloc_typed(ptr);
+    }
+    
+    /// Drops `init` elements from a partially initialized slice, then zeroes and deallocates its 
+    /// memory.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
+    ///   and writes, aligned, and a valid `T`.
+    #[track_caller]
+    #[inline]
+    unsafe fn zero_drop_and_dealloc_uninit_slice<T>(
+        &self,
+        ptr: NonNull<[MaybeUninit<T>]>,
+        init: usize,
+    ) {
+        NonNull::slice_from_raw_parts(ptr.cast::<T>(), init).drop_in_place();
+        ptr.cast::<T>().write_bytes(0, ptr.len());
+        self.dealloc_typed(ptr);
     }
 
     #[cfg(feature = "metadata")]

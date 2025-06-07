@@ -12,20 +12,24 @@ use std::{ffi::OsStr, path::Path};
 /// violating soundness or causing double frees.
 pub unsafe trait UnsizedCopy {}
 
+#[cfg(not(feature = "bytemuck"))]
 // Any `T` which is `Copy` is also `UnsizedCopy`.
 unsafe impl<T: Copy> UnsizedCopy for T {}
-// And so are slices containing copyable T.    ↰
-unsafe impl<T: Copy> UnsizedCopy for [T] {} // |
-// `str == [u8]` and `u8: Copy`.               ┤
-unsafe impl UnsizedCopy for str {} //          |
-// `CStr == [u8]` and `u8: Copy`               ┤
-unsafe impl UnsizedCopy for CStr {} //         |
-#[cfg(feature = "std")] //                     |
-// `OsStr == [u8]` and `[u8]: UnsizedCopy`     ┤
-unsafe impl UnsizedCopy for OsStr {} //        |
-#[cfg(feature = "std")] //                     |
-// `Path == OsStr` and `OsStr: UnsizedCopy`.   ┘
+// And so are slices containing copyable T.
+unsafe impl<T: Copy> UnsizedCopy for [T] {}
+// `str == [u8]` and `u8: Copy`.
+unsafe impl UnsizedCopy for str {}
+// `CStr == [u8]` and `u8: Copy`
+unsafe impl UnsizedCopy for CStr {}
+#[cfg(feature = "std")]
+// `OsStr == [u8]` and `[u8]: UnsizedCopy`
+unsafe impl UnsizedCopy for OsStr {}
+#[cfg(feature = "std")]
+// `Path == OsStr` and `OsStr: UnsizedCopy`.
 unsafe impl UnsizedCopy for Path {}
+
+#[cfg(feature = "bytemuck")]
+unsafe impl<D: bytemuck::Pod> UnsizedCopy for D {}
 
 #[cfg(feature = "metadata")]
 /// Trait indicating that a type has no metadata.

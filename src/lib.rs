@@ -63,7 +63,7 @@ mod type_props;
 /// Small alternatives to Rust functions which are currently unstable.
 pub mod unstable_util;
 
-// #[cfg(feature = "stats")]
+#[cfg(feature = "stats")]
 /// Allocation statistic gathering and reporting.
 pub mod stats;
 
@@ -114,8 +114,9 @@ pub mod helpers {
     /// 1. Drop the value of type `T` at the pointer.
     /// 2. Deallocate the underlying memory via the allocator.
     ///
-    /// To take ownership of the allocation without deallocating, call [`release`](SliceAllocGuard::release), which returns
-    /// the raw pointer and prevents the guard from running its cleanup.
+    /// To take ownership of the allocation without deallocating, call
+    /// [`release`](SliceAllocGuard::release), which returns the raw pointer and prevents the guard
+    /// from running its cleanup.
     ///
     /// This should be used in any situation where the initialization of a pointer's data may panic.
     /// (e.g., initializing via a clone or other user-implemented method)
@@ -234,9 +235,9 @@ pub mod helpers {
         #[inline]
         #[must_use]
         pub const fn release(self) -> NonNull<[T]> {
-            let out = NonNull::slice_from_raw_parts(self.ptr, self.init);
+            let ret = NonNull::slice_from_raw_parts(self.ptr, self.init);
             forget(self);
-            out
+            ret
         }
 
         /// Initializes the next element of the slice with `elem`.
@@ -421,7 +422,7 @@ pub trait Alloc {
     ///
     /// Returns [`AllocError::AllocFailed`] if the allocation fails.
     #[track_caller]
-    fn alloc_patterned<F: Fn(usize) -> u8>(
+    fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         layout: Layout,
         pattern: F,
@@ -436,7 +437,7 @@ pub trait Alloc {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[track_caller]
     #[inline]
-    fn alloc_slice_patterned<T, F: Fn(usize) -> u8>(
+    fn alloc_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
         &self,
         len: usize,
         pattern: F,
@@ -573,7 +574,7 @@ pub trait Alloc {
     /// - `old_layout` must describe exactly that block.
     #[track_caller]
     #[inline]
-    unsafe fn grow_patterned<F: Fn(usize) -> u8>(
+    unsafe fn grow_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
@@ -704,7 +705,7 @@ pub trait Alloc {
     /// - `old_layout` must describe exactly that block.
     #[track_caller]
     #[inline]
-    unsafe fn realloc_patterned<F: Fn(usize) -> u8>(
+    unsafe fn realloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
@@ -851,7 +852,7 @@ pub(crate) mod nightly {
 
                 #[track_caller]
                 #[inline]
-                fn alloc_patterned<F: Fn(usize) -> u8>(
+                fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
                     &self,
                     layout: Layout,
                     pattern: F,
@@ -904,7 +905,7 @@ pub(crate) mod nightly {
 
         #[track_caller]
         #[inline]
-        fn alloc_patterned<F: Fn(usize) -> u8>(
+        fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
             &self,
             layout: Layout,
             pattern: F,
@@ -956,7 +957,7 @@ pub(crate) mod fallback {
 
         #[track_caller]
         #[inline]
-        fn alloc_patterned<F: Fn(usize) -> u8>(
+        fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
             &self,
             layout: Layout,
             pattern: F,
@@ -994,7 +995,7 @@ pub(crate) mod fallback {
             (*self).alloc_filled(layout, n)
         }
 
-        fn alloc_patterned<F: Fn(usize) -> u8>(
+        fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
             &self,
             layout: Layout,
             pattern: F,
@@ -1009,7 +1010,6 @@ pub(crate) mod fallback {
 }
 
 unsafe impl GlobalAlloc for DefaultAlloc {
-    // TODO: determine whether this matches GlobalAlloc's semantics, and also maybe switch from *_unchecked to checked variants
     #[track_caller]
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -1097,7 +1097,7 @@ impl Error for AllocError {}
 /// reallocating using `new_layout`, filling new bytes using `pattern.`
 #[inline]
 #[track_caller]
-fn grow<A: Alloc + ?Sized, F: Fn(usize) -> u8>(
+fn grow<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
@@ -1143,7 +1143,7 @@ fn shrink<A: Alloc + ?Sized>(
 /// `old_layout.size()`.
 #[inline]
 #[track_caller]
-unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8>(
+unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
@@ -1187,7 +1187,7 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
 }
 
 /// The pattern to fill new bytes with.
-enum AllocPattern<F: Fn(usize) -> u8> {
+enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
     /// Don't fill bytes at all.
     None,
     /// Zero all bytes.
