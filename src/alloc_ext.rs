@@ -323,7 +323,7 @@ pub trait AllocExt: Alloc {
     /// # Safety
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
-    ///   and writes, aligned, and a valid `T`.
+    ///   and writes, aligned, a valid `[T]` for `init` elements, and a valid `[MaybeUninit<T>]`.
     #[track_caller]
     #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(

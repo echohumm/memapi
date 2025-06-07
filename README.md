@@ -24,46 +24,19 @@ A minimal, `no_std`-friendly memory allocation interface for managing raw buffer
 
 Add to your `Cargo.toml`:
 
-```
-toml
+```toml
 [dependencies]
-memapi = "0.8.1"
+memapi = "0.9.0"
 ```
 
-To enable the allocator API integration on nightly:
+Or, the recommended way:
 
-```
-toml
-[dependencies.memapi]
-version = "0.8.1"
-features = ["allocator_api"]
-```
+```toml
+[features]
+allocator_api = ["memapi/nightly"]
 
-To enable the alloc extension methods:
-
-```
-toml
-[dependencies.memapi]
-version = "0.8.1"
-features = ["alloc_ext"]
-```
-
-To enable unstable utilities:
-
-```
-toml
-[dependencies.memapi]
-version = "0.8.1"
-features = ["unstable_util"]
-```
-
-To enable allocation statistics:
-
-```
-toml
-[dependencies.memapi]
-version = "0.8.1"
-features = ["stats"]
+[dependencies]
+memapi = { version = "0.9.0", optional = true }
 ```
 
 ---
