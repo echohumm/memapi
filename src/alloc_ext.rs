@@ -430,7 +430,7 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     #[track_caller]
     #[inline]
-    unsafe fn alloc_copy_ptr_to_unchecked<T: ?Sized + UnsizedCopy>(
+    unsafe fn alloc_copy_ptr_to_unchecked<T: ?Sized>(
         &self,
         data: *const T,
     ) -> Result<NonNull<T>, AllocError> {

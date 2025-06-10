@@ -1,6 +1,6 @@
 [package]
 name = "memapi"
-version = "0.9.1"
+version = "0.9.2"
 edition = "2024"
 description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with some error handling."
 license = "MIT OR Apache-2.0"
