@@ -344,7 +344,7 @@ pub trait AllocExt: Alloc {
     ///   and writes, aligned, and a valid `T`.
     #[track_caller]
     #[inline]
-    unsafe fn zero_drop_and_dealloc_uninit_slice<T>(
+    unsafe fn drop_zero_and_dealloc_uninit_slice<T>(
         &self,
         ptr: NonNull<[MaybeUninit<T>]>,
         init: usize,

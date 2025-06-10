@@ -38,7 +38,8 @@ unsafe impl<D: bytemuck::Pod> UnsizedCopy for D {}
 ///
 /// # Example
 ///
-/// ```rust
+// invalid block type here suppresses an (incorrect) error in my ide
+/// ```rs
 /// # use memapi::{SizedProps, Thin};
 ///
 /// fn safe<T: Thin>() {

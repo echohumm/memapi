@@ -1,21 +1,9 @@
 use crate::{
+    Alloc, AllocError,
     owned::VariableError::{Hard, Soft},
-    Alloc,
-    AllocError
 };
-use core::{
-    fmt::{
-        Debug,
-        Display,
-        Formatter,
-        self
-    },
-    error::Error,
-    mem::{MaybeUninit, transmute},
-    ops::{Deref, DerefMut},
-    ptr::{NonNull, replace},
-    slice
-};
+use core::{error::Error, fmt::{self, Debug, Display, Formatter}, mem::{MaybeUninit, transmute}, ops::{Deref, DerefMut}, ptr, ptr::{NonNull, replace}, slice};
+use core::mem::{forget, ManuallyDrop};
 
 /// An error which can be soft or hard.
 pub enum VariableError<S, H> {
@@ -106,6 +94,28 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             alloc,
         }
     }
+    
+    /// Breaks the owned buffer into its raw data.
+    pub fn into_raw_parts(self) -> (NonNull<T>, usize, usize, A) {
+        let me = ManuallyDrop::new(self);
+        (me.buf, me.init, me.size, unsafe { ptr::read(&me.alloc) })
+    }
+
+    /// Creates a new owned buffer of `T` from the given parts.
+    #[inline]
+    pub const fn from_raw_parts(
+        buf: NonNull<T>,
+        init: usize,
+        size: usize,
+        alloc: A,
+    ) -> OwnedBuf<T, A> {
+        OwnedBuf {
+            buf,
+            init,
+            size,
+            alloc,
+        }
+    }
 
     /// Returns the total number of elements in the buffer.
     #[inline]
@@ -117,6 +127,16 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[inline]
     pub const fn initialized(&self) -> usize {
         self.init
+    }
+    
+    /// Sets the initialized element count.
+    /// 
+    /// # Safety
+    /// 
+    /// All elements up to `init` elements must be guaranteed to be initialized before use.
+    #[inline]
+    pub const unsafe fn set_initialized(&mut self, init: usize) {
+        self.init = init;
     }
 
     /// Gets a pointer to the entire buffer.
@@ -419,20 +439,48 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         // update initialized element count
         self.init += src.len();
     }
-    
-    /// Placeholder
-    pub fn replace_slice<A2: Alloc>(
-        &mut self,
-        idx: usize,
-        slice: OwnedBuf<T, A2>,
-    ) -> Result<OwnedBuf<T, A2>, OwnedBuf<T, A2>> {
-        let src = slice.as_slice_ptr().as_ptr();
-        if idx + src.len() > self.size {
-            return Err(slice);
-        }
-        
-        todo!()
-    }
+
+    // /// Placeholder
+    // #[inline]
+    // pub const fn try_replace_slice<A2: Alloc>(
+    //     &mut self,
+    //     idx: usize,
+    //     slice: OwnedBuf<T, A2>,
+    // ) -> Result<OwnedBuf<T, A>, OwnedBuf<T, A2>> where A: Clone {
+    //     todo!()
+    // }
+    //
+    // /// Placeholder
+    // #[inline]
+    // pub fn replace_slice_grow<A2: Alloc>(
+    //     &mut self,
+    //     idx: usize,
+    //     slice: OwnedBuf<T, A2>,
+    // ) -> Result<OwnedBuf<T, A>, AllocError> where A: Clone {
+    //     self.expand_to_fit(self.init + slice.init)?;
+    //     let replaced = todo!();
+    //     unsafe {
+    //         self.replace_slice_unchecked(idx, slice);
+    //     }
+    //     Ok(())
+    // }
+    //
+    // /// Placeholder
+    // #[inline]
+    // pub const unsafe fn replace_slice_unchecked<A2: Alloc>(
+    //     &mut self,
+    //     idx: usize,
+    //     slice: OwnedBuf<T, A2>,
+    //     replaced: usize,
+    // ) -> OwnedBuf<T, A>
+    // where
+    //     A: Clone,
+    // {
+    //     let src = slice.as_slice_ptr().as_ptr();
+    //     let dst = self.get_ptr_unchecked(idx);
+    //
+    //     todo!()
+    // }
 
     /// Gets a pointer to the element at the given `idx` if it is initialized.
     #[inline]
@@ -987,7 +1035,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
 
 impl<T, A: Alloc> Deref for OwnedBuf<T, A> {
     type Target = [T];
-    
+
     #[inline]
     fn deref(&self) -> &[T] {
         self.as_slice()
