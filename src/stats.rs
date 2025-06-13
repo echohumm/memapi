@@ -1,7 +1,4 @@
-use crate::{
-    Alloc, AllocError,
-    stats::AllocRes::{Fail, Succ},
-};
+use crate::{Alloc, AllocError, stats::AllocRes::{Fail, Succ}, DefaultAlloc};
 use alloc::{alloc::Layout, boxed::Box, format, rc::Rc, string::ToString, sync::Arc};
 use core::{
     fmt::{self, Display, Formatter},
@@ -22,9 +19,16 @@ use std::{
 /// each result via `L`.
 pub struct Stats<A, L: StatsLogger>(pub A, pub L);
 
+impl<L: StatsLogger> Stats<DefaultAlloc, L> {
+    /// Create a new stats‐collecting allocator wrapper.
+    pub const fn new(logger: L) -> Self {
+        Stats(DefaultAlloc, logger)
+    }
+}
+
 impl<A, L: StatsLogger> Stats<A, L> {
     /// Create a new stats‐collecting allocator wrapper.
-    pub const fn new(inner: A, logger: L) -> Self {
+    pub const fn new_in(inner: A, logger: L) -> Self {
         Stats(inner, logger)
     }
 }

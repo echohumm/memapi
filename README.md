@@ -26,7 +26,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.9.1"
+memapi = "0.10.0"
 ```
 
 Or, the recommended way:
@@ -36,7 +36,7 @@ Or, the recommended way:
 allocator_api = ["memapi/nightly"]
 
 [dependencies]
-memapi = { version = "0.9.1", optional = true }
+memapi = "0.10.0"
 ```
 
 ---

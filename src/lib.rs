@@ -63,12 +63,12 @@ mod type_props;
 /// Small alternatives to Rust functions which are currently unstable.
 pub mod unstable_util;
 
-#[cfg(feature = "stats")]
-/// Allocation statistic gathering and reporting.
-pub mod stats;
 #[cfg(feature = "owned")]
 /// An owned buffer type.
 pub mod owned;
+#[cfg(feature = "stats")]
+/// Allocation statistic gathering and reporting.
+pub mod stats;
 
 pub use marker::*;
 pub use type_props::*;
@@ -122,7 +122,7 @@ pub mod helpers {
     /// from running its cleanup.
     ///
     /// This should be used in any situation where the initialization of a pointer's data may panic.
-    /// (e.g., initializing via a clone or other user-implemented method)
+    /// (e.g., initializing via a clone or any other user-implemented method)
     ///
     /// # Examples
     ///

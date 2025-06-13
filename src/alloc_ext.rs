@@ -1,19 +1,15 @@
 #[cfg(feature = "metadata")]
 use crate::UnsizedCopy;
 use crate::{
-    helpers::{AllocGuard, SliceAllocGuard}, layout_or_sz_align, Alloc, AllocError,
-    PtrProps,
-    SizedProps,
+    Alloc, AllocError, PtrProps, SizedProps,
+    helpers::{AllocGuard, SliceAllocGuard},
+    layout_or_sz_align,
 };
 #[cfg(feature = "clone_to_uninit")]
 use core::clone::CloneToUninit;
 #[cfg(feature = "metadata")]
 use core::ptr::metadata;
-use core::{
-    alloc::Layout,
-    mem::MaybeUninit,
-    ptr::NonNull,
-};
+use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 
 /// Extension methods for the core [`Alloc`] trait, providing convenient
 /// routines to allocate, initialize, clone, copy, and deallocate sized
@@ -221,7 +217,12 @@ pub trait AllocExt: Alloc {
         ptr: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice(ptr.cast(), ptr.len(), new_len)
+        Ok(unsafe {
+            NonNull::slice_from_raw_parts(
+                self.grow_raw_slice(ptr.cast::<T>(), ptr.len(), new_len)?,
+                new_len,
+            )
+        })
     }
 
     /// Grows a slice to a new length given the pointer to its first element, current length, and
@@ -243,7 +244,7 @@ pub trait AllocExt: Alloc {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-    ) -> Result<NonNull<[T]>, AllocError> {
+    ) -> Result<NonNull<T>, AllocError> {
         unsafe {
             self.grow(
                 ptr.cast(),
@@ -252,7 +253,7 @@ pub trait AllocExt: Alloc {
                 layout_or_sz_align::<T>(new_len)
                     .map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?,
             )
-            .map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), new_len))
+            .map(NonNull::cast)
         }
     }
 
@@ -317,7 +318,7 @@ pub trait AllocExt: Alloc {
         ptr.as_ptr().write_bytes(0, n);
         self.dealloc_n(ptr, n);
     }
-    
+
     /// Drops `init` elements from partially initialized slice and deallocates it.
     ///
     /// # Safety
@@ -326,16 +327,12 @@ pub trait AllocExt: Alloc {
     ///   and writes, aligned, a valid `[T]` for `init` elements, and a valid `[MaybeUninit<T>]`.
     #[track_caller]
     #[inline]
-    unsafe fn drop_and_dealloc_uninit_slice<T>(
-        &self,
-        ptr: NonNull<[MaybeUninit<T>]>,
-        init: usize,
-    ) {
+    unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
         NonNull::slice_from_raw_parts(ptr.cast::<T>(), init).drop_in_place();
         self.dealloc_typed(ptr);
     }
-    
-    /// Drops `init` elements from a partially initialized slice, then zeroes and deallocates its 
+
+    /// Drops `init` elements from a partially initialized slice, then zeroes and deallocates its
     /// memory.
     ///
     /// # Safety
