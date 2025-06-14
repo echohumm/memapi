@@ -500,9 +500,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
         // pointer to initialized elements
         let src = slice.as_slice_ptr().as_ptr();
+        let len = slice.init;
         // write in the elements
         src.cast::<T>()
-            .copy_to_nonoverlapping(self.buf.as_ptr().add(idx), slice.init);
+            .copy_to_nonoverlapping(self.buf.as_ptr().add(idx), len);
         // deallocate the original buffer
         slice
             .alloc
@@ -510,7 +511,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         // noop but stops the non-consumed warning.
         forget(slice);
         // update initialized element count
-        self.init += src.len();
+        self.init += len;
     }
 
     /// Removes exactly `len` elements from this buffer, starting at `idx`, and returns them in a
@@ -1281,18 +1282,47 @@ impl<T, A: Alloc> BorrowMut<[MaybeUninit<T>]> for OwnedBuf<T, A> {
     }
 }
 
-// TODO: improve this with specialization
-impl<T: Clone, A: Alloc + Default> From<&[T]> for OwnedBuf<T, A> {
+macro_rules! spec_impl {
+    ($($extra_token:tt)?) => {
+        impl<T: Clone, A: Alloc + Default> From<&[T]> for OwnedBuf<T, A> {
+            #[track_caller]
+            #[inline]
+            $($extra_token)? fn from(slice: &[T]) -> OwnedBuf<T, A> {
+                Buf::from(slice)
+                    .clone_into_owned_in(A::default())
+                    .expect("`<From<&[T]>>::from` failed")
+            }
+        }
+        
+        impl<T: Clone, A: Alloc + Default> From<&mut [T]> for OwnedBuf<T, A> {
+            #[track_caller]
+            #[inline]
+            $($extra_token)? fn from(slice: &mut [T]) -> OwnedBuf<T, A> {
+                OwnedBuf::from(&*slice)
+            }
+        }
+    };
+}
+
+#[cfg(not(feature = "specialization"))]
+spec_impl!();
+
+#[cfg(feature = "specialization")]
+spec_impl!(default);
+
+#[cfg(feature = "specialization")]
+impl<T: Copy, A: Alloc + Default> From<&[T]> for OwnedBuf<T, A> {
     #[track_caller]
     #[inline]
     fn from(slice: &[T]) -> OwnedBuf<T, A> {
         Buf::from(slice)
-            .clone_into_owned_in(A::default())
+            .copy_into_owned_in(A::default())
             .expect("`<From<&[T]>>::from` failed")
     }
 }
 
-impl<T: Clone, A: Alloc + Default> From<&mut [T]> for OwnedBuf<T, A> {
+#[cfg(feature = "specialization")]
+impl<T: Copy, A: Alloc + Default> From<&mut [T]> for OwnedBuf<T, A> {
     #[track_caller]
     #[inline]
     fn from(slice: &mut [T]) -> OwnedBuf<T, A> {

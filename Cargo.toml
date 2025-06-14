@@ -1,10 +1,10 @@
 [package]
 name = "memapi"
-version = "0.10.0"
+version = "0.10.1"
 edition = "2024"
-description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with some error handling."
+description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with improved error handling."
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/barely-a-dev/memapi"
+repository = "https://github.com/afemboylol/memapi"
 keywords = ["allocator", "no_std", "memory", "allocation"]
 categories = ["no-std", "memory-management"]
 exclude = ["/tests"]
@@ -18,6 +18,8 @@ std = []
 
 metadata = ["nightly"]
 clone_to_uninit = ["nightly"]
+# `owned` only since nothing else uses spec.
+specialization = ["nightly", "owned"]
 
 alloc_ext = []
 resize_in_place = []
@@ -26,6 +28,7 @@ stats = []
 owned = []
 
 bytemuck = ["dep:bytemuck"]
+jemalloc_support = ["dep:tikv-jemallocator"]
 
 [[test]]
 name = "test"
@@ -33,3 +36,4 @@ path = "tests/test.rs"
 
 [dependencies]
 bytemuck = { version = "1.23.0", optional = true }
+tikv-jemallocator = { version = "0.6.0", optional = true }

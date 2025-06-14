@@ -300,8 +300,10 @@ mod stats_gathering_tests {
         alloc::Layout,
         sync::atomic::{AtomicUsize, Ordering},
     };
-    use memapi::stats::FmtLog;
-    use memapi::{stats::Stats, Alloc, DefaultAlloc};
+    use memapi::{
+        Alloc,
+        stats::{FmtLog, Stats},
+    };
 
     #[test]
     fn test_stats_counts_correct() {
@@ -377,7 +379,7 @@ mod owned_tests {
         // further try_init_next returns Err with the value back
         let v = 0xFF;
         assert_eq!(buf.try_init_next(v).unwrap_err(), v);
-        
+
         buf.drop_and_dealloc();
     }
 
@@ -412,7 +414,7 @@ mod owned_tests {
         assert!(buf.get(10).is_none());
         assert!(buf.get_ptr(10).is_none());
         assert!(buf.get_ptr(1).is_some());
-        
+
         buf.drop_and_dealloc();
     }
 
@@ -437,7 +439,7 @@ mod owned_tests {
         for (i, &v) in buf2.init_buf().iter().enumerate() {
             assert_eq!(v, (i as i16) * 10);
         }
-        
+
         buf2.drop_and_dealloc();
     }
 
@@ -466,7 +468,7 @@ mod owned_tests {
         assert!(buf2.size() >= 2);
         assert_eq!(buf2.initialized(), 2);
         assert_eq!(buf2.init_buf(), &[10, 20]);
-        
+
         buf.drop_and_dealloc();
         buf2.drop_and_dealloc();
     }
@@ -486,7 +488,7 @@ mod owned_tests {
         assert_eq!(slice_res.init_buf(), &[3, 4, 5]);
         // original buffer should have had 6 init, now 13 left
         assert_eq!(buf.initialized(), 13);
-        
+
         buf.drop_and_dealloc();
         slice_res.drop_and_dealloc();
     }
@@ -510,7 +512,7 @@ mod owned_tests {
         let lh = format!("{hard}");
         assert!(ls.contains("oops"));
         assert!(lh.contains("boom"));
-        
+
         buf.drop_and_dealloc();
     }
 }

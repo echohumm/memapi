@@ -4,6 +4,8 @@
 
 A minimal, `no_std`-friendly memory allocation interface for managing raw buffers, suitable for use in collections.
 
+note: this readme is very outdated
+
 ---
 
 ## Features
@@ -26,7 +28,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.10.0"
+memapi = "0.10.1"
 ```
 
 Or, the recommended way:
@@ -36,7 +38,7 @@ Or, the recommended way:
 allocator_api = ["memapi/nightly"]
 
 [dependencies]
-memapi = "0.10.0"
+memapi = "0.10.1"
 ```
 
 ---
