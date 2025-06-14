@@ -86,9 +86,13 @@ use core::{
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
     use crate::Alloc;
-    use core::mem::forget;
-    use core::{alloc::Layout, ops::Deref, ptr::NonNull};
-    use std::num::NonZeroUsize;
+    use core::{
+        alloc::Layout,
+        ops::Deref,
+        ptr::NonNull,
+        mem::forget,
+        num::NonZeroUsize
+    };
 
     /// Returns a [`NonNull`] which has the given alignment as its address.
     #[must_use]
