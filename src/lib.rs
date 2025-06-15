@@ -22,8 +22,10 @@
 //!
 //! ```rust
 //! # use memapi::{Alloc, DefaultAlloc, AllocError};
-//! # use core::alloc::Layout;
-//! # use core::ptr::NonNull;
+//! # use core::{
+//! #    alloc::Layout,
+//! #    ptr::NonNull
+//! # };
 //! let allocator = DefaultAlloc;
 //! // Allocate 4 usizes.
 //! let ptr = allocator.alloc_slice::<usize>(4).expect("alloc failed").cast::<usize>();
@@ -53,6 +55,8 @@ mod alloc_ext;
 #[cfg(feature = "resize_in_place")]
 mod in_place;
 
+#[cfg(any(feature = "std", feature = "jemalloc_support"))]
+use crate::helpers::{AllocGuard, dangling_nonnull};
 #[cfg(feature = "alloc_ext")]
 pub use alloc_ext::*;
 #[cfg(feature = "resize_in_place")]
@@ -86,17 +90,16 @@ use core::{
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
     use crate::Alloc;
-    use core::{
-        alloc::Layout,
-        ops::Deref,
-        ptr::NonNull,
-        mem::forget,
-        num::NonZeroUsize
-    };
+    use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
 
     /// Returns a [`NonNull`] which has the given alignment as its address.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the valid `alignment` would not result in a null pointer.
     #[must_use]
-    pub const fn dangling_nonnull(align: usize) -> NonNull<u8> {
+    #[inline]
+    pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
         NonNull::without_provenance(unsafe { NonZeroUsize::new_unchecked(align) })
     }
 
@@ -785,15 +788,105 @@ pub trait Alloc {
     }
 }
 
+#[cfg(any(feature = "std", feature = "jemalloc_support"))]
+macro_rules! default_global_alloc_impl {
+    ($ty:ty) => {
+        impl Alloc for $ty {
+            #[track_caller]
+            #[inline]
+            fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+                if layout.size() == 0 {
+                    Err(AllocError::ZeroSizedLayout(unsafe {
+                        dangling_nonnull(layout.align())
+                    }))
+                } else {
+                    match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
+                        Some(ptr) => Ok(ptr),
+                        None => Err(AllocError::AllocFailed(layout)),
+                    }
+                }
+            }
+
+            #[track_caller]
+            #[inline]
+            fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+                if layout.size() == 0 {
+                    Err(AllocError::ZeroSizedLayout(unsafe {
+                        dangling_nonnull(layout.align())
+                    }))
+                } else {
+                    match NonNull::new(unsafe { GlobalAlloc::alloc_zeroed(self, layout) }) {
+                        Some(ptr) => Ok(ptr),
+                        None => Err(AllocError::AllocFailed(layout)),
+                    }
+                }
+            }
+
+            #[track_caller]
+            #[inline]
+            fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
+                if layout.size() == 0 {
+                    Err(AllocError::ZeroSizedLayout(unsafe {
+                        dangling_nonnull(layout.align())
+                    }))
+                } else {
+                    match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
+                        Some(ptr) => {
+                            unsafe {
+                                ptr.write_bytes(n, layout.size());
+                            }
+                            Ok(ptr)
+                        }
+                        None => Err(AllocError::AllocFailed(layout)),
+                    }
+                }
+            }
+
+            #[track_caller]
+            #[inline]
+            fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
+                &self,
+                layout: Layout,
+                pattern: F,
+            ) -> Result<NonNull<u8>, AllocError> {
+                if layout.size() == 0 {
+                    Err(AllocError::ZeroSizedLayout(unsafe {
+                        dangling_nonnull(layout.align())
+                    }))
+                } else {
+                    match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
+                        Some(ptr) => {
+                            let guard = AllocGuard::new(ptr.cast::<u8>(), self);
+                            for i in 0..layout.size() {
+                                unsafe {
+                                    guard.as_ptr().add(i).write(pattern(i));
+                                }
+                            }
+                            Ok(guard.release())
+                        }
+                        None => Err(AllocError::AllocFailed(layout)),
+                    }
+                }
+            }
+
+            #[track_caller]
+            #[inline]
+            unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+                GlobalAlloc::dealloc(self, ptr.as_ptr(), layout);
+            }
+        }
+    };
+}
+
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use super::{Alloc, AllocError, DefaultAlloc, helpers::{AllocGuard, dangling_nonnull}};
-    use alloc::alloc::{Allocator, Global, Layout};
-    use core::{
-        ptr::NonNull,
-        alloc::GlobalAlloc
+    use super::{
+        Alloc, AllocError, DefaultAlloc,
+        helpers::{AllocGuard, dangling_nonnull},
     };
+    use alloc::alloc::{Allocator, Global, Layout};
+    use core::ptr::NonNull;
 
     unsafe impl Allocator for DefaultAlloc {
         #[track_caller]
@@ -858,7 +951,9 @@ pub(crate) mod nightly {
                 #[inline]
                 fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
                     if layout.size() == 0 {
-                        Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                        Err(AllocError::ZeroSizedLayout(unsafe {
+                            dangling_nonnull(layout.align())
+                        }))
                     } else {
                         Allocator::allocate(self, layout)
                             .map_err(|_| AllocError::AllocFailed(layout))
@@ -870,7 +965,9 @@ pub(crate) mod nightly {
                 #[inline]
                 fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
                     if layout.size() == 0 {
-                        Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                        Err(AllocError::ZeroSizedLayout(unsafe {
+                            dangling_nonnull(layout.align())
+                        }))
                     } else {
                         Allocator::allocate_zeroed(self, layout)
                             .map_err(|_| AllocError::AllocFailed(layout))
@@ -882,7 +979,9 @@ pub(crate) mod nightly {
                 #[inline]
                 fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
                     if layout.size() == 0 {
-                        Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                        Err(AllocError::ZeroSizedLayout(unsafe {
+                            dangling_nonnull(layout.align())
+                        }))
                     } else {
                         Allocator::allocate(self, layout)
                             .map_err(|_| AllocError::AllocFailed(layout))
@@ -904,7 +1003,9 @@ pub(crate) mod nightly {
                     pattern: F,
                 ) -> Result<NonNull<u8>, AllocError> {
                     if layout.size() == 0 {
-                        Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                        Err(AllocError::ZeroSizedLayout(unsafe {
+                            dangling_nonnull(layout.align())
+                        }))
                     } else {
                         Allocator::allocate(self, layout)
                             .map_err(|_| AllocError::AllocFailed(layout))
@@ -931,86 +1032,7 @@ pub(crate) mod nightly {
 
     default_alloc_impl!(DefaultAlloc);
     default_alloc_impl!(Global);
-    #[cfg(feature = "std")]
-    default_alloc_impl!(std::alloc::System);
-    #[cfg(feature = "jemalloc_support")]
-    impl Alloc for tikv_jemallocator::Jemalloc {
-        #[track_caller]
-        #[inline]
-        fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-            if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
-            } else {
-                match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
-                    Some(ptr) => Ok(ptr),
-                    None => Err(AllocError::AllocFailed(layout)),
-                }
-            }
-        }
 
-        #[track_caller]
-        #[inline]
-        fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-            if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
-            } else {
-                match NonNull::new(unsafe { GlobalAlloc::alloc_zeroed(self, layout) }) {
-                    Some(ptr) => Ok(ptr),
-                    None => Err(AllocError::AllocFailed(layout)),
-                }
-            }
-        }
-
-        #[track_caller]
-        #[inline]
-        fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-            if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
-            } else {
-                match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
-                    Some(ptr) => {
-                        unsafe {
-                            ptr.write_bytes(n, layout.size());
-                        }
-                        Ok(ptr)
-                    }
-                    None => Err(AllocError::AllocFailed(layout)),
-                }
-            }
-        }
-
-        #[track_caller]
-        #[inline]
-        fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-            &self,
-            layout: Layout,
-            pattern: F,
-        ) -> Result<NonNull<u8>, AllocError> {
-            if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
-            } else {
-                match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
-                    Some(ptr) => {
-                        let guard = AllocGuard::new(ptr.cast::<u8>(), self);
-                        for i in 0..layout.size() {
-                            unsafe {
-                                guard.as_ptr().add(i).write(pattern(i));
-                            }
-                        }
-                        Ok(guard.release())
-                    }
-                    None => Err(AllocError::AllocFailed(layout)),
-                }
-            }
-        }
-
-        #[track_caller]
-        #[inline]
-        unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-            GlobalAlloc::dealloc(self, ptr.as_ptr(), layout);
-        }
-    }
-    
     // TODO: in_place ops for jemalloc
 
     impl<A: Alloc + ?Sized> Alloc for &A {
@@ -1054,12 +1076,12 @@ pub(crate) mod nightly {
 /// The fallback module for stable Rust.
 pub(crate) mod fallback {
     use super::{
-        Alloc,
-        AllocError,
+        Alloc, AllocError,
         helpers::{AllocGuard, dangling_nonnull},
     };
     use alloc::alloc::{
-        Layout, alloc as raw_alloc, alloc_zeroed as raw_alloc_zeroed, dealloc as raw_dealloc,
+        Layout, alloc as raw_alloc, alloc_zeroed as raw_alloc_zeroed,
+        dealloc as raw_dealloc,
     };
     use core::ptr::NonNull;
 
@@ -1068,7 +1090,9 @@ pub(crate) mod fallback {
         #[inline]
         fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
             if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                Err(AllocError::ZeroSizedLayout(unsafe {
+                    dangling_nonnull(layout.align())
+                }))
             } else {
                 NonNull::new(unsafe { raw_alloc(layout) }).ok_or(AllocError::AllocFailed(layout))
             }
@@ -1078,7 +1102,9 @@ pub(crate) mod fallback {
         #[inline]
         fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
             if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                Err(AllocError::ZeroSizedLayout(unsafe {
+                    dangling_nonnull(layout.align())
+                }))
             } else {
                 NonNull::new(unsafe { raw_alloc_zeroed(layout) })
                     .ok_or(AllocError::AllocFailed(layout))
@@ -1089,7 +1115,9 @@ pub(crate) mod fallback {
         #[inline]
         fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
             if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                Err(AllocError::ZeroSizedLayout(unsafe {
+                    dangling_nonnull(layout.align())
+                }))
             } else {
                 let ptr = NonNull::new(unsafe { raw_alloc(layout).cast::<u8>() })
                     .ok_or(AllocError::AllocFailed(layout))?;
@@ -1108,7 +1136,9 @@ pub(crate) mod fallback {
             pattern: F,
         ) -> Result<NonNull<u8>, AllocError> {
             if layout.size() == 0 {
-                Err(AllocError::ZeroSizedLayout(dangling_nonnull(layout.align())))
+                Err(AllocError::ZeroSizedLayout(unsafe {
+                    dangling_nonnull(layout.align())
+                }))
             } else {
                 let guard = AllocGuard::new(
                     NonNull::new(unsafe { raw_alloc(layout).cast::<u8>() })
@@ -1156,9 +1186,12 @@ pub(crate) mod fallback {
             (*self).dealloc(ptr, layout);
         }
     }
-
-    // TODO: other allocators
 }
+
+#[cfg(feature = "std")]
+default_global_alloc_impl!(std::alloc::System);
+#[cfg(feature = "jemalloc_support")]
+default_global_alloc_impl!(tikv_jemallocator::Jemalloc);
 
 unsafe impl GlobalAlloc for DefaultAlloc {
     #[track_caller]
