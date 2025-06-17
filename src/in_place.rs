@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use crate::external_alloc::ffi;
-use crate::{Alloc, AllocError};
+use crate::{Alloc, AllocError, UOp};
 use core::{alloc::Layout, ptr::NonNull};
 
 pub trait ResizeInPlace: Alloc {
@@ -358,11 +358,10 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
 
     unsafe fn shrink_in_place(
         &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_size: usize,
+        _: NonNull<u8>,
+        _: Layout,
+        _: usize,
     ) -> Result<(), AllocError> {
-        unimplemented!("mimalloc doesn't support shrink-in-place. if you believe this is \
-        incorrect, please open an issue")
+        Err(AllocError::UnsupportedOperation(UOp::ShrinkInPlace))
     }
 }

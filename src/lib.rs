@@ -81,10 +81,11 @@ pub use external_alloc::*;
 pub use marker::*;
 pub use type_props::*;
 
-use crate::helpers::{dangling_nonnull_for, layout_or_sz_align, AllocGuard};
-use alloc::alloc::{alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de};
+use crate::helpers::{dangling_nonnull_for, layout_or_sz_align, null_q, AllocGuard};
+use alloc::alloc::{
+    alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de, GlobalAlloc, Layout,
+};
 use core::{
-    alloc::{GlobalAlloc, Layout},
     cmp::Ordering,
     error::Error,
     fmt::{self, Display, Formatter},
@@ -93,8 +94,18 @@ use core::{
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
-    use crate::{Alloc, SizedProps};
+    use crate::{Alloc, AllocError, SizedProps};
     use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
+
+    /// Converts a possibly null pointer into a [`NonNull`] result.
+    #[inline]
+    pub(crate) const fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        if ptr.is_null() {
+            Err(AllocError::AllocFailed(layout))
+        } else {
+            Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
+        }
+    }
 
     /// Returns a valid, dangling [`NonNull`] for the given layout.
     #[must_use]
@@ -898,8 +909,8 @@ default_alloc_impl!(DefaultAlloc);
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use super::{null_q, Alloc, AllocError, DefaultAlloc};
-    use crate::dangling_nonnull_for;
+    use super::{Alloc, AllocError, DefaultAlloc};
+    use crate::{dangling_nonnull_for, helpers::null_q};
     use alloc::alloc::{
         alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de, Allocator, Global, Layout,
     };
@@ -1035,167 +1046,6 @@ impl Alloc for std::alloc::System {
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         GlobalAlloc::dealloc(self, ptr.as_ptr(), layout);
-    }
-}
-
-// helper to convert a possibly null pointer into a nonnull result
-#[inline]
-const fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-    if ptr.is_null() {
-        Err(AllocError::AllocFailed(layout))
-    } else {
-        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
-    }
-}
-
-#[cfg(feature = "jemalloc")]
-impl Alloc for jemalloc::Jemalloc {
-    #[inline]
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
-            let flags = ffi::jem::layout_to_flags(layout.size(), layout.align());
-            let ptr = if flags == 0 {
-                unsafe { ffi::jem::malloc(layout.size()) }
-            } else {
-                unsafe { ffi::jem::mallocx(layout.size(), flags) }
-            };
-            null_q(ptr, layout)
-        }
-    }
-
-    #[inline]
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
-            let flags = ffi::jem::layout_to_flags(layout.size(), layout.align());
-            let ptr = if flags == 0 {
-                unsafe { ffi::jem::calloc(1, layout.size()) }
-            } else {
-                unsafe { ffi::jem::mallocx(layout.size(), flags | ffi::jem::MALLOCX_ZERO) }
-            };
-            null_q(ptr, layout)
-        }
-    }
-
-    #[inline]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        if layout.size() != 0 {
-            let flags = ffi::jem::layout_to_flags(layout.size(), layout.align());
-            ffi::jem::sdallocx(ptr.as_ptr().cast(), layout.size(), flags);
-        }
-    }
-
-    #[inline]
-    unsafe fn grow(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.align() != old_layout.align() {
-            return Err(AllocError::UnsupportedOperation(
-                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
-            ));
-        } else if new_layout.size() < old_layout.size() {
-            return Err(AllocError::GrowSmallerNewLayout(
-                old_layout.size(),
-                new_layout.size(),
-            ));
-        } else if new_layout.size() == old_layout.size() {
-            return Ok(ptr);
-        }
-        null_q(
-            ffi::jem::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
-            new_layout,
-        )
-    }
-
-    #[inline]
-    unsafe fn shrink(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.align() != old_layout.align() {
-            return Err(AllocError::UnsupportedOperation(
-                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
-            ));
-        } else if new_layout.size() > old_layout.size() {
-            return Err(AllocError::ShrinkBiggerNewLayout(
-                old_layout.size(),
-                new_layout.size(),
-            ));
-        } else if new_layout.size() == old_layout.size() {
-            return Ok(ptr);
-        }
-        null_q(
-            ffi::jem::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
-            new_layout,
-        )
-    }
-
-    #[inline]
-    unsafe fn realloc(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.align() != old_layout.align() {
-            return Err(AllocError::UnsupportedOperation(
-                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
-            ));
-        }
-        null_q(
-            ffi::jem::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
-            new_layout,
-        )
-    }
-}
-
-#[cfg(feature = "mimalloc")]
-impl Alloc for mimalloc::MiMalloc {
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        todo!()
-    }
-
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        todo!()
-    }
-
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        todo!()
-    }
-
-    unsafe fn grow(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
-        todo!()
-    }
-
-    unsafe fn shrink(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
-        todo!()
-    }
-
-    unsafe fn realloc(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
-        todo!()
     }
 }
 

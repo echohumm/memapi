@@ -104,6 +104,6 @@ pub mod ffi {
             mi_usable_size(ptr.cast())
         }
 
-        pub use mimalloc_sys::*;
+        pub use libmimalloc_sys::*;
     }
 }
