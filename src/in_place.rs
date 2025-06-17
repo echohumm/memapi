@@ -1,7 +1,6 @@
 #![allow(missing_docs)]
 
-#[cfg(feature = "jemalloc_in_place")]
-use crate::{external_alloc::ffi, jemalloc::Jemalloc};
+use crate::external_alloc::ffi;
 use crate::{Alloc, AllocError};
 use core::{alloc::Layout, ptr::NonNull};
 
@@ -195,7 +194,7 @@ pub trait ResizeInPlace: Alloc {
         }
     }
 
-    /// Reallocate a block, growing or shrinking as needed, filling any new bytes by calling 
+    /// Reallocate a block, growing or shrinking as needed, filling any new bytes by calling
     /// `pattern(i)` for each new byte index `i`.
     ///
     /// On grow, preserves existing contents up to `old_layout.size()`, and
@@ -228,7 +227,7 @@ pub trait ResizeInPlace: Alloc {
         }
     }
 
-    /// Reallocate a block, growing or shrinking as needed, filling any newly allocated bytes with 
+    /// Reallocate a block, growing or shrinking as needed, filling any newly allocated bytes with
     /// `n`.
     ///
     /// On grow, preserves existing contents up to `old_layout.size()`, and
@@ -263,7 +262,7 @@ pub trait ResizeInPlace: Alloc {
 }
 
 #[cfg(feature = "jemalloc_in_place")]
-impl ResizeInPlace for Jemalloc {
+impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
     #[inline]
     unsafe fn grow_in_place(
         &self,
@@ -279,10 +278,14 @@ impl ResizeInPlace for Jemalloc {
                 new_size,
             ))
         } else {
-            let flags = ffi::jem::layout_to_flags(new_size, old_layout.align());
             // it isn't my fault if this is wrong lol
-            let usable_size = ffi::jem::xallocx(ptr.as_ptr().cast(), new_size, 0, flags);
-            if usable_size >= new_size {
+            if ffi::jem::xallocx(
+                ptr.as_ptr().cast(),
+                new_size,
+                0,
+                ffi::jem::layout_to_flags(new_size, old_layout.align()),
+            ) >= new_size
+            {
                 Ok(())
             } else {
                 Err(AllocError::CannotResizeInPlace)
@@ -324,5 +327,42 @@ impl ResizeInPlace for Jemalloc {
                 Err(AllocError::CannotResizeInPlace)
             }
         }
+    }
+}
+
+#[cfg(feature = "mimalloc_in_place")]
+impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
+    #[inline]
+    unsafe fn grow_in_place(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_size: usize,
+    ) -> Result<(), AllocError> {
+        if new_size == 0 {
+            Err(AllocError::ResizeInPlaceZeroSized)
+        } else if new_size < old_layout.size() {
+            Err(AllocError::GrowSmallerNewLayout(
+                old_layout.size(),
+                new_size,
+            ))
+        } else {
+            // this would be, though
+            if ffi::mim::mi_expand(ptr.as_ptr().cast(), new_size).is_null() {
+                Err(AllocError::CannotResizeInPlace)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    unsafe fn shrink_in_place(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_size: usize,
+    ) -> Result<(), AllocError> {
+        unimplemented!("mimalloc doesn't support shrink-in-place. if you believe this is \
+        incorrect, please open an issue")
     }
 }

@@ -10,7 +10,7 @@ macro_rules! assume {
     };
 }
 
-/// Handle to the jemalloc allocator.This type implements the `GlobalAlloc` trait, allowing use as
+/// Handle to the jemalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use as
 /// a global allocator, and [`Alloc`](crate::Alloc).
 #[derive(Copy, Clone, Default, Debug)]
 pub struct Jemalloc;

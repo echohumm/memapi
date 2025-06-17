@@ -39,6 +39,8 @@
 //! ```
 
 // TODO: maybe update the readme
+// TODO: change most of the track_caller attrs into cfg_attr(miri, track_caller), as they are only
+//  useful then.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
@@ -98,9 +100,7 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
-        unsafe {
-            dangling_nonnull(layout.align())
-        }
+        unsafe { dangling_nonnull(layout.align()) }
     }
 
     /// Returns a [`NonNull`] which has the given alignment as its address.
@@ -471,7 +471,18 @@ pub trait Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[track_caller]
-    fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError>;
+    #[inline]
+    fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
+        match self.alloc(layout) {
+            Ok(p) => {
+                unsafe {
+                    p.as_ptr().write_bytes(n, layout.size());
+                }
+                Ok(p)
+            }
+            Err(e) => Err(e),
+        }
+    }
 
     /// Attempts to allocate a block of memory for `len` instances of `T`, filled with bytes
     /// initialized to `n`.
@@ -499,11 +510,25 @@ pub trait Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[track_caller]
+    #[inline]
     fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         layout: Layout,
         pattern: F,
-    ) -> Result<NonNull<u8>, AllocError>;
+    ) -> Result<NonNull<u8>, AllocError> {
+        match self.alloc(layout) {
+            Ok(p) => {
+                let guard = AllocGuard::new(p.cast::<u8>(), self);
+                for i in 0..layout.size() {
+                    unsafe {
+                        guard.as_ptr().add(i).write(pattern(i));
+                    }
+                }
+                Ok(guard.release())
+            }
+            Err(e) => Err(e),
+        }
+    }
 
     /// Attempts to allocate a block of memory for `len` instances of `T` and
     /// fill it by calling `pattern(i)` for each byte index `i`.
@@ -741,17 +766,13 @@ pub trait Alloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.size() > old_layout.size() {
-            grow_unchecked(
-                self,
-                ptr,
-                old_layout,
-                new_layout,
-                AllocPattern::<fn(usize) -> u8>::None,
-            )
-        } else {
-            shrink_unchecked(self, ptr, old_layout, new_layout)
-        }
+        ralloc(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            AllocPattern::<fn(usize) -> u8>::None,
+        )
     }
 
     /// Reallocate a block, growing or shrinking as needed, zeroing any newly
@@ -774,7 +795,13 @@ pub trait Alloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        self.realloc_filled(ptr, old_layout, new_layout, 0)
+        ralloc(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            AllocPattern::<fn(usize) -> u8>::Zero,
+        )
     }
 
     /// Reallocate a block, growing or shrinking as needed, filling any new bytes by calling
@@ -798,11 +825,7 @@ pub trait Alloc {
         new_layout: Layout,
         pattern: F,
     ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.size() > old_layout.size() {
-            grow_unchecked(self, ptr, old_layout, new_layout, AllocPattern::Fn(pattern))
-        } else {
-            shrink_unchecked(self, ptr, old_layout, new_layout)
-        }
+        ralloc(self, ptr, old_layout, new_layout, AllocPattern::Fn(pattern))
     }
 
     /// Reallocate a block, growing or shrinking as needed, filling any newly
@@ -826,17 +849,13 @@ pub trait Alloc {
         new_layout: Layout,
         n: u8,
     ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.size() > old_layout.size() {
-            grow_unchecked(
-                self,
-                ptr,
-                old_layout,
-                new_layout,
-                AllocPattern::<fn(usize) -> u8>::All(n),
-            )
-        } else {
-            shrink_unchecked(self, ptr, old_layout, new_layout)
-        }
+        ralloc(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            AllocPattern::<fn(usize) -> u8>::All(n),
+        )
     }
 }
 
@@ -865,44 +884,6 @@ macro_rules! default_alloc_impl {
 
             #[track_caller]
             #[inline]
-            fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-                if layout.size() == 0 {
-                    Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-                } else {
-                    null_q(unsafe { raw_all(layout) }, layout).map(|ptr| {
-                        let ptr = ptr.cast::<u8>();
-                        unsafe {
-                            ptr.write_bytes(n, layout.size());
-                        }
-                        ptr
-                    })
-                }
-            }
-
-            #[track_caller]
-            #[inline]
-            fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-                &self,
-                layout: Layout,
-                pattern: F,
-            ) -> Result<NonNull<u8>, AllocError> {
-                if layout.size() == 0 {
-                    Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-                } else {
-                    null_q(unsafe { raw_all(layout) }, layout).map(|ptr| {
-                        let guard = AllocGuard::new(ptr.cast::<u8>(), self);
-                        for i in 0..layout.size() {
-                            unsafe {
-                                guard.as_ptr().add(i).write(pattern(i));
-                            }
-                        }
-                        guard.release()
-                    })
-                }
-            }
-
-            #[track_caller]
-            #[inline]
             unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
                 if layout.size() != 0 {
                     de(ptr.as_ptr(), layout);
@@ -917,10 +898,7 @@ default_alloc_impl!(DefaultAlloc);
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use super::{
-        helpers::AllocGuard,
-        null_q, Alloc, AllocError, DefaultAlloc,
-    };
+    use super::{null_q, Alloc, AllocError, DefaultAlloc};
     use crate::dangling_nonnull_for;
     use alloc::alloc::{
         alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de, Allocator, Global, Layout,
@@ -997,22 +975,6 @@ pub(crate) mod nightly {
 
         #[track_caller]
         #[inline]
-        fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-            (**self).alloc_filled(layout, n)
-        }
-
-        #[track_caller]
-        #[inline]
-        fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-            &self,
-            layout: Layout,
-            pattern: F,
-        ) -> Result<NonNull<u8>, AllocError> {
-            (**self).alloc_patterned(layout, pattern)
-        }
-
-        #[track_caller]
-        #[inline]
         unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
             (**self).dealloc(ptr, layout);
         }
@@ -1033,18 +995,6 @@ pub(crate) mod fallback {
 
         fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
             (*self).alloc_zeroed(layout)
-        }
-
-        fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-            (*self).alloc_filled(layout, n)
-        }
-
-        fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-            &self,
-            layout: Layout,
-            pattern: F,
-        ) -> Result<NonNull<u8>, AllocError> {
-            (*self).alloc_patterned(layout, pattern)
         }
 
         unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
@@ -1076,49 +1026,6 @@ impl Alloc for std::alloc::System {
         } else {
             match NonNull::new(unsafe { GlobalAlloc::alloc_zeroed(self, layout) }) {
                 Some(ptr) => Ok(ptr),
-                None => Err(AllocError::AllocFailed(layout)),
-            }
-        }
-    }
-
-    #[track_caller]
-    #[inline]
-    fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
-            match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
-                Some(ptr) => {
-                    unsafe {
-                        ptr.write_bytes(n, layout.size());
-                    }
-                    Ok(ptr)
-                }
-                None => Err(AllocError::AllocFailed(layout)),
-            }
-        }
-    }
-
-    #[track_caller]
-    #[inline]
-    fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-        &self,
-        layout: Layout,
-        pattern: F,
-    ) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
-            match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
-                Some(ptr) => {
-                    let guard = AllocGuard::new(ptr.cast::<u8>(), self);
-                    for i in 0..layout.size() {
-                        unsafe {
-                            guard.as_ptr().add(i).write(pattern(i));
-                        }
-                    }
-                    Ok(guard.release())
-                }
                 None => Err(AllocError::AllocFailed(layout)),
             }
         }
@@ -1174,56 +1081,122 @@ impl Alloc for jemalloc::Jemalloc {
     }
 
     #[inline]
-    fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-        Alloc::alloc(&self, layout).map(|ptr| {
-            let ptr = ptr.cast::<u8>();
-            unsafe {
-                ptr.write_bytes(n, layout.size());
-            }
-            ptr
-        })
-    }
-
-    #[inline]
-    fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-        &self,
-        layout: Layout,
-        pattern: F,
-    ) -> Result<NonNull<u8>, AllocError> {
-        Alloc::alloc(self, layout).map(|ptr| {
-            let guard = AllocGuard::new(ptr.cast::<u8>(), self);
-            for i in 0..layout.size() {
-                unsafe {
-                    guard.as_ptr().add(i).write(pattern(i));
-                }
-            }
-            guard.release()
-        })
-    }
-
-    #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        let flags = ffi::jem::layout_to_flags(layout.size(), layout.align());
-        ffi::jem::sdallocx(ptr.as_ptr().cast(), layout.size(), flags);
+        if layout.size() != 0 {
+            let flags = ffi::jem::layout_to_flags(layout.size(), layout.align());
+            ffi::jem::sdallocx(ptr.as_ptr().cast(), layout.size(), flags);
+        }
+    }
+
+    #[inline]
+    unsafe fn grow(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<u8>, AllocError> {
+        if new_layout.align() != old_layout.align() {
+            return Err(AllocError::UnsupportedOperation(
+                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
+            ));
+        } else if new_layout.size() < old_layout.size() {
+            return Err(AllocError::GrowSmallerNewLayout(
+                old_layout.size(),
+                new_layout.size(),
+            ));
+        } else if new_layout.size() == old_layout.size() {
+            return Ok(ptr);
+        }
+        null_q(
+            ffi::jem::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
+            new_layout,
+        )
+    }
+
+    #[inline]
+    unsafe fn shrink(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<u8>, AllocError> {
+        if new_layout.align() != old_layout.align() {
+            return Err(AllocError::UnsupportedOperation(
+                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
+            ));
+        } else if new_layout.size() > old_layout.size() {
+            return Err(AllocError::ShrinkBiggerNewLayout(
+                old_layout.size(),
+                new_layout.size(),
+            ));
+        } else if new_layout.size() == old_layout.size() {
+            return Ok(ptr);
+        }
+        null_q(
+            ffi::jem::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
+            new_layout,
+        )
     }
 
     #[inline]
     unsafe fn realloc(
         &self,
         ptr: NonNull<u8>,
-        layout: Layout,
+        old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        let flags = ffi::jem::layout_to_flags(new_layout.size(), layout.align());
-        let ptr = if flags == 0 {
-            ffi::jem::realloc(ptr.as_ptr().cast(), new_layout.size())
-        } else {
-            ffi::jem::rallocx(ptr.as_ptr().cast(), new_layout.size(), flags)
-        };
-        null_q(ptr, layout)
+        if new_layout.align() != old_layout.align() {
+            return Err(AllocError::UnsupportedOperation(
+                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
+            ));
+        }
+        null_q(
+            ffi::jem::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
+            new_layout,
+        )
+    }
+}
+
+#[cfg(feature = "mimalloc")]
+impl Alloc for mimalloc::MiMalloc {
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        todo!()
     }
 
-    // TODO: other directly supported operations
+    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        todo!()
+    }
+
+    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+        todo!()
+    }
+
+    unsafe fn grow(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<u8>, AllocError> {
+        todo!()
+    }
+
+    unsafe fn shrink(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<u8>, AllocError> {
+        todo!()
+    }
+
+    unsafe fn realloc(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout,
+    ) -> Result<NonNull<u8>, AllocError> {
+        todo!()
+    }
 }
 
 unsafe impl GlobalAlloc for DefaultAlloc {
@@ -1274,7 +1247,8 @@ pub enum AllocError {
     ArithmeticOverflow,
     /// The layout computed with the given size and alignment is invalid.
     LayoutError(usize, usize),
-    /// The given layout was zero-sized. The contained [`NonNull`] will be dangling.
+    /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
+    /// the requested alignment.
     ZeroSizedLayout(NonNull<u8>),
     /// The underlying allocator failed to allocate using the given layout.
     AllocFailed(Layout),
@@ -1282,14 +1256,27 @@ pub enum AllocError {
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger layout.
     ShrinkBiggerNewLayout(usize, usize),
+    /// An operation unsupported by the allocator was attempted.
+    UnsupportedOperation(UOp),
     #[cfg(feature = "resize_in_place")]
-    /// Resizing in-place was found to be impossible.
+    /// Resize-in-place was found to be impossible.
     // Note that this variant means the allocator supports resizing in-place, but it failed.
     CannotResizeInPlace,
     #[cfg(feature = "resize_in_place")]
-    /// A size of zero was requested for a resize in-place operation.
+    /// A size of zero was requested for a resize-in-place operation.
+    ///
+    /// Same as [`AllocError::ZeroSizedLayout`], but without the [`NonNull`], which is useless for
+    /// in-place operations.
     ResizeInPlaceZeroSized,
-    /// A different alignment was passed to a reallocation function which doesn't support it.
+}
+
+#[derive(Debug, PartialEq, Eq)]
+#[repr(u8)]
+/// An unsupported operation.
+pub enum UOp {
+    /// A shrink-in-place operation.
+    ShrinkInPlace,
+    /// A reallocation operation with a different alignment from the original allocation.
     ReallocDifferentAlign(usize, usize),
 }
 
@@ -1312,17 +1299,26 @@ impl Display for AllocError {
                 f,
                 "attempted to shrink from a size of {old} to a larger size of {new}"
             ),
+            AllocError::UnsupportedOperation(op) => {
+                write!(f, "unsupported operation: attempted to {op}")
+            }
             #[cfg(feature = "resize_in_place")]
             AllocError::CannotResizeInPlace => write!(f, "cannot resize in place"),
             #[cfg(feature = "resize_in_place")]
             AllocError::ResizeInPlaceZeroSized => {
                 write!(f, "zero-sized resize in place was requested")
             }
-            AllocError::ReallocDifferentAlign(old, new) => write!(
-                f,
-                "unsupported attempt to realloc with a different alignment from the original: old: \
-                {old}, new: {new}"
-            ),
+        }
+    }
+}
+
+impl Display for UOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            UOp::ShrinkInPlace => write!(f, "shrink in place"),
+            UOp::ReallocDifferentAlign(old, new) => {
+                write!(f, "realloc diff from {old} to {new}")
+            }
         }
     }
 }
@@ -1420,6 +1416,23 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
         a.dealloc(ptr, old_layout);
     }
     Ok(new_ptr)
+}
+
+/// Helper for realloc to reduce repetition.
+#[track_caller]
+#[inline]
+unsafe fn ralloc<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
+    alloc: &A,
+    ptr: NonNull<u8>,
+    old_layout: Layout,
+    new_layout: Layout,
+    pat: AllocPattern<F>,
+) -> Result<NonNull<u8>, AllocError> {
+    match old_layout.size().cmp(&new_layout.size()) {
+        Ordering::Less => unsafe { grow_unchecked(&alloc, ptr, old_layout, new_layout, pat) },
+        Ordering::Equal => Ok(ptr),
+        Ordering::Greater => unsafe { shrink_unchecked(&alloc, ptr, old_layout, new_layout) },
+    }
 }
 
 /// The pattern to fill new bytes with.

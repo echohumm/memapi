@@ -517,7 +517,7 @@ mod owned_tests {
     }
 }
 
-#[cfg(feature = "jemalloc")]
+#[cfg(all(feature = "jemalloc", not(miri)))]
 mod jemalloc_tests {
     use core::{alloc::Layout, slice};
     use memapi::{SizedProps, ffi::jem::usable_size, jemalloc::Jemalloc, Alloc};

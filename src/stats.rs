@@ -578,30 +578,6 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
     }
 
     #[track_caller]
-    fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-        allocate(
-            self,
-            |alloc, layout| alloc.alloc_filled(layout, n),
-            layout,
-            AllocKind::Filled(n),
-        )
-    }
-
-    #[track_caller]
-    fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-        &self,
-        layout: Layout,
-        pattern: F,
-    ) -> Result<NonNull<u8>, AllocError> {
-        allocate(
-            self,
-            |alloc, layout| alloc.alloc_patterned(layout, pattern.clone()),
-            layout,
-            AllocKind::Patterned,
-        )
-    }
-
-    #[track_caller]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         self.0.dealloc(ptr, layout);
 

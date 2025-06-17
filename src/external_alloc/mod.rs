@@ -3,8 +3,9 @@
 pub mod jemalloc;
 
 // for the future
-// #[cfg(feature = "mimalloc")]
-// pub mod mimalloc;
+#[cfg(feature = "mimalloc")]
+/// Module for [mimalloc](https://microsoft.github.io/mimalloc/) support.
+pub mod mimalloc;
 
 /// FFI bindings to allocation libraries.
 pub mod ffi {
@@ -13,7 +14,11 @@ pub mod ffi {
     pub mod jem {
         #![allow(unexpected_cfgs)]
 
-        use core::ffi::c_int;
+        use core::{
+            alloc::Layout,
+            ffi::{c_int, c_void},
+        };
+
         #[cfg(any(
             target_arch = "arm",
             target_arch = "mips",
@@ -50,12 +55,12 @@ pub mod ffi {
             }
         }
 
-        /// Return the usable size of the allocation pointed to by ptr.
+        /// Returns the usable size of the allocation pointed to by ptr.
         ///
-        /// The return value may be larger than the size requested during allocation. This function 
+        /// The return value may be larger than the size requested during allocation. This function
         /// is not a mechanism for in-place `realloc()`; rather, it is provided solely as a tool for
-        /// introspection purposes. Any discrepancy between the requested allocation size and the 
-        /// size reported by this function should not be depended on, since such behavior is 
+        /// introspection purposes. Any discrepancy between the requested allocation size and the
+        /// size reported by this function should not be depended on, since such behavior is
         /// entirely implementation-dependent.
         ///
         /// # Safety
@@ -67,6 +72,38 @@ pub mod ffi {
             malloc_usable_size(ptr.cast())
         }
 
+        #[track_caller]
+        #[inline]
+        pub(crate) unsafe fn raw_ralloc(
+            ptr: *mut c_void,
+            old_layout: Layout,
+            new_layout: Layout,
+        ) -> *mut c_void {
+            let flags = layout_to_flags(new_layout.size(), old_layout.align());
+            if flags == 0 {
+                realloc(ptr, new_layout.size())
+            } else {
+                rallocx(ptr, new_layout.size(), flags)
+            }
+        }
+
         pub use tikv_jemalloc_sys::*;
+    }
+
+    #[cfg(feature = "mimalloc")]
+    /// Bindings from `mimalloc-sys`.
+    pub mod mim {
+        /// Returns the usable size of the allocation pointed to by ptr.
+        ///
+        /// # Safety
+        ///
+        /// `ptr` must have been allocated by mimalloc and must not have been freed yet.
+        #[inline]
+        #[must_use]
+        pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
+            mi_usable_size(ptr.cast())
+        }
+
+        pub use mimalloc_sys::*;
     }
 }
