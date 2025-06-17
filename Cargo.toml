@@ -1,7 +1,7 @@
 [package]
 name = "memapi"
 # major will always be 0 ngl
-version = "0.11.2"
+version = "0.11.0"
 edition = "2021"
 description = "A minimal, no_std-friendly memory allocation interface for raw buffers, with improved error handling."
 license = "MIT OR Apache-2.0"
