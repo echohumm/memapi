@@ -479,7 +479,7 @@ pub enum AllocKind {
     /// New bytes were filled with a constant value.
     Filled(u8),
     /// New bytes were filled with a pattern.
-    // FIXME: return the pattern
+    // FIXME: contain the pattern
     Patterned,
     /// There were no new bytes.
     Shrink,

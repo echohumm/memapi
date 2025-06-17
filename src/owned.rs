@@ -400,7 +400,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// # Errors
     ///
-    /// - `Err(val)` if the index is out of bounds or there is no space for the element.
+    /// - `Err(val)` if the index is out of bounds, or there is no space for the element.
     pub const fn try_insert(&mut self, idx: usize, val: T) -> Result<(), T> {
         if idx > self.init || self.init == self.size {
             return Err(val);
@@ -417,7 +417,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// # Safety
     ///
-    /// The caller must ensure `idx` is in bounds and their is space for a new element.
+    /// The caller must ensure `idx` is in bounds and there is space for a new element.
     pub const unsafe fn insert_unchecked(&mut self, idx: usize, val: T) {
         let dst = self.get_ptr_unchecked(idx);
         if idx != self.init {
@@ -427,7 +427,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         self.init += 1;
     }
 
-    // TODO: add slice replacing and extending
+    // TD: add slice replacing and extending
 
     #[allow(clippy::type_complexity)]
     /// Attempts to insert `slice` at `idx`, growing if necessary.
@@ -465,7 +465,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// # Errors
     ///
-    /// - `Err(slice)` if the index is out of bounds or there is no space for some elements of the
+    /// - `Err(slice)` if the index is out of bounds, or there is no space for some elements of the
     ///   slice.
     pub fn try_insert_slice<A2: Alloc>(
         &mut self,
@@ -519,7 +519,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// # Returns
     ///
-    /// - `Some(Ok(buf))` if `idx + len` is within bounds and allocation for the returned buffer
+    /// - `Some(Ok(buf))` if `idx + len` is within bounds, and allocation for the returned buffer
     ///   succeeds.
     /// - `Some(Err(alloc_err))` if allocation for the returned buffer fails.
     /// - `None` if `idx + len` exceeds the number of initialized elements.
@@ -547,7 +547,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// # Returns
     ///
-    /// - `Some(Ok(buf))` if `idx + len` is within bounds and allocation for the returned buffer
+    /// - `Some(Ok(buf))` if `idx + len` is within bounds, and allocation for the returned buffer
     ///   succeeds. `buf`'s length and size will be as many elements were available, up to
     ///   `req_len`.
     /// - `Some(Err(alloc_err))` if allocation for the returned buffer fails.
@@ -1048,9 +1048,6 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    // TD: make sure this doesn't cause any issues elsewhere (like with drop methods or other
-    //  deallocations)
-
     /// Drops all initialized elements and deallocates the buffer.
     #[track_caller]
     #[inline]
@@ -1381,7 +1378,7 @@ impl<T> Buf<'_, T> {
         self.clone_into_owned_in(DefaultAlloc)
     }
 
-    /// Creates a new owned buffer with a size equivalent to the contained slice, and copies all
+    /// Creates a new owned buffer with a size equivalent to the contained slice and copies all
     /// initialized elements into it.
     ///
     /// # Errors
