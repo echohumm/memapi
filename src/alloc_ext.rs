@@ -1,16 +1,13 @@
-#[cfg(feature = "metadata")]
-use crate::UnsizedCopy;
 use crate::{
+    error::AllocError,
     helpers::{AllocGuard, SliceAllocGuard},
-    layout_or_sz_align, Alloc, AllocError, PtrProps, SizedProps,
+    layout_or_sz_align,
+    type_props::{PtrProps, SizedProps},
+    Alloc,
 };
-#[cfg(feature = "clone_to_uninit")]
-use core::clone::CloneToUninit;
-#[cfg(feature = "metadata")]
-use core::ptr::metadata;
 use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 
-// TODO: slice growth with zeroing, filling, patterning, initializing, etc., slice shrinking with 
+// TODO: slice growth with zeroing, filling, patterning, initializing, etc., slice shrinking with
 //  init elem dropping
 
 /// Extension methods for the core [`Alloc`] trait, providing convenient
@@ -126,14 +123,16 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[track_caller]
     #[inline]
-    fn alloc_clone_to<T: CloneToUninit + ?Sized>(
+    fn alloc_clone_to<T: core::clone::CloneToUninit + ?Sized>(
         &self,
         data: &T,
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(Layout::for_value::<T>(data)) {
             Ok(ptr) => Ok(unsafe {
-                let guard =
-                    AllocGuard::new(NonNull::<T>::from_raw_parts(ptr, metadata(data)), self);
+                let guard = AllocGuard::new(
+                    NonNull::<T>::from_raw_parts(ptr, core::ptr::metadata(data)),
+                    self,
+                );
                 data.clone_to_uninit(guard.as_ptr().cast());
                 guard.release()
             }),
@@ -150,7 +149,10 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
     #[track_caller]
     #[inline]
-    fn alloc_clone_to<T: CloneToUninit>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
+    fn alloc_clone_to<T: core::clone::CloneToUninit>(
+        &self,
+        data: &T,
+    ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(Layout::for_value::<T>(data)) {
             Ok(ptr) => Ok(unsafe {
                 let guard = AllocGuard::new(ptr, self);
@@ -342,8 +344,7 @@ pub trait AllocExt: Alloc {
         self.realloc_raw_slice(slice.cast::<T>(), slice.len(), new_len)
     }
 
-
-    /// Reallocates a slice to a new length given the pointer to its first element, current length, 
+    /// Reallocates a slice to a new length given the pointer to its first element, current length,
     /// and requested length.
     ///
     /// On grow, preserves all existing elements and truncates to `new_len` elements on shrink. This
@@ -480,7 +481,7 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[track_caller]
     #[inline]
-    fn alloc_copy_ref_to<T: ?Sized + UnsizedCopy>(
+    fn alloc_copy_ref_to<T: ?Sized + crate::marker::UnsizedCopy>(
         &self,
         data: &T,
     ) -> Result<NonNull<T>, AllocError> {
@@ -500,7 +501,7 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[track_caller]
     #[inline]
-    unsafe fn alloc_copy_ptr_to<T: ?Sized + UnsizedCopy>(
+    unsafe fn alloc_copy_ptr_to<T: ?Sized + crate::marker::UnsizedCopy>(
         &self,
         data: *const T,
     ) -> Result<NonNull<T>, AllocError> {
@@ -509,7 +510,7 @@ pub trait AllocExt: Alloc {
 
     #[cfg(feature = "metadata")]
     /// Allocates and copies an unsized `T` by reference without requiring
-    /// `T: `[`UnsizedCopy`](UnsizedCopy), returning a `NonNull<T>`.
+    /// `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy), returning a `NonNull<T>`.
     ///
     /// # Safety
     ///
@@ -530,7 +531,7 @@ pub trait AllocExt: Alloc {
                 NonNull::from_ref(data)
                     .cast()
                     .copy_to_nonoverlapping(ptr, size_of_val::<T>(data));
-                NonNull::from_raw_parts(ptr, metadata(&raw const *data))
+                NonNull::from_raw_parts(ptr, core::ptr::metadata(&raw const *data))
             }),
             Err(e) => Err(e),
         }
@@ -538,7 +539,7 @@ pub trait AllocExt: Alloc {
 
     #[cfg(feature = "metadata")]
     /// Allocates and copies an unsized `T` by raw pointer without requiring
-    /// `T: `[`UnsizedCopy`](UnsizedCopy), returning a `NonNull<T>`.
+    /// `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy), returning a `NonNull<T>`.
     ///
     /// # Safety
     ///
@@ -558,7 +559,7 @@ pub trait AllocExt: Alloc {
             Ok(ptr) => Ok({
                 NonNull::new_unchecked(data.cast_mut().cast())
                     .copy_to_nonoverlapping(ptr, size_of_val::<T>(&*data));
-                NonNull::from_raw_parts(ptr, metadata(data))
+                NonNull::from_raw_parts(ptr, core::ptr::metadata(data))
             }),
             Err(e) => Err(e),
         }

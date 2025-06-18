@@ -21,7 +21,7 @@
 //! # Examples
 //!
 //! ```rust
-//! # use memapi::{Alloc, DefaultAlloc, AllocError};
+//! # use memapi::{Alloc, DefaultAlloc, error::AllocError};
 //! # use core::{
 //! #    alloc::Layout,
 //! #    ptr::NonNull
@@ -62,12 +62,16 @@ pub use alloc_ext::*;
 #[cfg(feature = "resize_in_place")]
 pub use in_place::*;
 
-mod marker;
-mod type_props;
+/// Marker traits.
+pub mod marker;
+/// Sized type properties as constants and property getters for pointers.
+pub mod type_props;
 
 /// Small alternatives to Rust functions which are currently unstable.
 pub mod unstable_util;
 
+/// Errors which can occur during allocation.
+pub mod error;
 #[cfg(feature = "owned")]
 /// An owned buffer type.
 pub mod owned;
@@ -78,23 +82,21 @@ pub mod stats;
 pub(crate) mod external_alloc;
 pub use external_alloc::*;
 
-pub use marker::*;
-pub use type_props::*;
-
-use crate::helpers::{dangling_nonnull_for, layout_or_sz_align, null_q, AllocGuard};
+use crate::{
+    error::AllocError,
+    helpers::{dangling_nonnull_for, layout_or_sz_align, null_q, AllocGuard},
+};
 use alloc::alloc::{
     alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de, GlobalAlloc, Layout,
 };
 use core::{
     cmp::Ordering,
-    error::Error,
-    fmt::{self, Display, Formatter},
     ptr::{null_mut, NonNull},
 };
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
-    use crate::{Alloc, AllocError, SizedProps};
+    use crate::{error::AllocError, type_props::SizedProps, Alloc};
     use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
@@ -417,6 +419,82 @@ pub mod helpers {
 /// Default allocator, delegating to the global allocator.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DefaultAlloc;
+
+macro_rules! default_alloc_impl {
+    ($ty:ty) => {
+        impl Alloc for $ty {
+            #[track_caller]
+            #[inline]
+            fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+                if layout.size() == 0 {
+                    Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
+                } else {
+                    null_q(unsafe { raw_all(layout) }, layout)
+                }
+            }
+
+            #[track_caller]
+            #[inline]
+            fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+                if layout.size() == 0 {
+                    Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
+                } else {
+                    null_q(unsafe { raw_allz(layout) }, layout)
+                }
+            }
+
+            #[track_caller]
+            #[inline]
+            unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+                if layout.size() != 0 {
+                    de(ptr.as_ptr(), layout);
+                }
+            }
+        }
+    };
+}
+
+unsafe impl GlobalAlloc for DefaultAlloc {
+    #[track_caller]
+    #[inline]
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        match Alloc::alloc(&self, layout) {
+            Ok(ptr) => ptr.as_ptr(),
+            Err(_) => null_mut(),
+        }
+    }
+
+    #[track_caller]
+    #[inline]
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        Alloc::dealloc(&self, NonNull::new_unchecked(ptr), layout);
+    }
+
+    #[track_caller]
+    #[inline]
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        match Alloc::alloc_zeroed(&self, layout) {
+            Ok(ptr) => ptr.as_ptr(),
+            Err(_) => null_mut(),
+        }
+    }
+
+    #[track_caller]
+    #[inline]
+    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        match Alloc::realloc(
+            &self,
+            NonNull::new_unchecked(ptr),
+            layout,
+            Layout::from_size_align_unchecked(new_size, layout.align()),
+        ) {
+            Ok(ptr) => ptr.as_ptr(),
+            Err(_) => null_mut(),
+        }
+    }
+}
+
+default_alloc_impl!(DefaultAlloc);
 
 /// A memory allocation interface.
 ///
@@ -870,47 +948,16 @@ pub trait Alloc {
     }
 }
 
-macro_rules! default_alloc_impl {
-    ($ty:ty) => {
-        impl Alloc for $ty {
-            #[track_caller]
-            #[inline]
-            fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-                if layout.size() == 0 {
-                    Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-                } else {
-                    null_q(unsafe { raw_all(layout) }, layout)
-                }
-            }
-
-            #[track_caller]
-            #[inline]
-            fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-                if layout.size() == 0 {
-                    Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-                } else {
-                    null_q(unsafe { raw_allz(layout) }, layout)
-                }
-            }
-
-            #[track_caller]
-            #[inline]
-            unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-                if layout.size() != 0 {
-                    de(ptr.as_ptr(), layout);
-                }
-            }
-        }
-    };
-}
-
-default_alloc_impl!(DefaultAlloc);
-
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use super::{Alloc, AllocError, DefaultAlloc};
-    use crate::{dangling_nonnull_for, helpers::null_q};
+    use crate::{
+        Alloc,
+        error::AllocError,
+        DefaultAlloc,
+        dangling_nonnull_for,
+        helpers::null_q
+    };
     use alloc::alloc::{
         alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de, Allocator, Global, Layout,
     };
@@ -995,7 +1042,7 @@ pub(crate) mod nightly {
 #[cfg(not(feature = "nightly"))]
 /// The fallback module for stable Rust.
 pub(crate) mod fallback {
-    use super::{Alloc, AllocError};
+    use crate::{Alloc, error::AllocError};
     use alloc::alloc::Layout;
     use core::ptr::NonNull;
 
@@ -1048,132 +1095,6 @@ impl Alloc for std::alloc::System {
         GlobalAlloc::dealloc(self, ptr.as_ptr(), layout);
     }
 }
-
-unsafe impl GlobalAlloc for DefaultAlloc {
-    #[track_caller]
-    #[inline]
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        match Alloc::alloc(&self, layout) {
-            Ok(ptr) => ptr.as_ptr(),
-            Err(_) => null_mut(),
-        }
-    }
-
-    #[track_caller]
-    #[inline]
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        Alloc::dealloc(&self, NonNull::new_unchecked(ptr), layout);
-    }
-
-    #[track_caller]
-    #[inline]
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        match Alloc::alloc_zeroed(&self, layout) {
-            Ok(ptr) => ptr.as_ptr(),
-            Err(_) => null_mut(),
-        }
-    }
-
-    #[track_caller]
-    #[inline]
-    unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        match Alloc::realloc(
-            &self,
-            NonNull::new_unchecked(ptr),
-            layout,
-            Layout::from_size_align_unchecked(new_size, layout.align()),
-        ) {
-            Ok(ptr) => ptr.as_ptr(),
-            Err(_) => null_mut(),
-        }
-    }
-}
-
-/// Errors for allocation operations.
-#[derive(Debug, PartialEq, Eq)]
-#[repr(u8)]
-pub enum AllocError {
-    /// A basic arithmetic operation overflowed.
-    ArithmeticOverflow,
-    /// The layout computed with the given size and alignment is invalid.
-    LayoutError(usize, usize),
-    /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
-    /// the requested alignment.
-    ZeroSizedLayout(NonNull<u8>),
-    /// The underlying allocator failed to allocate using the given layout.
-    AllocFailed(Layout),
-    /// Attempted to grow to a smaller layout.
-    GrowSmallerNewLayout(usize, usize),
-    /// Attempted to shrink to a larger layout.
-    ShrinkBiggerNewLayout(usize, usize),
-    /// An operation unsupported by the allocator was attempted.
-    UnsupportedOperation(UOp),
-    #[cfg(feature = "resize_in_place")]
-    /// Resize-in-place was found to be impossible.
-    // Note that this variant means the allocator supports resizing in-place, but it failed.
-    CannotResizeInPlace,
-    #[cfg(feature = "resize_in_place")]
-    /// A size of zero was requested for a resize-in-place operation.
-    ///
-    /// Same as [`AllocError::ZeroSizedLayout`], but without the [`NonNull`], which is useless for
-    /// in-place operations.
-    ResizeInPlaceZeroSized,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-#[repr(u8)]
-/// An unsupported operation.
-pub enum UOp {
-    /// A shrink-in-place operation.
-    ShrinkInPlace,
-    /// A reallocation operation with a different alignment from the original allocation.
-    ReallocDifferentAlign(usize, usize),
-}
-
-impl Display for AllocError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            AllocError::ArithmeticOverflow => write!(f, "arithmetic overflow"),
-            AllocError::LayoutError(sz, align) => {
-                write!(f, "computed invalid layout: size: {sz}, align: {align}")
-            }
-            AllocError::ZeroSizedLayout(_) => {
-                write!(f, "zero-sized layout was given")
-            }
-            AllocError::AllocFailed(l) => write!(f, "allocation failed for layout: {l:?}"),
-            AllocError::GrowSmallerNewLayout(old, new) => write!(
-                f,
-                "attempted to grow from a size of {old} to a smaller size of {new}"
-            ),
-            AllocError::ShrinkBiggerNewLayout(old, new) => write!(
-                f,
-                "attempted to shrink from a size of {old} to a larger size of {new}"
-            ),
-            AllocError::UnsupportedOperation(op) => {
-                write!(f, "unsupported operation: attempted to {op}")
-            }
-            #[cfg(feature = "resize_in_place")]
-            AllocError::CannotResizeInPlace => write!(f, "cannot resize in place"),
-            #[cfg(feature = "resize_in_place")]
-            AllocError::ResizeInPlaceZeroSized => {
-                write!(f, "zero-sized resize in place was requested")
-            }
-        }
-    }
-}
-
-impl Display for UOp {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            UOp::ShrinkInPlace => write!(f, "shrink in place"),
-            UOp::ReallocDifferentAlign(old, new) => {
-                write!(f, "realloc diff from {old} to {new}")
-            }
-        }
-    }
-}
-
-impl Error for AllocError {}
 
 /// Internal helper to grow the allocation at `ptr` by deallocating using `old_layout` and
 /// reallocating using `new_layout`, filling new bytes using `pattern.`

@@ -2,7 +2,7 @@ use core::alloc::Layout;
 use memapi::unstable_util::{
     pad_layout_for, pad_layout_to_align, repeat_layout, repeat_layout_packed,
 };
-use memapi::{Alloc, AllocError, DefaultAlloc};
+use memapi::{Alloc, error::AllocError, DefaultAlloc};
 
 #[test]
 fn test_alloc_and_dealloc() {
@@ -229,9 +229,8 @@ fn test_repeat_layout_variants() {
 
 #[cfg(feature = "alloc_ext")]
 mod alloc_ext_tests {
-    use super::*;
     use core::alloc::Layout;
-    use memapi::{AllocExt, DefaultAlloc};
+    use memapi::{Alloc, AllocExt, DefaultAlloc};
 
     #[test]
     fn test_alloc_init_and_default_and_write() {
@@ -353,8 +352,10 @@ mod stats_gathering_tests {
 
 #[cfg(feature = "owned")]
 mod owned_tests {
-    use super::*;
-    use memapi::owned::{OwnedBuf, VariableError};
+    use memapi::{
+        DefaultAlloc,
+        owned::{OwnedBuf, VariableError}
+    };
 
     #[test]
     fn test_new_and_basic_properties() {
@@ -520,7 +521,7 @@ mod owned_tests {
 #[cfg(all(feature = "jemalloc", not(miri)))]
 mod jemalloc_tests {
     use core::{alloc::Layout, slice};
-    use memapi::{SizedProps, ffi::jem::usable_size, jemalloc::Jemalloc, Alloc};
+    use memapi::{type_props::SizedProps, ffi::jem::usable_size, jemalloc::Jemalloc, Alloc};
 
     #[test]
     fn alloc_and_dealloc_basic() {

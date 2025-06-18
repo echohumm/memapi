@@ -1,7 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::external_alloc::ffi;
-use crate::{Alloc, AllocError, UOp};
+use crate::{error::AllocError, Alloc};
 use core::{alloc::Layout, ptr::NonNull};
 
 pub trait ResizeInPlace: Alloc {
@@ -279,11 +278,11 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
             ))
         } else {
             // it isn't my fault if this is wrong lol
-            if ffi::jem::xallocx(
+            if crate::external_alloc::ffi::jem::xallocx(
                 ptr.as_ptr().cast(),
                 new_size,
                 0,
-                ffi::jem::layout_to_flags(new_size, old_layout.align()),
+                crate::external_alloc::ffi::jem::layout_to_flags(new_size, old_layout.align()),
             ) >= new_size
             {
                 Ok(())
@@ -311,15 +310,17 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
             // noop
             Ok(())
         } else {
-            let flags = ffi::jem::layout_to_flags(new_size, old_layout.align());
-            let usable_size = ffi::jem::xallocx(ptr.as_ptr().cast(), new_size, 0, flags);
+            let flags =
+                crate::external_alloc::ffi::jem::layout_to_flags(new_size, old_layout.align());
+            let usable_size =
+                crate::external_alloc::ffi::jem::xallocx(ptr.as_ptr().cast(), new_size, 0, flags);
 
             if usable_size < old_layout.size() {
                 Ok(())
-            } else if usable_size == ffi::jem::nallocx(new_size, flags) {
+            } else if usable_size == crate::external_alloc::ffi::jem::nallocx(new_size, flags) {
                 debug_assert_eq!(
-                    ffi::jem::nallocx(new_size, flags),
-                    ffi::jem::nallocx(old_layout.size(), flags)
+                    crate::external_alloc::ffi::jem::nallocx(new_size, flags),
+                    crate::external_alloc::ffi::jem::nallocx(old_layout.size(), flags)
                 );
 
                 Ok(())
@@ -348,7 +349,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
             ))
         } else {
             // this would be, though
-            if ffi::mim::mi_expand(ptr.as_ptr().cast(), new_size).is_null() {
+            if crate::external_alloc::ffi::mim::mi_expand(ptr.as_ptr().cast(), new_size).is_null() {
                 Err(AllocError::CannotResizeInPlace)
             } else {
                 Ok(())
@@ -362,6 +363,8 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         _: Layout,
         _: usize,
     ) -> Result<(), AllocError> {
-        Err(AllocError::UnsupportedOperation(UOp::ShrinkInPlace))
+        Err(AllocError::UnsupportedOperation(
+            crate::error::UOp::ShrinkInPlace,
+        ))
     }
 }

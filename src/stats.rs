@@ -1,18 +1,15 @@
-use crate::{Alloc, AllocError, stats::AllocRes::{Fail, Succ}, DefaultAlloc};
+use crate::{
+    stats::AllocRes::{Fail, Succ},
+    Alloc, AllocError, DefaultAlloc,
+};
 use alloc::{alloc::Layout, boxed::Box, format, rc::Rc, string::ToString, sync::Arc};
 use core::{
     fmt::{self, Display, Formatter},
-    ptr::{NonNull, null_mut},
+    ptr::{null_mut, NonNull},
     sync::atomic::{
         AtomicUsize,
         Ordering::{Acquire, Release},
     },
-};
-#[cfg(feature = "std")]
-use std::{
-    fs::File,
-    io::{Stdout, Write, stdout},
-    sync::{Mutex, MutexGuard},
 };
 
 /// A wrapper that delegates all `Alloc` calls to `A` and logs
@@ -35,11 +32,11 @@ impl<A, L: StatsLogger> Stats<A, L> {
 
 // no-op logger
 impl StatsLogger for () {
-    fn log(&self, _stat: AllocRes) {}
-    fn inc_total_bytes_allocated(&self, _bytes: usize) -> usize {
+    fn log(&self, _: AllocRes) {}
+    fn inc_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
-    fn dec_total_bytes_allocated(&self, _bytes: usize) -> usize {
+    fn dec_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
     fn total(&self) -> usize {
@@ -72,24 +69,25 @@ macro_rules! atomic_total_ops {
 
 // byte counter-only logger (no stat)
 impl StatsLogger for AtomicUsize {
-    fn log(&self, _stat: AllocRes) {}
+    fn log(&self, _: AllocRes) {}
 
     atomic_total_ops!(self);
 }
 
 #[cfg(feature = "std")]
 // file stat-only logger (no byte-count)
-impl StatsLogger for Mutex<File> {
+impl StatsLogger for std::sync::Mutex<std::fs::File> {
     fn log(&self, stat: AllocRes) {
-        self.lock()
-            .expect("`Mutex<File>` was poisoned")
-            .write_all(format!("{stat}").as_bytes())
-            .expect("failed to write to `File`");
+        <std::fs::File as std::io::Write>::write_all(
+            &mut self.lock().expect("`Mutex<File>` was poisoned"),
+            format!("{stat}").as_bytes(),
+        )
+        .expect("failed to write to `File`");
     }
-    fn inc_total_bytes_allocated(&self, _bytes: usize) -> usize {
+    fn inc_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
-    fn dec_total_bytes_allocated(&self, _bytes: usize) -> usize {
+    fn dec_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
     fn total(&self) -> usize {
@@ -125,9 +123,9 @@ delegate_logger!(Arc<L>);
 
 #[cfg(feature = "std")]
 /// An IO buffer that can be used to log statistics.
-pub struct IOLog<W: Write> {
+pub struct IOLog<W: std::io::Write> {
     /// The writer to log to.
-    pub buf: Mutex<W>,
+    pub buf: std::sync::Mutex<W>,
     /// The total number of bytes allocated.
     pub total: AtomicUsize,
 }
@@ -136,13 +134,13 @@ pub struct IOLog<W: Write> {
 /// A buffer that can be used to log statistics.
 pub struct FmtLog<W: fmt::Write> {
     /// The writer to log to.
-    pub buf: Mutex<W>,
+    pub buf: std::sync::Mutex<W>,
     /// The total number of bytes allocated.
     pub total: AtomicUsize,
 }
 
 #[cfg(feature = "std")]
-impl<W: Write> StatsLogger for IOLog<W> {
+impl<W: std::io::Write> StatsLogger for IOLog<W> {
     #[inline]
     fn log(&self, stat: AllocRes) {
         self.buf
@@ -170,20 +168,20 @@ impl<W: fmt::Write> StatsLogger for FmtLog<W> {
 }
 
 #[cfg(feature = "std")]
-impl Default for IOLog<Stdout> {
-    fn default() -> IOLog<Stdout> {
+impl Default for IOLog<std::io::Stdout> {
+    fn default() -> IOLog<std::io::Stdout> {
         IOLog {
-            buf: Mutex::new(stdout()),
+            buf: std::sync::Mutex::new(std::io::stdout()),
             total: AtomicUsize::new(0),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl Default for IOLog<File> {
-    fn default() -> IOLog<File> {
+impl Default for IOLog<std::fs::File> {
+    fn default() -> IOLog<std::fs::File> {
         IOLog {
-            buf: Mutex::new(File::create("alloc_stats.log").unwrap()),
+            buf: std::sync::Mutex::new(std::fs::File::create("alloc_stats.log").unwrap()),
             total: AtomicUsize::new(0),
         }
     }
@@ -193,14 +191,14 @@ impl Default for IOLog<File> {
 impl<W: fmt::Write + Default> Default for FmtLog<W> {
     fn default() -> FmtLog<W> {
         FmtLog {
-            buf: Mutex::new(W::default()),
+            buf: std::sync::Mutex::new(W::default()),
             total: AtomicUsize::new(0),
         }
     }
 }
 
 #[cfg(feature = "std")]
-impl<W: Write> From<W> for IOLog<W> {
+impl<W: std::io::Write> From<W> for IOLog<W> {
     #[inline]
     fn from(w: W) -> IOLog<W> {
         IOLog::new(w)
@@ -215,12 +213,12 @@ impl<W: fmt::Write> From<W> for FmtLog<W> {
 }
 
 #[cfg(feature = "std")]
-impl<W: Write> IOLog<W> {
+impl<W: std::io::Write> IOLog<W> {
     /// Creates a new [`IOLog`] from a writer.
     #[inline]
     pub const fn new(buf: W) -> IOLog<W> {
         IOLog {
-            buf: Mutex::new(buf),
+            buf: std::sync::Mutex::new(buf),
             total: AtomicUsize::new(0),
         }
     }
@@ -232,7 +230,7 @@ impl<W: fmt::Write> FmtLog<W> {
     #[inline]
     pub const fn new(buf: W) -> FmtLog<W> {
         FmtLog {
-            buf: Mutex::new(buf),
+            buf: std::sync::Mutex::new(buf),
             total: AtomicUsize::new(0),
         }
     }
@@ -241,9 +239,9 @@ impl<W: fmt::Write> FmtLog<W> {
     ///
     /// # Panics
     ///
-    /// This function will panic if the inner [`Mutex`] is poisoned.
+    /// This function will panic if the inner [`Mutex`](std::sync::Mutex) is poisoned.
     #[inline]
-    pub fn get_log(&self) -> MutexGuard<'_, W> {
+    pub fn get_log(&self) -> std::sync::MutexGuard<'_, W> {
         self.buf
             .lock()
             .expect("inner `Mutex<W>` for `FmtLog` was poisoned")
@@ -252,11 +250,11 @@ impl<W: fmt::Write> FmtLog<W> {
 
 #[cfg(feature = "std")]
 /// A logger that writes to a file.
-pub type FileLog = IOLog<File>;
+pub type FileLog = IOLog<std::fs::File>;
 
 #[cfg(feature = "std")]
 /// A logger that writes to stdout.
-pub type StdoutLog = IOLog<Stdout>;
+pub type StdoutLog = IOLog<std::io::Stdout>;
 
 #[cfg(feature = "std")]
 /// A logger that writes to a string.

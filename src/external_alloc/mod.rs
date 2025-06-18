@@ -1,11 +1,50 @@
+use crate::{
+    error::{AllocError, UOp},
+    helpers::null_q,
+};
+use core::{alloc::Layout, ffi::c_void, ptr::NonNull};
+
 #[cfg(feature = "jemalloc")]
 /// Module for [jemalloc](https://jemalloc.net/) support.
 pub mod jemalloc;
 
-// for the future
 #[cfg(feature = "mimalloc")]
 /// Module for [mimalloc](https://microsoft.github.io/mimalloc/) support.
 pub mod mimalloc;
+
+#[allow(dead_code)]
+#[track_caller]
+#[inline]
+pub(crate) unsafe fn resize<F: Fn() -> *mut c_void>(
+    ralloc: F,
+    ptr: NonNull<u8>,
+    old_layout: Layout,
+    new_layout: Layout,
+    need_same_align: bool,
+    is_grow: bool,
+) -> Result<NonNull<u8>, AllocError> {
+    if need_same_align && new_layout.align() != old_layout.align() {
+        return Err(AllocError::UnsupportedOperation(UOp::ReallocDiffAlign(
+            old_layout.align(),
+            new_layout.align(),
+        )));
+    }
+
+    let old_size = old_layout.size();
+    let new_size = new_layout.size();
+
+    if new_size == old_size {
+        return Ok(ptr);
+    } else if is_grow {
+        if new_size < old_size {
+            return Err(AllocError::GrowSmallerNewLayout(old_size, new_size));
+        }
+    } else if new_size > old_size {
+        return Err(AllocError::ShrinkBiggerNewLayout(old_size, new_size));
+    }
+
+    null_q(ralloc(), new_layout)
+}
 
 /// FFI bindings to allocation libraries.
 pub mod ffi {

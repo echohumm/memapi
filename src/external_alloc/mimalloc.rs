@@ -1,4 +1,5 @@
 use crate::{
+    external_alloc::resize,
     ffi::mim as ffi,
     helpers::{dangling_nonnull_for, null_q},
     Alloc, AllocError,
@@ -69,17 +70,15 @@ impl Alloc for MiMalloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.size() < old_layout.size() {
-            return Err(AllocError::GrowSmallerNewLayout(
-                old_layout.size(),
-                new_layout.size(),
-            ));
-        } else if new_layout.size() == old_layout.size() {
-            return Ok(ptr);
-        }
-        null_q(
-            ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align()),
+        resize(
+            || unsafe {
+                ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align())
+            },
+            ptr,
+            old_layout,
             new_layout,
+            false,
+            true,
         )
     }
 
@@ -89,17 +88,15 @@ impl Alloc for MiMalloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.size() > old_layout.size() {
-            return Err(AllocError::ShrinkBiggerNewLayout(
-                old_layout.size(),
-                new_layout.size(),
-            ));
-        } else if new_layout.size() == old_layout.size() {
-            return Ok(ptr);
-        }
-        null_q(
-            ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align()),
+        resize(
+            || unsafe {
+                ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align())
+            },
+            ptr,
+            old_layout,
             new_layout,
+            false,
+            false,
         )
     }
 

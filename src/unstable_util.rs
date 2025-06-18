@@ -1,14 +1,12 @@
 use crate::AllocError;
 use alloc::alloc::Layout;
-#[cfg(feature = "metadata")]
-use core::ptr::{self, metadata};
 
 #[cfg(feature = "metadata")]
 /// Alternative to `*mut T`'s `with_metadata_of`, because it's unstable.
 #[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mut U {
-    ptr::from_raw_parts_mut(ptr.cast::<()>(), metadata(meta))
+    core::ptr::from_raw_parts_mut(ptr.cast::<()>(), core::ptr::metadata(meta))
 }
 
 #[cfg(feature = "metadata")]
@@ -16,7 +14,7 @@ pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mu
 #[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U) -> *const U {
-    ptr::from_raw_parts(ptr.cast::<()>(), metadata(meta))
+    core::ptr::from_raw_parts(ptr.cast::<()>(), core::ptr::metadata(meta))
 }
 
 /// Alternative to [`Layout::padding_needed_for`], because it's unstable.

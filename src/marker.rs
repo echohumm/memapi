@@ -1,8 +1,4 @@
 use core::ffi::CStr;
-#[cfg(feature = "metadata")]
-use core::ptr::Pointee;
-#[cfg(feature = "std")]
-use std::{ffi::OsStr, path::Path};
 
 /// Unsafe marker trait for types that can be copied, including unsized types such as slices.
 ///
@@ -22,10 +18,10 @@ unsafe impl UnsizedCopy for str {}
 unsafe impl UnsizedCopy for CStr {}
 #[cfg(feature = "std")]
 // `OsStr == [u8]` and `[u8]: UnsizedCopy`
-unsafe impl UnsizedCopy for OsStr {}
+unsafe impl UnsizedCopy for std::ffi::OsStr {}
 #[cfg(feature = "std")]
 // `Path == OsStr` and `OsStr: UnsizedCopy`.
-unsafe impl UnsizedCopy for Path {}
+unsafe impl UnsizedCopy for std::path::Path {}
 
 #[cfg(feature = "metadata")]
 /// Trait indicating that a type has no metadata.
@@ -42,7 +38,7 @@ unsafe impl UnsizedCopy for Path {}
 ///     assert_eq!(<&T>::SZ, usize::SZ)
 /// }
 /// ```
-pub trait Thin: Pointee<Metadata = ()> {}
+pub trait Thin: core::ptr::Pointee<Metadata = ()> {}
 
 #[cfg(feature = "metadata")]
-impl<P: Pointee<Metadata = ()>> Thin for P {}
+impl<P: core::ptr::Pointee<Metadata = ()>> Thin for P {}

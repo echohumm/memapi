@@ -1,7 +1,8 @@
 use crate::{
-    external_alloc::ffi::jem::{self as ffi, layout_to_flags},
-    helpers::dangling_nonnull_for,
-    null_q, Alloc, AllocError, UOp,
+    error::{AllocError, UOp},
+    external_alloc::{ffi::jem as ffi, resize},
+    helpers::{dangling_nonnull_for, null_q},
+    Alloc,
 };
 use core::{
     alloc::{GlobalAlloc, Layout},
@@ -26,7 +27,7 @@ unsafe impl GlobalAlloc for Jemalloc {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         assume!(layout.size() != 0);
-        let flags = layout_to_flags(layout.size(), layout.align());
+        let flags = ffi::layout_to_flags(layout.size(), layout.align());
         if flags == 0 {
             ffi::malloc(layout.size())
         } else {
@@ -42,14 +43,14 @@ unsafe impl GlobalAlloc for Jemalloc {
         ffi::sdallocx(
             ptr.cast(),
             layout.size(),
-            layout_to_flags(layout.size(), layout.align()),
+            ffi::layout_to_flags(layout.size(), layout.align()),
         );
     }
 
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         assume!(layout.size() != 0);
-        let flags = layout_to_flags(layout.size(), layout.align());
+        let flags = ffi::layout_to_flags(layout.size(), layout.align());
         if flags == 0 {
             ffi::calloc(1, layout.size())
         } else {
@@ -62,7 +63,7 @@ unsafe impl GlobalAlloc for Jemalloc {
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         assume!(layout.size() != 0);
         assume!(new_size != 0);
-        let flags = layout_to_flags(new_size, layout.align());
+        let flags = ffi::layout_to_flags(new_size, layout.align());
         if flags == 0 {
             ffi::realloc(ptr.cast(), new_size)
         } else {
@@ -78,7 +79,7 @@ impl Alloc for Jemalloc {
         if layout.size() == 0 {
             Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
         } else {
-            let flags = layout_to_flags(layout.size(), layout.align());
+            let flags = ffi::layout_to_flags(layout.size(), layout.align());
             null_q(
                 if flags == 0 {
                     unsafe { ffi::malloc(layout.size()) }
@@ -95,7 +96,7 @@ impl Alloc for Jemalloc {
         if layout.size() == 0 {
             Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
         } else {
-            let flags = layout_to_flags(layout.size(), layout.align());
+            let flags = ffi::layout_to_flags(layout.size(), layout.align());
             null_q(
                 if flags == 0 {
                     unsafe { ffi::calloc(1, layout.size()) }
@@ -113,7 +114,7 @@ impl Alloc for Jemalloc {
             ffi::sdallocx(
                 ptr.as_ptr().cast(),
                 layout.size(),
-                layout_to_flags(layout.size(), layout.align()),
+                ffi::layout_to_flags(layout.size(), layout.align()),
             );
         }
     }
@@ -125,21 +126,13 @@ impl Alloc for Jemalloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.align() != old_layout.align() {
-            return Err(AllocError::UnsupportedOperation(
-                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
-            ));
-        } else if new_layout.size() < old_layout.size() {
-            return Err(AllocError::GrowSmallerNewLayout(
-                old_layout.size(),
-                new_layout.size(),
-            ));
-        } else if new_layout.size() == old_layout.size() {
-            return Ok(ptr);
-        }
-        null_q(
-            ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
+        resize(
+            || unsafe { ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout) },
+            ptr,
+            old_layout,
             new_layout,
+            true,
+            true,
         )
     }
 
@@ -150,21 +143,13 @@ impl Alloc for Jemalloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        if new_layout.align() != old_layout.align() {
-            return Err(AllocError::UnsupportedOperation(
-                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
-            ));
-        } else if new_layout.size() > old_layout.size() {
-            return Err(AllocError::ShrinkBiggerNewLayout(
-                old_layout.size(),
-                new_layout.size(),
-            ));
-        } else if new_layout.size() == old_layout.size() {
-            return Ok(ptr);
-        }
-        null_q(
-            ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
+        resize(
+            || unsafe { ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout) },
+            ptr,
+            old_layout,
             new_layout,
+            true,
+            false,
         )
     }
 
@@ -176,9 +161,10 @@ impl Alloc for Jemalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         if new_layout.align() != old_layout.align() {
-            return Err(AllocError::UnsupportedOperation(
-                UOp::ReallocDifferentAlign(old_layout.align(), new_layout.align()),
-            ));
+            return Err(AllocError::UnsupportedOperation(UOp::ReallocDiffAlign(
+                old_layout.align(),
+                new_layout.align(),
+            )));
         }
         null_q(
             ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),

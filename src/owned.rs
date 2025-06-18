@@ -1,16 +1,17 @@
 use crate::helpers::SliceAllocGuard;
 use crate::{
-    Alloc, AllocError, DefaultAlloc, SizedProps,
     owned::VariableError::{Hard, Soft},
+    type_props::SizedProps,
+    Alloc, AllocError, DefaultAlloc,
 };
 use core::borrow::{Borrow, BorrowMut};
 use core::{
     alloc::Layout,
     error::Error,
     fmt::{self, Debug, Display, Formatter},
-    mem::{ManuallyDrop, MaybeUninit, forget, transmute},
+    mem::{forget, transmute, ManuallyDrop, MaybeUninit},
     ops::{Deref, DerefMut},
-    ptr::{self, NonNull, replace},
+    ptr::{self, replace, NonNull},
     slice,
 };
 
@@ -1290,7 +1291,7 @@ macro_rules! spec_impl {
                     .expect("`<From<&[T]>>::from` failed")
             }
         }
-        
+
         impl<T: Clone, A: Alloc + Default> From<&mut [T]> for OwnedBuf<T, A> {
             #[track_caller]
             #[inline]
