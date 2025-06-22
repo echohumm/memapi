@@ -47,11 +47,12 @@
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "specialization", feature(min_specialization))]
-#![cfg_attr(feature = "const_heap_alloc", feature(core_intrinsics, const_heap))]
+#![cfg_attr(feature = "const_heap_alloc", feature(core_intrinsics, const_heap, const_eval_select))]
 #![allow(unsafe_op_in_unsafe_fn, internal_features)]
 #![deny(missing_docs)]
 
 extern crate alloc;
+extern crate core;
 
 #[cfg(feature = "alloc_ext")]
 mod alloc_ext;
@@ -62,6 +63,8 @@ mod in_place;
 pub use alloc_ext::*;
 #[cfg(feature = "resize_in_place")]
 pub use in_place::*;
+
+// TODO: when my ide actually works, move stats, owned, alloc_ext and const_heap_alloc to ./features/*.rs because they are only active when a feature is on.
 
 /// Marker traits.
 pub mod marker;
@@ -80,7 +83,12 @@ pub mod owned;
 /// Allocation statistic gathering and reporting.
 pub mod stats;
 
+#[cfg(feature = "const_heap_alloc")]
+/// A constant allocator.
+pub mod const_heap_alloc;
+
 pub(crate) mod external_alloc;
+
 pub use external_alloc::*;
 
 use crate::{
@@ -94,328 +102,6 @@ use core::{
     cmp::Ordering,
     ptr::{null_mut, NonNull},
 };
-
-/// Helpers which tend to be useful in other libraries as well.
-pub mod helpers {
-    use crate::{error::AllocError, type_props::SizedProps, Alloc};
-    use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
-
-    /// Converts a possibly null pointer into a [`NonNull`] result.
-    #[inline]
-    pub(crate) const fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if ptr.is_null() {
-            Err(AllocError::AllocFailed(layout))
-        } else {
-            Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
-        }
-    }
-
-    /// Returns a valid, dangling [`NonNull`] for the given layout.
-    #[must_use]
-    #[inline]
-    pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
-        unsafe { dangling_nonnull(layout.align()) }
-    }
-
-    /// Returns a [`NonNull`] which has the given alignment as its address.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the valid `alignment` would not result in a null pointer.
-    #[must_use]
-    #[inline]
-    pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
-        NonNull::without_provenance(unsafe { NonZeroUsize::new_unchecked(align) })
-    }
-
-    /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(size, align)` if creation of a layout with the given size and alignment fails.
-    #[inline]
-    pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
-        let (sz, align) = (T::SZ, T::ALIGN);
-
-        if sz != 0 && n > unsafe { (isize::MAX as usize + 1).unchecked_sub(align) } / sz {
-            return Err((sz, align));
-        }
-
-        unsafe {
-            Ok(Layout::from_size_align_unchecked(
-                sz.unchecked_mul(n),
-                align,
-            ))
-        }
-    }
-
-    /// A RAII guard that owns a single allocation and ensures it is deallocated unless explicitly
-    /// released.
-    ///
-    /// `AllocGuard` wraps a `NonNull<T>` pointer and an allocator reference `&A`. When the guard
-    /// goes out of scope, it will deallocate the underlying memory via the allocator.
-    ///
-    /// To take ownership of the allocation without deallocating, call
-    /// [`release`](SliceAllocGuard::release), which returns the raw pointer and prevents the guard
-    /// from running its cleanup.
-    ///
-    /// This should be used in any situation where the initialization of a pointer's data may panic.
-    /// (e.g., initializing via a clone or any other user-implemented method)
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use core::ptr::NonNull;
-    /// # use memapi::{helpers::AllocGuard, Alloc, DefaultAlloc};
-    /// # let alloc = DefaultAlloc;
-    /// // Allocate space for one `u32` and wrap it in a guard
-    /// let layout = core::alloc::Layout::new::<u32>();
-    /// let mut guard = AllocGuard::new(alloc.alloc(layout).unwrap().cast::<u32>(), &alloc);
-    ///
-    /// // Initialize the value
-    /// unsafe { guard.as_ptr().write(123) };
-    ///
-    /// // If everything is OK, take ownership and prevent automatic deallocation
-    /// // (commented out for this example as the pointer will not be used)
-    /// // let raw = guard.release();
-    /// ```
-    pub struct AllocGuard<'a, T: ?Sized, A: Alloc + ?Sized> {
-        ptr: NonNull<T>,
-        alloc: &'a A,
-    }
-
-    impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
-        /// Creates a new guard from a pointer and a reference to an allocator.
-        #[inline]
-        pub const fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A> {
-            AllocGuard { ptr, alloc }
-        }
-
-        /// Initializes the value by writing to the contained pointer.
-        #[track_caller]
-        #[inline]
-        pub const fn init(&self, elem: T)
-        where
-            T: Sized,
-        {
-            unsafe {
-                self.ptr.write(elem);
-            }
-        }
-
-        /// Releases ownership of the allocation, preventing deallocation, and return the raw
-        /// pointer.
-        #[inline]
-        #[must_use]
-        pub const fn release(self) -> NonNull<T> {
-            let ptr = self.ptr;
-            forget(self);
-            ptr
-        }
-    }
-
-    impl<T: ?Sized, A: Alloc + ?Sized> Drop for AllocGuard<'_, T, A> {
-        #[track_caller]
-        fn drop(&mut self) {
-            unsafe {
-                self.alloc.dealloc(
-                    self.ptr.cast::<u8>(),
-                    Layout::for_value(&*self.ptr.as_ptr()),
-                );
-            }
-        }
-    }
-
-    impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
-        type Target = NonNull<T>;
-
-        fn deref(&self) -> &Self::Target {
-            &self.ptr
-        }
-    }
-
-    /// A RAII guard for a heap‐allocated slice that tracks how many elements have been initialized.
-    ///
-    /// On drop, it will:
-    /// 1. Run destructors for each initialized element.
-    /// 2. Deallocate the entire slice memory.
-    ///
-    /// Use [`init`](SliceAllocGuard::init) or [`init_unchecked`](SliceAllocGuard::init_unchecked)
-    /// to initialize elements one by one, [`extend_init`](SliceAllocGuard::extend_init) to
-    /// initialize many elements at once, and [`release`](SliceAllocGuard::release) to take
-    /// ownership of the fully‐initialized slice without running cleanup.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use core::ptr::NonNull;
-    /// # use memapi::{helpers::SliceAllocGuard, Alloc, DefaultAlloc};
-    /// # let alloc = DefaultAlloc;
-    /// # let len = 5;
-    /// let mut guard = SliceAllocGuard::new(
-    ///     alloc.alloc_slice::<u32>(len).unwrap().cast::<u32>(),
-    ///     &alloc,
-    ///     len
-    /// );
-    ///
-    /// for i in 0..len {
-    ///     guard.init(i as u32).unwrap();
-    /// }
-    ///
-    /// // All elements are now initialized; take ownership:
-    /// // (commented out for this example as the pointer will not be used)
-    /// // let slice_ptr = guard.release();
-    /// ```
-    pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
-        ptr: NonNull<T>,
-        alloc: &'a A,
-        init: usize,
-        full: usize,
-    }
-
-    impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
-        /// Creates a new slice guard for `full` elements at `ptr` in the given allocator.
-        #[inline]
-        pub const fn new(ptr: NonNull<T>, alloc: &'a A, full: usize) -> SliceAllocGuard<'a, T, A> {
-            SliceAllocGuard {
-                ptr,
-                alloc,
-                init: 0,
-                full,
-            }
-        }
-
-        /// Release ownership of the slice without deallocating memory.
-        #[inline]
-        #[must_use]
-        pub const fn release(self) -> NonNull<[T]> {
-            let ret = NonNull::slice_from_raw_parts(self.ptr, self.init);
-            forget(self);
-            ret
-        }
-
-        /// Initializes the next element of the slice with `elem`.
-        ///
-        /// # Errors
-        ///
-        /// Returns `Err(elem)` if the slice is at capacity.
-        #[inline]
-        pub const fn init(&mut self, elem: T) -> Result<(), T> {
-            if self.init == self.full {
-                return Err(elem);
-            }
-            unsafe {
-                self.init_unchecked(elem);
-            }
-            Ok(())
-        }
-
-        /// Initializes the next element of the slice with `elem`.
-        ///
-        /// # Safety
-        ///
-        /// The caller must ensure that the slice is not at capacity. (`initialized() < full()`)
-        #[inline]
-        pub const unsafe fn init_unchecked(&mut self, elem: T) {
-            self.ptr.add(self.init).write(elem);
-            self.init += 1;
-        }
-
-        /// Initializes the next elements of the slice with the elements from `iter`.
-        ///
-        /// # Errors
-        ///
-        /// Returns `Err((iter, elem))` if the slice is filled before iteration finishes. The
-        /// contained iterator will have been partially consumed.
-        #[inline]
-        pub fn extend_init<I: IntoIterator<Item = T>>(
-            &mut self,
-            iter: I,
-        ) -> Result<(), I::IntoIter> {
-            let mut iter = iter.into_iter();
-            loop {
-                if self.init == self.full {
-                    return Err(iter);
-                }
-                match iter.next() {
-                    Some(elem) => unsafe {
-                        self.ptr.add(self.init).write(elem);
-                        self.init += 1;
-                    },
-                    None => return Ok(()),
-                }
-            }
-        }
-
-        /// Returns how many elements have been initialized.
-        #[inline]
-        #[allow(clippy::must_use_candidate)]
-        pub const fn initialized(&self) -> usize {
-            self.init
-        }
-
-        /// Returns the total number of elements in the slice.
-        #[inline]
-        #[allow(clippy::must_use_candidate)]
-        pub const fn full(&self) -> usize {
-            self.full
-        }
-
-        /// Returns `true` if every element in the slice has been initialized.
-        #[inline]
-        #[allow(clippy::must_use_candidate)]
-        pub const fn is_full(&self) -> bool {
-            self.init == self.full
-        }
-
-        /// Copies as many elements from `slice` as will fit.
-        ///
-        /// On success, all elements are copied and `Ok(())` is returned. If
-        /// `slice.len() > remaining_capacity`, it copies as many elements as will fit, advances
-        /// the initialized count to full, and returns `Err(excess)`.
-        ///
-        /// # Errors
-        ///
-        /// Returns `Err(excess)` if `slice.len() > remaining_capacity`.
-        pub fn copy_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
-        where
-            T: Copy,
-        {
-            let to_copy = slice.len().min(self.full - self.init);
-
-            unsafe {
-                slice
-                    .as_ptr()
-                    .copy_to_nonoverlapping(self.ptr.as_ptr().add(self.init), to_copy);
-            }
-
-            self.init += to_copy;
-            let uncopied = slice.len() - to_copy;
-            if uncopied == 0 {
-                Ok(())
-            } else {
-                Err(uncopied)
-            }
-        }
-    }
-
-    impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
-        fn drop(&mut self) {
-            unsafe {
-                NonNull::slice_from_raw_parts(self.ptr, self.init).drop_in_place();
-                self.alloc.dealloc_n(self.ptr, self.full);
-            }
-        }
-    }
-
-    impl<T, A: Alloc + ?Sized> Deref for SliceAllocGuard<'_, T, A> {
-        type Target = NonNull<T>;
-
-        fn deref(&self) -> &Self::Target {
-            &self.ptr
-        }
-    }
-}
 
 /// Default allocator, delegating to the global allocator.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -534,7 +220,18 @@ pub trait Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[track_caller]
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError>;
+    #[inline]
+    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        match self.alloc(layout) {
+            Ok(p) => {
+                unsafe {
+                    p.write_bytes(0, layout.size());
+                }
+                Ok(p)
+            }
+            Err(e) => Err(e),
+        }
+    }
 
     /// Attempts to allocate a zeroed block of memory for `len` instances of `T`.
     ///
@@ -1217,4 +914,326 @@ enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
     All(u8),
     /// Get the value of the byte using the given predicate.
     Fn(F),
+}
+
+/// Helpers which tend to be useful in other libraries as well.
+pub mod helpers {
+    use crate::{error::AllocError, type_props::SizedProps, Alloc};
+    use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
+
+    /// Converts a possibly null pointer into a [`NonNull`] result.
+    #[inline]
+    pub(crate) const fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        if ptr.is_null() {
+            Err(AllocError::AllocFailed(layout))
+        } else {
+            Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
+        }
+    }
+
+    /// Returns a valid, dangling [`NonNull`] for the given layout.
+    #[must_use]
+    #[inline]
+    pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
+        unsafe { dangling_nonnull(layout.align()) }
+    }
+
+    /// Returns a [`NonNull`] which has the given alignment as its address.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the valid `alignment` would not result in a null pointer.
+    #[must_use]
+    #[inline]
+    pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
+        NonNull::without_provenance(unsafe { NonZeroUsize::new_unchecked(align) })
+    }
+
+    /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(size, align)` if creation of a layout with the given size and alignment fails.
+    #[inline]
+    pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
+        let (sz, align) = (T::SZ, T::ALIGN);
+
+        if sz != 0 && n > unsafe { (isize::MAX as usize + 1).unchecked_sub(align) } / sz {
+            return Err((sz, align));
+        }
+
+        unsafe {
+            Ok(Layout::from_size_align_unchecked(
+                sz.unchecked_mul(n),
+                align,
+            ))
+        }
+    }
+
+    /// A RAII guard that owns a single allocation and ensures it is deallocated unless explicitly
+    /// released.
+    ///
+    /// `AllocGuard` wraps a `NonNull<T>` pointer and an allocator reference `&A`. When the guard
+    /// goes out of scope, it will deallocate the underlying memory via the allocator.
+    ///
+    /// To take ownership of the allocation without deallocating, call
+    /// [`release`](SliceAllocGuard::release), which returns the raw pointer and prevents the guard
+    /// from running its cleanup.
+    ///
+    /// This should be used in any situation where the initialization of a pointer's data may panic.
+    /// (e.g., initializing via a clone or any other user-implemented method)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use core::ptr::NonNull;
+    /// # use memapi::{helpers::AllocGuard, Alloc, DefaultAlloc};
+    /// # let alloc = DefaultAlloc;
+    /// // Allocate space for one `u32` and wrap it in a guard
+    /// let layout = core::alloc::Layout::new::<u32>();
+    /// let mut guard = AllocGuard::new(alloc.alloc(layout).unwrap().cast::<u32>(), &alloc);
+    ///
+    /// // Initialize the value
+    /// unsafe { guard.as_ptr().write(123) };
+    ///
+    /// // If everything is OK, take ownership and prevent automatic deallocation
+    /// // (commented out for this example as the pointer will not be used)
+    /// // let raw = guard.release();
+    /// ```
+    pub struct AllocGuard<'a, T: ?Sized, A: Alloc + ?Sized> {
+        ptr: NonNull<T>,
+        alloc: &'a A,
+    }
+
+    impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
+        /// Creates a new guard from a pointer and a reference to an allocator.
+        #[inline]
+        pub const fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A> {
+            AllocGuard { ptr, alloc }
+        }
+
+        /// Initializes the value by writing to the contained pointer.
+        #[track_caller]
+        #[inline]
+        pub const fn init(&self, elem: T)
+        where
+            T: Sized,
+        {
+            unsafe {
+                self.ptr.write(elem);
+            }
+        }
+
+        /// Releases ownership of the allocation, preventing deallocation, and return the raw
+        /// pointer.
+        #[inline]
+        #[must_use]
+        pub const fn release(self) -> NonNull<T> {
+            let ptr = self.ptr;
+            forget(self);
+            ptr
+        }
+    }
+
+    impl<T: ?Sized, A: Alloc + ?Sized> Drop for AllocGuard<'_, T, A> {
+        #[track_caller]
+        fn drop(&mut self) {
+            unsafe {
+                self.alloc.dealloc(
+                    self.ptr.cast::<u8>(),
+                    Layout::for_value(&*self.ptr.as_ptr()),
+                );
+            }
+        }
+    }
+
+    impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
+        type Target = NonNull<T>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.ptr
+        }
+    }
+
+    /// A RAII guard for a heap‐allocated slice that tracks how many elements have been initialized.
+    ///
+    /// On drop, it will:
+    /// 1. Run destructors for each initialized element.
+    /// 2. Deallocate the entire slice memory.
+    ///
+    /// Use [`init`](SliceAllocGuard::init) or [`init_unchecked`](SliceAllocGuard::init_unchecked)
+    /// to initialize elements one by one, [`extend_init`](SliceAllocGuard::extend_init) to
+    /// initialize many elements at once, and [`release`](SliceAllocGuard::release) to take
+    /// ownership of the fully‐initialized slice without running cleanup.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use core::ptr::NonNull;
+    /// # use memapi::{helpers::SliceAllocGuard, Alloc, DefaultAlloc};
+    /// # let alloc = DefaultAlloc;
+    /// # let len = 5;
+    /// let mut guard = SliceAllocGuard::new(
+    ///     alloc.alloc_slice::<u32>(len).unwrap().cast::<u32>(),
+    ///     &alloc,
+    ///     len
+    /// );
+    ///
+    /// for i in 0..len {
+    ///     guard.init(i as u32).unwrap();
+    /// }
+    ///
+    /// // All elements are now initialized; take ownership:
+    /// // (commented out for this example as the pointer will not be used)
+    /// // let slice_ptr = guard.release();
+    /// ```
+    pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
+        ptr: NonNull<T>,
+        alloc: &'a A,
+        init: usize,
+        full: usize,
+    }
+
+    impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
+        /// Creates a new slice guard for `full` elements at `ptr` in the given allocator.
+        #[inline]
+        pub const fn new(ptr: NonNull<T>, alloc: &'a A, full: usize) -> SliceAllocGuard<'a, T, A> {
+            SliceAllocGuard {
+                ptr,
+                alloc,
+                init: 0,
+                full,
+            }
+        }
+
+        /// Release ownership of the slice without deallocating memory.
+        #[inline]
+        #[must_use]
+        pub const fn release(self) -> NonNull<[T]> {
+            let ret = NonNull::slice_from_raw_parts(self.ptr, self.init);
+            forget(self);
+            ret
+        }
+
+        /// Initializes the next element of the slice with `elem`.
+        ///
+        /// # Errors
+        ///
+        /// Returns `Err(elem)` if the slice is at capacity.
+        #[inline]
+        pub const fn init(&mut self, elem: T) -> Result<(), T> {
+            if self.init == self.full {
+                return Err(elem);
+            }
+            unsafe {
+                self.init_unchecked(elem);
+            }
+            Ok(())
+        }
+
+        /// Initializes the next element of the slice with `elem`.
+        ///
+        /// # Safety
+        ///
+        /// The caller must ensure that the slice is not at capacity. (`initialized() < full()`)
+        #[inline]
+        pub const unsafe fn init_unchecked(&mut self, elem: T) {
+            self.ptr.add(self.init).write(elem);
+            self.init += 1;
+        }
+
+        /// Initializes the next elements of the slice with the elements from `iter`.
+        ///
+        /// # Errors
+        ///
+        /// Returns `Err((iter, elem))` if the slice is filled before iteration finishes. The
+        /// contained iterator will have been partially consumed.
+        #[inline]
+        pub fn extend_init<I: IntoIterator<Item = T>>(
+            &mut self,
+            iter: I,
+        ) -> Result<(), I::IntoIter> {
+            let mut iter = iter.into_iter();
+            loop {
+                if self.init == self.full {
+                    return Err(iter);
+                }
+                match iter.next() {
+                    Some(elem) => unsafe {
+                        self.ptr.add(self.init).write(elem);
+                        self.init += 1;
+                    },
+                    None => return Ok(()),
+                }
+            }
+        }
+
+        /// Returns how many elements have been initialized.
+        #[inline]
+        #[allow(clippy::must_use_candidate)]
+        pub const fn initialized(&self) -> usize {
+            self.init
+        }
+
+        /// Returns the total number of elements in the slice.
+        #[inline]
+        #[allow(clippy::must_use_candidate)]
+        pub const fn full(&self) -> usize {
+            self.full
+        }
+
+        /// Returns `true` if every element in the slice has been initialized.
+        #[inline]
+        #[allow(clippy::must_use_candidate)]
+        pub const fn is_full(&self) -> bool {
+            self.init == self.full
+        }
+
+        /// Copies as many elements from `slice` as will fit.
+        ///
+        /// On success, all elements are copied and `Ok(())` is returned. If
+        /// `slice.len() > remaining_capacity`, it copies as many elements as will fit, advances
+        /// the initialized count to full, and returns `Err(excess)`.
+        ///
+        /// # Errors
+        ///
+        /// Returns `Err(excess)` if `slice.len() > remaining_capacity`.
+        pub fn copy_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
+        where
+            T: Copy,
+        {
+            let to_copy = slice.len().min(self.full - self.init);
+
+            unsafe {
+                slice
+                    .as_ptr()
+                    .copy_to_nonoverlapping(self.ptr.as_ptr().add(self.init), to_copy);
+            }
+
+            self.init += to_copy;
+            let uncopied = slice.len() - to_copy;
+            if uncopied == 0 {
+                Ok(())
+            } else {
+                Err(uncopied)
+            }
+        }
+    }
+
+    impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
+        fn drop(&mut self) {
+            unsafe {
+                NonNull::slice_from_raw_parts(self.ptr, self.init).drop_in_place();
+                self.alloc.dealloc_n(self.ptr, self.full);
+            }
+        }
+    }
+
+    impl<T, A: Alloc + ?Sized> Deref for SliceAllocGuard<'_, T, A> {
+        type Target = NonNull<T>;
+
+        fn deref(&self) -> &Self::Target {
+            &self.ptr
+        }
+    }
 }
