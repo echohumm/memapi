@@ -47,7 +47,8 @@
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "specialization", feature(min_specialization))]
-#![allow(unsafe_op_in_unsafe_fn)]
+#![cfg_attr(feature = "const_heap_alloc", feature(core_intrinsics, const_heap))]
+#![allow(unsafe_op_in_unsafe_fn, internal_features)]
 #![deny(missing_docs)]
 
 extern crate alloc;
