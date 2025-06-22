@@ -8,7 +8,7 @@ use core::{
 /// Errors for allocation operations.
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
-pub enum AllocError {
+pub enum AllocError<O: Error = Err, UO: Error = Err> {
     /// A basic arithmetic operation overflowed.
     ArithmeticOverflow,
     /// The layout computed with the given size and alignment is invalid.
@@ -25,7 +25,7 @@ pub enum AllocError {
     /// Attempted to shrink to a larger layout.
     ShrinkBiggerNewLayout(usize, usize),
     /// An operation unsupported by the allocator was attempted.
-    UnsupportedOperation(UOp),
+    UnsupportedOperation(UOp<UO>),
     #[cfg(feature = "resize_in_place")]
     /// Resize-in-place was found to be impossible.
     // Note that this variant means the allocator supports resizing in-place, but it failed.
@@ -36,19 +36,35 @@ pub enum AllocError {
     /// Same as [`AllocError::ZeroSizedLayout`], but without the [`NonNull`], which is useless for
     /// in-place operations.
     ResizeInPlaceZeroSized,
+    /// Any other kind of error.
+    Other(O),
 }
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
+/// A zero-sized enum which exists only to be a default type for [`AllocError::Other`] and [`UOp::Other`].
+pub struct Err;
+
+impl Display for Err {
+    fn fmt(&self, _: &mut Formatter<'_>) -> fmt::Result {
+        Ok(())
+    }
+}
+
+impl Error for Err {}
 
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 /// An unsupported operation.
-pub enum UOp {
+pub enum UOp<O: Error = Err> {
     /// A shrink-in-place operation.
     ShrinkInPlace,
     /// A reallocation operation with a different alignment from the original allocation.
     ReallocDiffAlign(usize, usize),
+    /// Any other unsupported operation.
+    Other(O)
 }
 
-impl Display for AllocError {
+impl<O: Error> Display for AllocError<O> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AllocError::ArithmeticOverflow => write!(f, "arithmetic overflow"),
@@ -76,17 +92,19 @@ impl Display for AllocError {
             AllocError::ResizeInPlaceZeroSized => {
                 write!(f, "zero-sized resize in place was requested")
             }
+            AllocError::Other(other) => write!(f, "allocation error: {other}"),
         }
     }
 }
 
-impl Display for UOp {
+impl<O: Error> Display for UOp<O> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             UOp::ShrinkInPlace => write!(f, "shrink in place"),
             UOp::ReallocDiffAlign(old, new) => {
                 write!(f, "realloc diff align from {old} to {new}")
             }
+            UOp::Other(other) => write!(f, "{other}"),
         }
     }
 }

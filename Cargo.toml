@@ -40,8 +40,10 @@ full = [
     "clone_to_uninit",
     "alloc_ext",
     "stats",
+    "owned",
     "jemalloc_in_place",
-    "mimalloc_in_place"
+    "mimalloc_in_place",
+    "const_heap_alloc",
 ]
 
 [[test]]
