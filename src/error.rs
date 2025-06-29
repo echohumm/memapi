@@ -6,6 +6,11 @@ use core::{
 };
 
 /// Errors for allocation operations.
+///
+/// # Type parameters
+///
+/// - `O`: The type which the `Other` variant wraps.
+/// - `UO`: The type which `UnsupportedOperation::`[`UOp::Other`] wraps.
 #[derive(Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum AllocError<O: Error = Err, UO: Error = Err> {
@@ -13,6 +18,8 @@ pub enum AllocError<O: Error = Err, UO: Error = Err> {
     ArithmeticOverflow,
     /// The layout computed with the given size and alignment is invalid.
     LayoutError(usize, usize),
+    /// There is not enough memory available for allocation.
+    OutOfMemory,
     /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
     /// the requested alignment.
     ///
@@ -41,7 +48,8 @@ pub enum AllocError<O: Error = Err, UO: Error = Err> {
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-/// A zero-sized enum which exists only to be a default type for [`AllocError::Other`] and [`UOp::Other`].
+/// A zero-sized struct, which exists only to be a default type for [`AllocError::Other`] and
+/// [`UOp::Other`].
 pub struct Err;
 
 impl Display for Err {
@@ -61,7 +69,7 @@ pub enum UOp<O: Error = Err> {
     /// A reallocation operation with a different alignment from the original allocation.
     ReallocDiffAlign(usize, usize),
     /// Any other unsupported operation.
-    Other(O)
+    Other(O),
 }
 
 impl<O: Error> Display for AllocError<O> {
@@ -71,6 +79,7 @@ impl<O: Error> Display for AllocError<O> {
             AllocError::LayoutError(sz, align) => {
                 write!(f, "computed invalid layout: size: {sz}, align: {align}")
             }
+            AllocError::OutOfMemory => write!(f, "out of memory"),
             AllocError::ZeroSizedLayout(_) => {
                 write!(f, "zero-sized layout was given")
             }

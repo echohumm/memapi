@@ -33,8 +33,6 @@ jemalloc_in_place = ["jemalloc", "resize_in_place"]
 mimalloc = ["dep:libmimalloc-sys"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
 
-const_heap_alloc = []
-
 full = [
     "specialization",
     "std",
@@ -45,16 +43,11 @@ full = [
     "owned",
     "jemalloc_in_place",
     "mimalloc_in_place",
-    "const_heap_alloc",
 ]
 
 [[test]]
 name = "test"
 path = "tests/test.rs"
-
-[[bin]]
-name = "bintest"
-path = "bin/bintest.rs"
 
 [dependencies]
 tikv-jemalloc-sys = { version = "0.6.0", optional = true }

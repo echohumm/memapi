@@ -1,3 +1,4 @@
 /target
 /.idea
 /testall.py
+rustc-ice*
