@@ -53,7 +53,7 @@
 extern crate alloc;
 extern crate core;
 
-use crate::error::Err;
+use crate::error::Err as DefError;
 #[cfg(feature = "alloc_ext")]
 pub use alloc_ext::*;
 #[cfg(feature = "resize_in_place")]
@@ -181,8 +181,8 @@ default_alloc_impl!(DefaultAlloc);
 ///
 /// # Type parameters
 ///
-/// - `OErr: Error = Err`: The type which [`AllocError::Other(OErr)`] wraps.
-pub trait Alloc<OErr: Error = Err> {
+/// - `OErr: Error = DefError`: The type which [`AllocError::Other(OErr)`] wraps.
+pub trait Alloc<OErr: Error = DefError> {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
     /// # Errors
@@ -886,9 +886,15 @@ enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
-    use crate::Err;
-use crate::{error::AllocError, type_props::SizedProps, Alloc};
-    use core::{
+	use crate::{
+		error::{
+			Err as DefError,
+			AllocError
+		},
+		type_props::SizedProps,
+		Alloc
+	};
+	use core::{
         alloc::Layout,
         mem::forget,
         num::NonZeroUsize,
@@ -983,7 +989,7 @@ use crate::{error::AllocError, type_props::SizedProps, Alloc};
     /// // (commented out for this example as the pointer will not be used)
     /// // let raw = guard.release();
     /// ```
-    pub struct AllocGuard<'a, T: ?Sized, A: Alloc<O> + ?Sized, O: Error = Err> {
+    pub struct AllocGuard<'a, T: ?Sized, A: Alloc<O> + ?Sized, O: Error = DefError> {
         ptr: NonNull<T>,
         alloc: &'a A,
         _marker: PhantomData<O>,
