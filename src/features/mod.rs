@@ -8,9 +8,9 @@ pub mod alloc_slice;
 /// Reallocation in-place.
 pub mod in_place;
 
-#[cfg(feature = "stats")]
-/// Allocation statistic gathering and reporting.
-pub mod stats;
 #[cfg(feature = "owned")]
 /// An owned buffer type.
 pub mod owned;
+#[cfg(feature = "stats")]
+/// Allocation statistic gathering and reporting.
+pub mod stats;

@@ -1,5 +1,10 @@
-use crate::helpers::zsl_check;
-use crate::{external_alloc::resize, ffi::mim as ffi, helpers::null_q, Alloc, AllocError};
+use crate::{
+    error::DefaultError,
+    external_alloc::resize,
+    ffi::mim as ffi,
+    helpers::{null_q, zsl_check},
+    Alloc, AllocError, UnsupportedOperation,
+};
 use core::{
     alloc::{GlobalAlloc, Layout},
     ptr::NonNull,
@@ -10,35 +15,38 @@ use core::{
 pub struct MiMalloc;
 
 unsafe impl GlobalAlloc for MiMalloc {
-	#[cfg_attr(miri, track_caller)]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ffi::mi_malloc_aligned(layout.size(), layout.align()).cast()
     }
 
-	#[cfg_attr(miri, track_caller)]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         ffi::mi_free_size_aligned(ptr.cast(), layout.size(), layout.align());
     }
 
-	#[cfg_attr(miri, track_caller)]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         ffi::mi_zalloc_aligned(layout.size(), layout.align()).cast()
     }
 
-	#[cfg_attr(miri, track_caller)]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         ffi::mi_realloc_aligned(ptr.cast(), new_size, layout.align()).cast()
     }
 }
 
-impl Alloc for MiMalloc {
-	#[cfg_attr(miri, track_caller)]
-	#[inline]
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+impl Alloc<DefaultError, UnsupportedOperation> for MiMalloc {
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    fn alloc(
+        &self,
+        layout: Layout,
+    ) -> Result<NonNull<u8>, AllocError<DefaultError, UnsupportedOperation>> {
         zsl_check(layout, |layout| {
             null_q(
                 unsafe { ffi::mi_malloc_aligned(layout.size(), layout.align()) }.cast::<u8>(),
@@ -47,9 +55,12 @@ impl Alloc for MiMalloc {
         })
     }
 
-	#[cfg_attr(miri, track_caller)]
-	#[inline]
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    fn alloc_zeroed(
+        &self,
+        layout: Layout,
+    ) -> Result<NonNull<u8>, AllocError<DefaultError, UnsupportedOperation>> {
         zsl_check(layout, |layout| {
             null_q(
                 unsafe { ffi::mi_zalloc_aligned(layout.size(), layout.align()) }.cast::<u8>(),
@@ -58,22 +69,22 @@ impl Alloc for MiMalloc {
         })
     }
 
-	#[cfg_attr(miri, track_caller)]
-	#[inline]
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if layout.size() != 0 {
             ffi::mi_free_size_aligned(ptr.as_ptr().cast(), layout.size(), layout.align());
         }
     }
 
-	#[cfg_attr(miri, track_caller)]
-	#[inline]
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
+    ) -> Result<NonNull<u8>, AllocError<DefaultError, UnsupportedOperation>> {
         resize(
             || unsafe {
                 ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align())
@@ -86,14 +97,14 @@ impl Alloc for MiMalloc {
         )
     }
 
-	#[cfg_attr(miri, track_caller)]
-	#[inline]
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
+    ) -> Result<NonNull<u8>, AllocError<DefaultError, UnsupportedOperation>> {
         resize(
             || unsafe {
                 ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align())
@@ -106,14 +117,14 @@ impl Alloc for MiMalloc {
         )
     }
 
-	#[cfg_attr(miri, track_caller)]
-	#[inline]
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn realloc(
         &self,
         ptr: NonNull<u8>,
         _: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError> {
+    ) -> Result<NonNull<u8>, AllocError<DefaultError, UnsupportedOperation>> {
         null_q(
             ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align()),
             new_layout,

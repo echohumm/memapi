@@ -1,17 +1,16 @@
 use crate::{
-	error::{AllocError, Err as DefError},
-	helpers::{layout_or_sz_align, AllocGuard, SliceAllocGuard},
-	type_props::{
-		SizedProps,
-		PtrProps
-	},
-	Alloc,
+    error::{AllocError, DefaultError},
+    helpers::{layout_or_sz_align, AllocGuard, SliceAllocGuard},
+    type_props::{PtrProps, SizedProps},
+    Alloc,
 };
 use core::{alloc::Layout, error::Error, mem::MaybeUninit, ptr::NonNull};
 
 /// Slice-specific extension methods for [`Alloc`], providing convenient functions for slice
 /// allocator operations.
-pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
+pub trait AllocSlice<OErr: Error = DefaultError, UOErr: Error = DefaultError>:
+    Alloc<OErr, UOErr>
+{
     /// Attempts to allocate a block of memory for `len` instances of `T`.
     ///
     /// # Errors
@@ -21,7 +20,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc_slice<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    fn alloc_slice<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc(layout)
@@ -38,7 +37,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc_slice_zeroed<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    fn alloc_slice_zeroed<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_zeroed(layout)
@@ -54,7 +53,10 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
     /// - [`AllocError::ZeroSizedLayout`] if the slice is zero-sized.
     #[track_caller]
     #[inline]
-    fn alloc_clone_slice_to<T: Clone>(&self, data: &[T]) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    fn alloc_clone_slice_to<T: Clone>(
+        &self,
+        data: &[T],
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         match self.alloc(unsafe { data.layout() }) {
             Ok(ptr) => Ok(unsafe {
                 let mut guard = SliceAllocGuard::new(ptr.cast(), self, data.len());
@@ -81,7 +83,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         &self,
         len: usize,
         f: F,
-    ) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         match self.alloc(
             layout_or_sz_align::<T>(len).map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?,
         ) {
@@ -108,7 +110,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         &self,
         init: I,
         len: usize,
-    ) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         let guard = AllocGuard::new(self.alloc_slice(len)?, self);
         init(*guard);
         Ok(guard.release())
@@ -124,7 +126,10 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
     #[inline]
-    fn alloc_default_slice<T: Default>(&self, len: usize) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    fn alloc_default_slice<T: Default>(
+        &self,
+        len: usize,
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         self.alloc_slice_with(len, |_| T::default())
     }
 
@@ -138,7 +143,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
     #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
         NonNull::slice_from_raw_parts(ptr.cast::<T>(), init).drop_in_place();
-		self.dealloc(ptr.cast::<u8>(), ptr.layout());
+        self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
     /// Drops `init` elements from a partially initialized slice, then zeroes and deallocates its
@@ -157,7 +162,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
     ) {
         NonNull::slice_from_raw_parts(ptr.cast::<T>(), init).drop_in_place();
         ptr.cast::<T>().write_bytes(0, ptr.len());
-		self.dealloc(ptr.cast::<u8>(), ptr.layout());
+        self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
     /// Allocates memory for a slice of uninitialized `T` with the given length and returns a
@@ -173,7 +178,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
     fn alloc_slice_guard<T>(
         &'_ self,
         len: usize,
-    ) -> Result<SliceAllocGuard<'_, T, Self, OErr>, AllocError<OErr>> {
+    ) -> Result<SliceAllocGuard<'_, T, Self, OErr, UOErr>, AllocError<OErr, UOErr>> {
         match self.alloc_slice::<T>(len) {
             Ok(ptr) => Ok(SliceAllocGuard::new(ptr.cast(), self, len)),
             Err(e) => Err(e),
@@ -198,7 +203,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-    ) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         self.grow_raw_slice(slice.cast::<T>(), slice.len(), new_len)
             .map(|p| NonNull::slice_from_raw_parts(p, new_len))
     }
@@ -226,7 +231,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-    ) -> Result<NonNull<T>, AllocError<OErr>> {
+    ) -> Result<NonNull<T>, AllocError<OErr, UOErr>> {
         unsafe {
             self.grow(
                 ptr.cast(),
@@ -254,7 +259,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-    ) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         self.shrink_raw_slice(slice.cast::<T>(), slice.len(), new_len)
             .map(|p| NonNull::slice_from_raw_parts(p, new_len))
     }
@@ -278,7 +283,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-    ) -> Result<NonNull<T>, AllocError<OErr>> {
+    ) -> Result<NonNull<T>, AllocError<OErr, UOErr>> {
         unsafe {
             self.shrink(
                 ptr.cast(),
@@ -307,7 +312,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-    ) -> Result<NonNull<T>, AllocError<OErr>> {
+    ) -> Result<NonNull<T>, AllocError<OErr, UOErr>> {
         self.realloc_raw_slice(slice.cast::<T>(), slice.len(), new_len)
     }
 
@@ -333,7 +338,7 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-    ) -> Result<NonNull<T>, AllocError<OErr>> {
+    ) -> Result<NonNull<T>, AllocError<OErr, UOErr>> {
         unsafe {
             self.realloc(
                 ptr.cast(),
@@ -392,10 +397,10 @@ pub trait AllocSlice<OErr: Error = DefError>: Alloc<OErr> {
 impl<OErr: Error, A: Alloc<OErr>> AllocSlice<OErr> for A {}
 
 #[cfg(feature = "alloc_ext")]
-/// Slice-specific extension methods for [`AllocExt`](crate::alloc_ext::AllocExt), providing 
+/// Slice-specific extension methods for [`AllocExt`](crate::alloc_ext::AllocExt), providing
 /// extended convenient functions for slice allocator operations.
-pub trait AllocSliceExt<OErr: Error = DefError>:
-    AllocSlice<OErr> + crate::alloc_ext::AllocExt<OErr>
+pub trait AllocSliceExt<OErr: Error = DefaultError, UOErr: Error = DefaultError>:
+    AllocSlice<OErr, UOErr> + crate::alloc_ext::AllocExt<OErr, UOErr>
 {
     /// Attempts to allocate a block of memory for `len` instances of `T`, filled with bytes
     /// initialized to `n`.
@@ -407,7 +412,11 @@ pub trait AllocSliceExt<OErr: Error = DefError>:
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc_slice_filled<T>(&self, len: usize, n: u8) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    fn alloc_slice_filled<T>(
+        &self,
+        len: usize,
+        n: u8,
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_filled(layout, n)
@@ -429,7 +438,7 @@ pub trait AllocSliceExt<OErr: Error = DefError>:
         &self,
         len: usize,
         pattern: F,
-    ) -> Result<NonNull<[T]>, AllocError<OErr>> {
+    ) -> Result<NonNull<[T]>, AllocError<OErr, UOErr>> {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_patterned(layout, pattern)
@@ -438,4 +447,4 @@ pub trait AllocSliceExt<OErr: Error = DefError>:
     }
 }
 
-impl<OErr: Error, A: AllocSlice<OErr>> AllocSliceExt<OErr> for A {}
+impl<OErr: Error, UOErr: Error, A: AllocSlice<OErr, UOErr>> AllocSliceExt<OErr, UOErr> for A {}

@@ -1,3 +1,4 @@
+use crate::error::DefaultError;
 use crate::helpers::{layout_or_sz_align, SliceAllocGuard};
 use crate::{
     owned::VariableError::{Hard, Soft},
@@ -14,6 +15,7 @@ use core::{
     ptr::{self, replace, NonNull},
     slice,
 };
+use std::marker::PhantomData;
 
 /// An error which can be soft or hard.
 pub enum VariableError<S, H> {
@@ -52,7 +54,12 @@ impl<S: Display + Debug, H: Display + Debug> Error for VariableError<S, H> {}
 /// [`reset_zero`](OwnedBuf::reset_zero).
 ///
 /// The drop functions consume, while the reset functions do not.
-pub struct OwnedBuf<T, A: Alloc = DefaultAlloc> {
+pub struct OwnedBuf<
+    T,
+    A: Alloc<OErr, UOErr> = DefaultAlloc,
+    OErr: Error = DefaultError,
+    UOErr: Error = DefaultError,
+> {
     /// The buffer.
     buf: NonNull<T>,
     /// The number of initialized elements.
@@ -61,9 +68,10 @@ pub struct OwnedBuf<T, A: Alloc = DefaultAlloc> {
     size: usize,
     /// The allocator.
     alloc: A,
+    _marker: PhantomData<(OErr, UOErr)>,
 }
 
-impl<T, A: Alloc> Debug for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> Debug for OwnedBuf<T, A, OErr, UOErr> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("OwnedBuf")
             .field("buf", &self.buf)
@@ -95,7 +103,7 @@ impl<T> OwnedBuf<T> {
     }
 }
 
-impl<T, A: Alloc> OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> OwnedBuf<T, A, OErr, UOErr> {
     /// Creates a new owned buffer of `T` with the given length, in the given allocator.
     ///
     /// # Errors
@@ -104,15 +112,21 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    pub fn new_in(len: usize, alloc: A) -> Result<OwnedBuf<T, A>, AllocError> {
-		let layout = layout_or_sz_align::<T>(len)
-			.map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+    pub fn new_in(
+        len: usize,
+        alloc: A,
+    ) -> Result<OwnedBuf<T, A, OErr, UOErr>, AllocError<OErr, UOErr>> {
+        let layout = layout_or_sz_align::<T>(len)
+            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         Ok(OwnedBuf {
-            buf: alloc.alloc(layout)
-				.map_err(|_| AllocError::AllocFailed(layout))?.cast(),
+            buf: alloc
+                .alloc(layout)
+                .map_err(|_| AllocError::AllocFailed(layout))?
+                .cast(),
             init: 0,
             size: len,
             alloc,
+            _marker: PhantomData,
         })
     }
 
@@ -120,12 +134,13 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// allocations.
     #[must_use]
     #[inline]
-    pub const fn new_unallocated_in(alloc: A) -> OwnedBuf<T, A> {
+    pub const fn new_unallocated_in(alloc: A) -> OwnedBuf<T, A, OErr, UOErr> {
         OwnedBuf {
             buf: NonNull::dangling(),
             init: 0,
             size: 0,
             alloc,
+            _marker: PhantomData,
         }
     }
 
@@ -149,12 +164,13 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         init: usize,
         size: usize,
         alloc: A,
-    ) -> OwnedBuf<T, A> {
+    ) -> OwnedBuf<T, A, OErr, UOErr> {
         OwnedBuf {
             buf,
             init,
             size,
             alloc,
+            _marker: PhantomData,
         }
     }
 
@@ -275,7 +291,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[inline]
-    pub fn init_next_grow(&mut self, val: T) -> Result<(), AllocError> {
+    pub fn init_next_grow(&mut self, val: T) -> Result<(), AllocError<OErr, UOErr>> {
         self.expand_to_fit(self.init + 1)?;
         unsafe {
             self.init_next_unchecked(val);
@@ -384,7 +400,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         &mut self,
         idx: usize,
         val: T,
-    ) -> Result<(), VariableError<T, (T, AllocError)>> {
+    ) -> Result<(), VariableError<T, (T, AllocError<OErr, UOErr>)>> {
         if idx > self.init {
             return Err(Soft(val));
         }
@@ -445,11 +461,17 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// `alloc_err` may be:
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    pub fn try_insert_slice_grow<A2: Alloc>(
+    pub fn try_insert_slice_grow<A2: Alloc<OErr2, UOErr2>, OErr2: Error, UOErr2: Error>(
         &mut self,
         idx: usize,
-        slice: OwnedBuf<T, A2>,
-    ) -> Result<(), VariableError<OwnedBuf<T, A2>, (OwnedBuf<T, A2>, AllocError)>> {
+        slice: OwnedBuf<T, A2, OErr2, UOErr2>,
+    ) -> Result<
+        (),
+        VariableError<
+            OwnedBuf<T, A2, OErr2, UOErr2>,
+            (OwnedBuf<T, A2, OErr2, UOErr2>, AllocError<OErr, UOErr>),
+        >,
+    > {
         if idx > self.init {
             return Err(Soft(slice));
         }
@@ -471,11 +493,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// - `Err(slice)` if the index is out of bounds, or there is no space for some elements of the
     ///   slice.
-    pub fn try_insert_slice<A2: Alloc>(
+    pub fn try_insert_slice<A2: Alloc<OErr2, UOErr2>, OErr2: Error, UOErr2: Error>(
         &mut self,
         idx: usize,
-        slice: OwnedBuf<T, A2>,
-    ) -> Result<(), OwnedBuf<T, A2>> {
+        slice: OwnedBuf<T, A2, OErr2, UOErr2>,
+    ) -> Result<(), OwnedBuf<T, A2, OErr2, UOErr2>> {
         if idx > self.init || self.init + slice.len() > self.size {
             return Err(slice);
         }
@@ -495,7 +517,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - the index is in bounds
     /// - the index plus the initialized length of the slice will not go outside of the allocated
     ///   buffer.
-    pub unsafe fn insert_slice_unchecked<A2: Alloc>(&mut self, idx: usize, slice: OwnedBuf<T, A2>) {
+    pub unsafe fn insert_slice_unchecked<A2: Alloc<OErr2, UOErr2>, OErr2: Error, UOErr2: Error>(
+        &mut self,
+        idx: usize,
+        slice: OwnedBuf<T, A2, OErr2, UOErr2>,
+    ) {
         // destination of the slice
         let dst = self.get_ptr_unchecked(idx);
         // shift elements over to make space as necessary
@@ -509,10 +535,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         src.cast::<T>()
             .copy_to_nonoverlapping(self.buf.as_ptr().add(idx), len);
         // deallocate the original buffer
-		slice.alloc.dealloc(
-			NonNull::new_unchecked(src.cast()),
-			Layout::from_size_align_unchecked(size_of::<T>() * slice.size, align_of::<T>()),
-		);
+        slice.alloc.dealloc(
+            NonNull::new_unchecked(src.cast()),
+            Layout::from_size_align_unchecked(size_of::<T>() * slice.size, align_of::<T>()),
+        );
         // noop but stops the non-consumed warning.
         forget(slice);
         // update initialized element count
@@ -536,7 +562,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         &mut self,
         idx: usize,
         len: usize,
-    ) -> Option<Result<OwnedBuf<T, A>, AllocError>>
+    ) -> Option<Result<OwnedBuf<T, A, OErr, UOErr>, AllocError<OErr, UOErr>>>
     where
         A: Clone,
     {
@@ -565,7 +591,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         &mut self,
         idx: usize,
         req_len: usize,
-    ) -> Option<Result<OwnedBuf<T, A>, AllocError>>
+    ) -> Option<Result<OwnedBuf<T, A, OErr, UOErr>, AllocError<OErr, UOErr>>>
     where
         A: Clone,
     {
@@ -592,11 +618,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         &mut self,
         idx: usize,
         len: usize,
-    ) -> Result<OwnedBuf<T, A>, AllocError>
+    ) -> Result<OwnedBuf<T, A, OErr, UOErr>, AllocError<OErr, UOErr>>
     where
         A: Clone,
     {
-        let mut new_buf = OwnedBuf::<T, A>::new_in(len, self.alloc.clone())?;
+        let mut new_buf = OwnedBuf::<T, A, OErr, UOErr>::new_in(len, self.alloc.clone())?;
         for i in 0..len {
             new_buf.init_next_unchecked(ptr::read(self.get_ptr_unchecked(idx + i).as_ptr()));
         }
@@ -947,7 +973,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    pub fn reserve(&mut self, additional: usize) -> Result<(), AllocError> {
+    pub fn reserve(&mut self, additional: usize) -> Result<(), AllocError<OErr, UOErr>> {
         unsafe {
             self.set_size_unchecked(self.size + additional)?;
         }
@@ -962,7 +988,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    pub fn shrink_to_fit(&mut self) -> Result<(), AllocError> {
+    pub fn shrink_to_fit(&mut self) -> Result<(), AllocError<OErr, UOErr>> {
         if self.init < self.size {
             self.buf = unsafe {
                 self.alloc
@@ -987,7 +1013,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    pub fn expand_to_fit(&mut self, necessary_size: usize) -> Result<(), AllocError> {
+    pub fn expand_to_fit(&mut self, necessary_size: usize) -> Result<(), AllocError<OErr, UOErr>> {
         if self.size < necessary_size {
             unsafe {
                 self.set_size_unchecked(necessary_size)?;
@@ -1008,20 +1034,26 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    pub unsafe fn set_size_unchecked(&mut self, new_size: usize) -> Result<(), AllocError> {
+    pub unsafe fn set_size_unchecked(
+        &mut self,
+        new_size: usize,
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         if new_size == self.size {
             return Ok(());
         }
-		let layout = layout_or_sz_align::<T>(new_size)
-			.map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        let new_buf = self.alloc.alloc(layout)
-			.map_err(|_| AllocError::AllocFailed(layout))?.cast();
+        let layout = layout_or_sz_align::<T>(new_size)
+            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+        let new_buf = self
+            .alloc
+            .alloc(layout)
+            .map_err(|_| AllocError::AllocFailed(layout))?
+            .cast();
         if self.buf != NonNull::dangling() {
             self.buf.copy_to_nonoverlapping(new_buf, self.init);
-			self.alloc.dealloc(
-				self.buf.cast(),
-				Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
-			);
+            self.alloc.dealloc(
+                self.buf.cast(),
+                Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+            );
         }
         self.buf = new_buf;
         self.size = new_size;
@@ -1034,12 +1066,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     pub fn drop_and_dealloc(self) {
         if self.buf != NonNull::dangling() {
             unsafe {
-                NonNull::<[T]>::slice_from_raw_parts(self.buf, self.init)
-                    .drop_in_place();
-				self.alloc.dealloc(
-					self.buf.cast(),
-					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
-				);
+                NonNull::<[T]>::slice_from_raw_parts(self.buf, self.init).drop_in_place();
+                self.alloc.dealloc(
+                    self.buf.cast(),
+                    Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+                );
             }
         }
     }
@@ -1057,10 +1088,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 )
                 .drop_in_place();
                 self.buf.as_ptr().write_bytes(0, self.size);
-				self.alloc.dealloc(
-					self.buf.cast(),
-					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
-				);
+                self.alloc.dealloc(
+                    self.buf.cast(),
+                    Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+                );
             }
         }
     }
@@ -1076,10 +1107,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                     self.init,
                 )
                 .drop_in_place();
-				self.alloc.dealloc(
-					self.buf.cast(),
-					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
-				);
+                self.alloc.dealloc(
+                    self.buf.cast(),
+                    Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+                );
                 self.init = 0;
                 self.size = 0;
                 self.buf = NonNull::dangling();
@@ -1099,11 +1130,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 )
                 .drop_in_place();
                 self.buf.as_ptr().write_bytes(0, self.size);
-				// TODO: put this in a helper
-				self.alloc.dealloc(
-					self.buf.cast(),
-					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
-				);
+                // TODO: put this in a helper
+                self.alloc.dealloc(
+                    self.buf.cast(),
+                    Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+                );
                 self.init = 0;
                 self.size = 0;
                 self.buf = NonNull::dangling();
@@ -1221,7 +1252,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     }
 }
 
-impl<T, A: Alloc> Deref for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> Deref for OwnedBuf<T, A, OErr, UOErr> {
     type Target = [T];
 
     #[inline]
@@ -1230,74 +1261,94 @@ impl<T, A: Alloc> Deref for OwnedBuf<T, A> {
     }
 }
 
-impl<T, A: Alloc> DerefMut for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> DerefMut for OwnedBuf<T, A, OErr, UOErr> {
     #[inline]
     fn deref_mut(&mut self) -> &mut [T] {
         self.as_slice_mut()
     }
 }
 
-impl<T, A: Alloc> AsRef<[T]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> AsRef<[T]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     #[inline]
     fn as_ref(&self) -> &[T] {
         self
     }
 }
 
-impl<T, A: Alloc> AsMut<[T]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> AsMut<[T]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     #[inline]
     fn as_mut(&mut self) -> &mut [T] {
         self
     }
 }
 
-impl<T, A: Alloc> AsRef<[MaybeUninit<T>]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> AsRef<[MaybeUninit<T>]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     #[inline]
     fn as_ref(&self) -> &[MaybeUninit<T>] {
         self.as_uninit_slice()
     }
 }
 
-impl<T, A: Alloc> AsMut<[MaybeUninit<T>]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> AsMut<[MaybeUninit<T>]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     #[inline]
     fn as_mut(&mut self) -> &mut [MaybeUninit<T>] {
         self.as_uninit_slice_mut()
     }
 }
 
-impl<'s, T, A: Alloc> From<&'s OwnedBuf<T, A>> for Buf<'s, T> {
+impl<'s, T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> From<&'s OwnedBuf<T, A, OErr, UOErr>>
+    for Buf<'s, T>
+{
     #[inline]
-    fn from(owned: &'s OwnedBuf<T, A>) -> Self {
+    fn from(owned: &'s OwnedBuf<T, A, OErr, UOErr>) -> Self {
         Buf::from(unsafe { &*(owned.as_uninit_slice_ptr().as_ptr() as *mut [T]) })
     }
 }
 
-impl<'s, T, A: Alloc> From<&'s mut OwnedBuf<T, A>> for Buf<'s, T> {
+impl<'s, T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error>
+    From<&'s mut OwnedBuf<T, A, OErr, UOErr>> for Buf<'s, T>
+{
     #[inline]
-    fn from(owned: &'s mut OwnedBuf<T, A>) -> Self {
+    fn from(owned: &'s mut OwnedBuf<T, A, OErr, UOErr>) -> Self {
         Buf::from(unsafe { &*(owned.as_uninit_slice_ptr().as_ptr() as *mut [T]) })
     }
 }
 
-impl<T, A: Alloc> Borrow<[T]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> Borrow<[T]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     fn borrow(&self) -> &[T] {
         self
     }
 }
 
-impl<T, A: Alloc> Borrow<[MaybeUninit<T>]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> Borrow<[MaybeUninit<T>]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     fn borrow(&self) -> &[MaybeUninit<T>] {
         self.as_uninit_slice()
     }
 }
 
-impl<T, A: Alloc> BorrowMut<[T]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> BorrowMut<[T]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     fn borrow_mut(&mut self) -> &mut [T] {
         self
     }
 }
 
-impl<T, A: Alloc> BorrowMut<[MaybeUninit<T>]> for OwnedBuf<T, A> {
+impl<T, A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error> BorrowMut<[MaybeUninit<T>]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     fn borrow_mut(&mut self) -> &mut [MaybeUninit<T>] {
         self.as_uninit_slice_mut()
     }
@@ -1305,20 +1356,24 @@ impl<T, A: Alloc> BorrowMut<[MaybeUninit<T>]> for OwnedBuf<T, A> {
 
 macro_rules! spec_impl {
     ($($extra_token:tt)?) => {
-        impl<T: Clone, A: Alloc + Default> From<&[T]> for OwnedBuf<T, A> {
+        impl<T: Clone, A: Alloc<OErr, UOErr> + Default, OErr: Error, UOErr: Error> From<&[T]>
+			for OwnedBuf<T, A, OErr, UOErr>
+		{
             #[track_caller]
             #[inline]
-            $($extra_token)? fn from(slice: &[T]) -> OwnedBuf<T, A> {
+            $($extra_token)? fn from(slice: &[T]) -> OwnedBuf<T, A, OErr, UOErr> {
                 Buf::from(slice)
                     .clone_into_owned_in(A::default())
                     .expect("`<From<&[T]>>::from` failed")
             }
         }
 
-        impl<T: Clone, A: Alloc + Default> From<&mut [T]> for OwnedBuf<T, A> {
+        impl<T: Clone, A: Alloc<OErr, UOErr> + Default, OErr: Error, UOErr: Error> From<&mut [T]>
+			for OwnedBuf<T, A, OErr, UOErr>
+		{
             #[track_caller]
             #[inline]
-            $($extra_token)? fn from(slice: &mut [T]) -> OwnedBuf<T, A> {
+            $($extra_token)? fn from(slice: &mut [T]) -> OwnedBuf<T, A, OErr, UOErr> {
                 OwnedBuf::from(&*slice)
             }
         }
@@ -1332,10 +1387,12 @@ spec_impl!();
 spec_impl!(default);
 
 #[cfg(feature = "specialization")]
-impl<T: Copy, A: Alloc + Default> From<&[T]> for OwnedBuf<T, A> {
+impl<T: Copy, A: Alloc<OErr, UOErr> + Default, OErr: Error, UOErr: Error> From<&[T]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     #[track_caller]
     #[inline]
-    fn from(slice: &[T]) -> OwnedBuf<T, A> {
+    fn from(slice: &[T]) -> OwnedBuf<T, A, OErr, UOErr> {
         Buf::from(slice)
             .copy_into_owned_in(A::default())
             .expect("`<From<&[T]>>::from` failed")
@@ -1343,10 +1400,12 @@ impl<T: Copy, A: Alloc + Default> From<&[T]> for OwnedBuf<T, A> {
 }
 
 #[cfg(feature = "specialization")]
-impl<T: Copy, A: Alloc + Default> From<&mut [T]> for OwnedBuf<T, A> {
+impl<T: Copy, A: Alloc<OErr, UOErr> + Default, OErr: Error, UOErr: Error> From<&mut [T]>
+    for OwnedBuf<T, A, OErr, UOErr>
+{
     #[track_caller]
     #[inline]
-    fn from(slice: &mut [T]) -> OwnedBuf<T, A> {
+    fn from(slice: &mut [T]) -> OwnedBuf<T, A, OErr, UOErr> {
         OwnedBuf::from(&*slice)
     }
 }
@@ -1442,7 +1501,10 @@ impl<T> Buf<'_, T> {
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    pub fn clone_into_owned_in<A: Alloc>(&self, alloc: A) -> Result<OwnedBuf<T, A>, AllocError>
+    pub fn clone_into_owned_in<A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error>(
+        &self,
+        alloc: A,
+    ) -> Result<OwnedBuf<T, A, OErr, UOErr>, AllocError<OErr, UOErr>>
     where
         T: Clone,
     {
@@ -1459,6 +1521,7 @@ impl<T> Buf<'_, T> {
             init: self.init,
             size,
             alloc,
+            _marker: PhantomData,
         })
     }
 
@@ -1470,7 +1533,10 @@ impl<T> Buf<'_, T> {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     #[inline]
-    pub fn copy_into_owned_in<A: Alloc>(&self, alloc: A) -> Result<OwnedBuf<T, A>, AllocError>
+    pub fn copy_into_owned_in<A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error>(
+        &self,
+        alloc: A,
+    ) -> Result<OwnedBuf<T, A, OErr, UOErr>, AllocError<OErr, UOErr>>
     where
         T: Copy,
     {
@@ -1489,10 +1555,10 @@ impl<T> Buf<'_, T> {
     ///
     /// The caller must ensure the performed copying of elements is safe.
     #[inline]
-    pub unsafe fn copy_into_owned_in_unchecked<A: Alloc>(
+    pub unsafe fn copy_into_owned_in_unchecked<A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error>(
         &self,
         alloc: A,
-    ) -> Result<OwnedBuf<T, A>, AllocError> {
+    ) -> Result<OwnedBuf<T, A, OErr, UOErr>, AllocError<OErr, UOErr>> {
         let (buf, _, size, alloc) = OwnedBuf::new_in(self.buf.len(), alloc)?.into_raw_parts();
         for i in 0..self.init {
             buf.add(i).write(ptr::read(
@@ -1504,6 +1570,7 @@ impl<T> Buf<'_, T> {
             init: self.init,
             size,
             alloc,
+            _marker: PhantomData,
         })
     }
 
@@ -1515,13 +1582,17 @@ impl<T> Buf<'_, T> {
     /// The contained elements must be unowned.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    pub const unsafe fn into_owned<A: Alloc>(self, alloc: A) -> OwnedBuf<T, A> {
+    pub const unsafe fn into_owned<A: Alloc<OErr, UOErr>, OErr: Error, UOErr: Error>(
+        self,
+        alloc: A,
+    ) -> OwnedBuf<T, A, OErr, UOErr> {
         let Buf { init, buf: elems } = self;
         OwnedBuf {
             buf: NonNull::from_ref(elems).cast::<T>(),
             init,
             size: elems.len(),
             alloc,
+            _marker: PhantomData,
         }
     }
 }

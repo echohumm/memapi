@@ -1,5 +1,6 @@
 use crate::AllocError;
 use alloc::alloc::Layout;
+use core::fmt::{self, Display, Formatter};
 
 #[cfg(feature = "metadata")]
 /// Alternative to `*mut T`'s `with_metadata_of`, because it's unstable.
@@ -57,7 +58,10 @@ pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
 /// - [`AllocError::LayoutError`] if the computed layout is invalid.
 /// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
 #[inline]
-pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usize), AllocError> {
+pub const fn repeat_layout(
+    layout: Layout,
+    count: usize,
+) -> Result<(Layout, usize), AllocError<UUError>> {
     let padded = pad_layout_to_align(layout, layout.align());
     match repeat_layout_packed(padded, count) {
         Ok(repeated) => Ok((repeated, padded.size())),
@@ -78,7 +82,10 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
 /// - [`AllocError::LayoutError`] if the computed layout is invalid.
 /// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
 #[inline]
-pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
+pub const fn repeat_layout_packed(
+    layout: Layout,
+    count: usize,
+) -> Result<Layout, AllocError<UUError>> {
     if let Some(size) = layout.size().checked_mul(count) {
         let align = layout.align();
         match Layout::from_size_align(size, align) {
@@ -86,7 +93,7 @@ pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout
             Err(_) => Err(AllocError::LayoutError(layout.size(), layout.align())),
         }
     } else {
-        Err(AllocError::ArithmeticOverflow)
+        Err(AllocError::Other(UUError::ArithmeticOverflow))
     }
 }
 
@@ -96,3 +103,20 @@ const fn size_rounded_up_to_align(sz: usize, align: usize) -> usize {
         sz.unchecked_add(sub1) & !sub1
     }
 }
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+/// An error which can occur specifically when using [`unstable_util`](crate::unstable_util).
+pub enum UUError {
+    /// A basic arithmetic operation overflowed.
+    ArithmeticOverflow,
+}
+
+impl Display for UUError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            UUError::ArithmeticOverflow => write!(f, "arithmetic overflow"),
+        }
+    }
+}
+
+impl core::error::Error for UUError {}

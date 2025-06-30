@@ -1,9 +1,17 @@
 #![allow(missing_docs)]
 
-use crate::{error::AllocError, Alloc};
-use core::{alloc::Layout, ptr::NonNull};
+use crate::error::{AllocError, DefaultError};
+use core::{
+    alloc::Layout,
+    fmt::{self, Display, Formatter},
+    ptr::NonNull,
+};
 
-pub trait ResizeInPlace: Alloc {
+pub trait ResizeInPlace<
+    OErr: core::error::Error = DefaultError,
+    UOErr: core::error::Error = DefaultError,
+>
+{
     /// Grow the given block to a new, larger layout.
     ///
     /// # Errors
@@ -23,7 +31,7 @@ pub trait ResizeInPlace: Alloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError>;
+    ) -> Result<(), AllocError<OErr, UOErr>>;
 
     /// Grow the given block to a new, larger layout, zeroing newly allocated bytes.
     ///
@@ -45,7 +53,7 @@ pub trait ResizeInPlace: Alloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         self.grow_in_place_filled(ptr, old_layout, new_size, 0)
     }
 
@@ -71,7 +79,7 @@ pub trait ResizeInPlace: Alloc {
         old_layout: Layout,
         new_size: usize,
         pattern: F,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         self.grow_in_place(ptr, old_layout, new_size)?;
         let start_num = old_layout.size();
         let start = ptr.add(start_num);
@@ -102,7 +110,7 @@ pub trait ResizeInPlace: Alloc {
         old_layout: Layout,
         new_size: usize,
         n: u8,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         self.grow_in_place(ptr, old_layout, new_size)?;
         ptr.add(old_layout.size())
             .write_bytes(n, new_size - old_layout.size());
@@ -129,7 +137,7 @@ pub trait ResizeInPlace: Alloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError>;
+    ) -> Result<(), AllocError<OErr, UOErr>>;
 
     /// Reallocate a block, growing or shrinking as needed.
     ///
@@ -154,7 +162,7 @@ pub trait ResizeInPlace: Alloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         if new_size > old_layout.size() {
             self.grow_in_place(ptr, old_layout, new_size)
         } else {
@@ -185,7 +193,7 @@ pub trait ResizeInPlace: Alloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         if new_size > old_layout.size() {
             self.grow_in_place_zeroed(ptr, old_layout, new_size)
         } else {
@@ -218,7 +226,7 @@ pub trait ResizeInPlace: Alloc {
         old_layout: Layout,
         new_size: usize,
         pattern: F,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         if new_size > old_layout.size() {
             self.grow_in_place_patterned(ptr, old_layout, new_size, pattern)
         } else {
@@ -251,7 +259,7 @@ pub trait ResizeInPlace: Alloc {
         old_layout: Layout,
         new_size: usize,
         n: u8,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<OErr, UOErr>> {
         if new_size > old_layout.size() {
             self.grow_in_place_filled(ptr, old_layout, new_size, n)
         } else {
@@ -261,16 +269,18 @@ pub trait ResizeInPlace: Alloc {
 }
 
 #[cfg(feature = "jemalloc_in_place")]
-impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
+impl ResizeInPlace<InPlaceError, crate::external_alloc::UnsupportedOperation>
+    for crate::external_alloc::jemalloc::Jemalloc
+{
     #[inline]
     unsafe fn grow_in_place(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<InPlaceError, crate::external_alloc::UnsupportedOperation>> {
         if new_size == 0 {
-            Err(AllocError::ResizeInPlaceZeroSized)
+            Err(AllocError::Other(InPlaceError::ResizeInPlaceZeroSized))
         } else if new_size < old_layout.size() {
             Err(AllocError::GrowSmallerNewLayout(
                 old_layout.size(),
@@ -287,7 +297,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
             {
                 Ok(())
             } else {
-                Err(AllocError::CannotResizeInPlace)
+                Err(AllocError::Other(InPlaceError::CannotResizeInPlace))
             }
         }
     }
@@ -298,9 +308,9 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<InPlaceError, crate::external_alloc::UnsupportedOperation>> {
         if new_size == 0 {
-            Err(AllocError::ResizeInPlaceZeroSized)
+            Err(AllocError::Other(InPlaceError::ResizeInPlaceZeroSized))
         } else if new_size > old_layout.size() {
             Err(AllocError::ShrinkBiggerNewLayout(
                 old_layout.size(),
@@ -325,23 +335,25 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
 
                 Ok(())
             } else {
-                Err(AllocError::CannotResizeInPlace)
+                Err(AllocError::Other(InPlaceError::CannotResizeInPlace))
             }
         }
     }
 }
 
 #[cfg(feature = "mimalloc_in_place")]
-impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
+impl ResizeInPlace<InPlaceError, crate::external_alloc::UnsupportedOperation>
+    for crate::external_alloc::mimalloc::MiMalloc
+{
     #[inline]
     unsafe fn grow_in_place(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<InPlaceError, crate::external_alloc::UnsupportedOperation>> {
         if new_size == 0 {
-            Err(AllocError::ResizeInPlaceZeroSized)
+            Err(AllocError::Other(InPlaceError::ResizeInPlaceZeroSized))
         } else if new_size < old_layout.size() {
             Err(AllocError::GrowSmallerNewLayout(
                 old_layout.size(),
@@ -350,7 +362,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         } else {
             // this would be, though
             if crate::external_alloc::ffi::mim::mi_expand(ptr.as_ptr().cast(), new_size).is_null() {
-                Err(AllocError::CannotResizeInPlace)
+                Err(AllocError::Other(InPlaceError::CannotResizeInPlace))
             } else {
                 Ok(())
             }
@@ -362,9 +374,34 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         _: NonNull<u8>,
         _: Layout,
         _: usize,
-    ) -> Result<(), AllocError> {
+    ) -> Result<(), AllocError<InPlaceError, crate::external_alloc::UnsupportedOperation>> {
         Err(AllocError::UnsupportedOperation(
-            crate::error::UOp::ShrinkInPlace,
+            crate::external_alloc::UnsupportedOperation::ShrinkInPlace,
         ))
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum InPlaceError {
+    /// Resize-in-place was found to be impossible.
+    // Note that this variant means the allocator supports resizing in-place, but it failed.
+    CannotResizeInPlace,
+    /// A size of zero was requested for a resize-in-place operation.
+    ///
+    /// Same as [`AllocError::ZeroSizedLayout`], but without the [`NonNull`], which is useless for
+    /// in-place operations.
+    ResizeInPlaceZeroSized,
+}
+
+impl Display for InPlaceError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            InPlaceError::CannotResizeInPlace => write!(f, "cannot resize in place"),
+            InPlaceError::ResizeInPlaceZeroSized => {
+                write!(f, "zero-sized resize in place was requested")
+            }
+        }
+    }
+}
+
+impl core::error::Error for InPlaceError {}
