@@ -17,7 +17,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     unsafe fn grow_in_place(
         &self,
         ptr: NonNull<u8>,
@@ -38,7 +38,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow_in_place_zeroed(
         &self,
@@ -63,7 +63,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow_in_place_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
@@ -94,7 +94,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow_in_place_filled(
         &self,
@@ -123,7 +123,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     unsafe fn shrink_in_place(
         &self,
         ptr: NonNull<u8>,
@@ -147,7 +147,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc_in_place(
         &self,
@@ -178,7 +178,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc_in_place_zeroed(
         &self,
@@ -210,7 +210,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc_in_place_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
@@ -243,7 +243,7 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc_in_place_filled(
         &self,

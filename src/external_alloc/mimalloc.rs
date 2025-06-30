@@ -1,9 +1,5 @@
-use crate::{
-    external_alloc::resize,
-    ffi::mim as ffi,
-    helpers::{dangling_nonnull_for, null_q},
-    Alloc, AllocError,
-};
+use crate::helpers::zsl_check;
+use crate::{external_alloc::resize, ffi::mim as ffi, helpers::null_q, Alloc, AllocError};
 use core::{
     alloc::{GlobalAlloc, Layout},
     ptr::NonNull,
@@ -14,21 +10,25 @@ use core::{
 pub struct MiMalloc;
 
 unsafe impl GlobalAlloc for MiMalloc {
+	#[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ffi::mi_malloc_aligned(layout.size(), layout.align()).cast()
     }
 
+	#[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         ffi::mi_free_size_aligned(ptr.cast(), layout.size(), layout.align());
     }
 
+	#[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         ffi::mi_zalloc_aligned(layout.size(), layout.align()).cast()
     }
 
+	#[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
         ffi::mi_realloc_aligned(ptr.cast(), new_size, layout.align()).cast()
@@ -36,34 +36,38 @@ unsafe impl GlobalAlloc for MiMalloc {
 }
 
 impl Alloc for MiMalloc {
+	#[cfg_attr(miri, track_caller)]
+	#[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
+        zsl_check(layout, |layout| {
             null_q(
                 unsafe { ffi::mi_malloc_aligned(layout.size(), layout.align()) }.cast::<u8>(),
                 layout,
             )
-        }
+        })
     }
 
+	#[cfg_attr(miri, track_caller)]
+	#[inline]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
+        zsl_check(layout, |layout| {
             null_q(
                 unsafe { ffi::mi_zalloc_aligned(layout.size(), layout.align()) }.cast::<u8>(),
                 layout,
             )
-        }
+        })
     }
 
+	#[cfg_attr(miri, track_caller)]
+	#[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if layout.size() != 0 {
             ffi::mi_free_size_aligned(ptr.as_ptr().cast(), layout.size(), layout.align());
         }
     }
 
+	#[cfg_attr(miri, track_caller)]
+	#[inline]
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
@@ -82,6 +86,8 @@ impl Alloc for MiMalloc {
         )
     }
 
+	#[cfg_attr(miri, track_caller)]
+	#[inline]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,
@@ -100,6 +106,8 @@ impl Alloc for MiMalloc {
         )
     }
 
+	#[cfg_attr(miri, track_caller)]
+	#[inline]
     unsafe fn realloc(
         &self,
         ptr: NonNull<u8>,

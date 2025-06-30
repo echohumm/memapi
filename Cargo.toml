@@ -22,6 +22,7 @@ clone_to_uninit = ["nightly"]
 specialization = ["nightly"]
 
 alloc_ext = []
+alloc_slice = ["alloc_ext"]
 resize_in_place = []
 
 stats = []
@@ -38,7 +39,7 @@ full = [
     "std",
     "metadata",
     "clone_to_uninit",
-    "alloc_ext",
+    "alloc_slice",
     "stats",
     "owned",
     "jemalloc_in_place",

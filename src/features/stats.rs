@@ -626,42 +626,6 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
     }
 
     #[track_caller]
-    unsafe fn grow_patterned<F: Fn(usize) -> u8 + Clone>(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-        pattern: F,
-    ) -> Result<NonNull<u8>, AllocError> {
-        grow(
-            self,
-            |a, ptr, old, new| a.grow_patterned(ptr, old, new, pattern.clone()),
-            ptr,
-            old_layout,
-            new_layout,
-            AllocKind::Patterned,
-        )
-    }
-
-    #[track_caller]
-    fn grow_filled(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-        n: u8,
-    ) -> Result<NonNull<u8>, AllocError> {
-        grow(
-            self,
-            |a, ptr, old, new| a.grow_filled(ptr, old, new, n),
-            ptr,
-            old_layout,
-            new_layout,
-            AllocKind::Filled(n),
-        )
-    }
-
-    #[track_caller]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,

@@ -1,4 +1,4 @@
-use crate::helpers::SliceAllocGuard;
+use crate::helpers::{layout_or_sz_align, SliceAllocGuard};
 use crate::{
     owned::VariableError::{Hard, Soft},
     type_props::SizedProps,
@@ -80,7 +80,7 @@ impl<T> OwnedBuf<T> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn new(len: usize) -> Result<OwnedBuf<T>, AllocError> {
         OwnedBuf::new_in(len, DefaultAlloc)
@@ -102,11 +102,14 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn new_in(len: usize, alloc: A) -> Result<OwnedBuf<T, A>, AllocError> {
+		let layout = layout_or_sz_align::<T>(len)
+			.map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         Ok(OwnedBuf {
-            buf: alloc.alloc_slice::<T>(len)?.cast(),
+            buf: alloc.alloc(layout)
+				.map_err(|_| AllocError::AllocFailed(layout))?.cast(),
             init: 0,
             size: len,
             alloc,
@@ -285,7 +288,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// # Safety
     ///
     /// The caller must ensure `self.init < self.size`
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn init_next_unchecked(&mut self, val: T) {
         self.buf.as_ptr().add(self.init).write(val);
@@ -308,7 +311,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// # Safety
     ///
     /// The caller must ensure there is an initialized element to remove.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn remove_last_unchecked(&mut self) -> T {
         self.init -= 1;
@@ -330,7 +333,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// # Safety
     ///
     /// The caller must ensure the index is in the bounds of the initialized buffer.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
         let src = self.get_ptr_unchecked(idx);
@@ -506,9 +509,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         src.cast::<T>()
             .copy_to_nonoverlapping(self.buf.as_ptr().add(idx), len);
         // deallocate the original buffer
-        slice
-            .alloc
-            .dealloc_n(NonNull::new_unchecked(src.cast::<T>()), slice.size);
+		slice.alloc.dealloc(
+			NonNull::new_unchecked(src.cast()),
+			Layout::from_size_align_unchecked(size_of::<T>() * slice.size, align_of::<T>()),
+		);
         // noop but stops the non-consumed warning.
         forget(slice);
         // update initialized element count
@@ -725,7 +729,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// # Safety
     ///
     /// The caller must ensure the index is in bounds.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn get_ptr_unchecked(&self, idx: usize) -> NonNull<T> {
         unsafe { self.buf.add(idx) }
@@ -736,7 +740,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// # Safety
     ///
     /// The caller must ensure the index is in bounds.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn get_unchecked(&self, idx: usize) -> &T {
         unsafe { &*self.get_ptr_unchecked(idx).as_ptr() }
@@ -747,7 +751,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// # Safety
     ///
     /// The caller must ensure the index is in bounds.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn get_mut_unchecked(&mut self, idx: usize) -> &mut T {
         unsafe { &mut *self.get_ptr_unchecked(idx).as_ptr() }
@@ -903,7 +907,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// The caller must ensure the parameters are in bounds, meaning:
     /// - If using the slice as initialized data, `start + len < self.init`.
     /// - If using the slice as uninitialized data, `start + len < self.size`.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn get_slice_ptr_unchecked(&self, start: usize, len: usize) -> NonNull<[T]> {
         NonNull::slice_from_raw_parts(self.get_ptr_unchecked(start), len)
@@ -916,7 +920,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// The caller must ensure the parameters are in bounds, meaning:
     /// - If using the slice as initialized data, `start + len < self.init`.
     /// - If using the slice as uninitialized data, `start + len < self.size`.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn get_slice_unchecked(&self, start: usize, len: usize) -> &[T] {
         unsafe { &*self.get_slice_ptr_unchecked(start, len).as_ptr() }
@@ -929,7 +933,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// The caller must ensure the parameters are in bounds, meaning:
     /// - If using the slice as initialized data, `start + len < self.init`.
     /// - If using the slice as uninitialized data, `start + len < self.size`.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn get_slice_mut_unchecked(&mut self, start: usize, len: usize) -> &mut [T] {
         unsafe { &mut *self.get_slice_ptr_unchecked(start, len).as_ptr() }
@@ -941,7 +945,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn reserve(&mut self, additional: usize) -> Result<(), AllocError> {
         unsafe {
@@ -956,7 +960,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn shrink_to_fit(&mut self) -> Result<(), AllocError> {
         if self.init < self.size {
@@ -981,7 +985,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn expand_to_fit(&mut self, necessary_size: usize) -> Result<(), AllocError> {
         if self.size < necessary_size {
@@ -1002,16 +1006,22 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub unsafe fn set_size_unchecked(&mut self, new_size: usize) -> Result<(), AllocError> {
         if new_size == self.size {
             return Ok(());
         }
-        let new_buf = self.alloc.alloc_slice::<T>(new_size)?.cast();
+		let layout = layout_or_sz_align::<T>(new_size)
+			.map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+        let new_buf = self.alloc.alloc(layout)
+			.map_err(|_| AllocError::AllocFailed(layout))?.cast();
         if self.buf != NonNull::dangling() {
             self.buf.copy_to_nonoverlapping(new_buf, self.init);
-            self.alloc.dealloc_n(self.buf, self.size);
+			self.alloc.dealloc(
+				self.buf.cast(),
+				Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+			);
         }
         self.buf = new_buf;
         self.size = new_size;
@@ -1019,21 +1029,24 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     }
 
     /// Destructor to drop all initialized elements and deallocate the buffer.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn drop_and_dealloc(self) {
         if self.buf != NonNull::dangling() {
             unsafe {
-                NonNull::<[T]>::slice_from_raw_parts(self.buf.cast::<T>(), self.init)
+                NonNull::<[T]>::slice_from_raw_parts(self.buf, self.init)
                     .drop_in_place();
-                self.alloc.dealloc_n(self.buf, self.size);
+				self.alloc.dealloc(
+					self.buf.cast(),
+					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+				);
             }
         }
     }
 
     /// Destructor to drop all initialized elements, zero the allocated memory, and deallocate the
     /// buffer.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn drop_zero_and_dealloc(self) {
         if self.buf != NonNull::dangling() {
@@ -1044,13 +1057,16 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 )
                 .drop_in_place();
                 self.buf.as_ptr().write_bytes(0, self.size);
-                self.alloc.dealloc_n(self.buf, self.size);
+				self.alloc.dealloc(
+					self.buf.cast(),
+					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+				);
             }
         }
     }
 
     /// Drops all initialized elements and deallocates the buffer.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn reset(&mut self) {
         if self.buf != NonNull::dangling() {
@@ -1060,7 +1076,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                     self.init,
                 )
                 .drop_in_place();
-                self.alloc.dealloc_n(self.buf, self.size);
+				self.alloc.dealloc(
+					self.buf.cast(),
+					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+				);
                 self.init = 0;
                 self.size = 0;
                 self.buf = NonNull::dangling();
@@ -1069,7 +1088,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     }
 
     /// Drops all initialized elements, zeroes allocated memory, and deallocates the buffer.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn reset_zero(&mut self) {
         if self.buf != NonNull::dangling() {
@@ -1080,7 +1099,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 )
                 .drop_in_place();
                 self.buf.as_ptr().write_bytes(0, self.size);
-                self.alloc.dealloc_n(self.buf, self.size);
+				// TODO: put this in a helper
+				self.alloc.dealloc(
+					self.buf.cast(),
+					Layout::from_size_align_unchecked(size_of::<T>() * self.size, align_of::<T>()),
+				);
                 self.init = 0;
                 self.size = 0;
                 self.buf = NonNull::dangling();
@@ -1370,7 +1393,7 @@ impl<T> Buf<'_, T> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn clone_into_owned(&self) -> Result<OwnedBuf<T>, AllocError>
     where
@@ -1417,7 +1440,7 @@ impl<T> Buf<'_, T> {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn clone_into_owned_in<A: Alloc>(&self, alloc: A) -> Result<OwnedBuf<T, A>, AllocError>
     where
@@ -1490,7 +1513,7 @@ impl<T> Buf<'_, T> {
     /// # Safety
     ///
     /// The contained elements must be unowned.
-    #[track_caller]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn into_owned<A: Alloc>(self, alloc: A) -> OwnedBuf<T, A> {
         let Buf { init, buf: elems } = self;

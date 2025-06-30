@@ -1,7 +1,8 @@
+use crate::helpers::zsl_check;
 use crate::{
     error::{AllocError, UOp},
     external_alloc::{ffi::jem as ffi, resize},
-    helpers::{dangling_nonnull_for, null_q},
+    helpers::null_q,
     Alloc,
 };
 use core::{
@@ -24,6 +25,7 @@ macro_rules! assume {
 pub struct Jemalloc;
 
 unsafe impl GlobalAlloc for Jemalloc {
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         assume!(layout.size() != 0);
@@ -36,6 +38,7 @@ unsafe impl GlobalAlloc for Jemalloc {
         .cast()
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         assume!(!ptr.is_null());
@@ -47,6 +50,7 @@ unsafe impl GlobalAlloc for Jemalloc {
         );
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         assume!(layout.size() != 0);
@@ -74,11 +78,10 @@ unsafe impl GlobalAlloc for Jemalloc {
 }
 
 impl Alloc for Jemalloc {
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
+        zsl_check(layout, |layout| {
             let flags = ffi::layout_to_flags(layout.size(), layout.align());
             null_q(
                 if flags == 0 {
@@ -88,14 +91,13 @@ impl Alloc for Jemalloc {
                 },
                 layout,
             )
-        }
+        })
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if layout.size() == 0 {
-            Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-        } else {
+        zsl_check(layout, |layout| {
             let flags = ffi::layout_to_flags(layout.size(), layout.align());
             null_q(
                 if flags == 0 {
@@ -105,9 +107,10 @@ impl Alloc for Jemalloc {
                 },
                 layout,
             )
-        }
+        })
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if layout.size() != 0 {
@@ -119,6 +122,7 @@ impl Alloc for Jemalloc {
         }
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow(
         &self,
@@ -136,6 +140,7 @@ impl Alloc for Jemalloc {
         )
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn shrink(
         &self,
@@ -153,6 +158,7 @@ impl Alloc for Jemalloc {
         )
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(
         &self,

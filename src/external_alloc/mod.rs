@@ -13,7 +13,7 @@ pub mod jemalloc;
 pub mod mimalloc;
 
 #[allow(dead_code)]
-#[track_caller]
+#[cfg_attr(miri, track_caller)]
 #[inline]
 pub(crate) unsafe fn resize<F: Fn() -> *mut c_void>(
     ralloc: F,
@@ -111,7 +111,7 @@ pub mod ffi {
             malloc_usable_size(ptr.cast())
         }
 
-        #[track_caller]
+        #[cfg_attr(miri, track_caller)]
         #[inline]
         pub(crate) unsafe fn raw_ralloc(
             ptr: *mut c_void,
