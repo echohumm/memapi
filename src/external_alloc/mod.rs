@@ -1,11 +1,5 @@
-use crate::error::DefaultError;
 use crate::{error::AllocError, helpers::null_q};
-use core::{
-    alloc::Layout,
-    ffi::c_void,
-    fmt::{self, Display, Formatter},
-    ptr::NonNull,
-};
+use core::{alloc::Layout, ffi::c_void, ptr::NonNull};
 
 #[cfg(feature = "jemalloc")]
 /// Module for [jemalloc](https://jemalloc.net/) support.
@@ -14,6 +8,8 @@ pub mod jemalloc;
 #[cfg(feature = "mimalloc")]
 /// Module for [mimalloc](https://microsoft.github.io/mimalloc/) support.
 pub mod mimalloc;
+
+pub(crate) const REALLOC_DIFF_ALIGN: &str = "reallocate with a different alignment";
 
 #[allow(dead_code)]
 #[cfg_attr(miri, track_caller)]
@@ -25,11 +21,9 @@ pub(crate) unsafe fn resize<F: Fn() -> *mut c_void>(
     new_layout: Layout,
     need_same_align: bool,
     is_grow: bool,
-) -> Result<NonNull<u8>, AllocError<DefaultError, UnsupportedOperation>> {
+) -> Result<NonNull<u8>, AllocError> {
     if need_same_align && new_layout.align() != old_layout.align() {
-        return Err(AllocError::UnsupportedOperation(
-            UnsupportedOperation::ReallocDiffAlign(old_layout.align(), new_layout.align()),
-        ));
+        return Err(AllocError::UnsupportedOperation(REALLOC_DIFF_ALIGN));
     }
 
     let old_size = old_layout.size();
@@ -47,28 +41,6 @@ pub(crate) unsafe fn resize<F: Fn() -> *mut c_void>(
 
     null_q(ralloc(), new_layout)
 }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-/// Any unsupported operation.
-pub enum UnsupportedOperation {
-    /// A reallocation operation with a different alignment from the original allocation.
-    ReallocDiffAlign(usize, usize),
-    /// A shrink-in-place operation.
-    ShrinkInPlace,
-}
-
-impl Display for UnsupportedOperation {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            UnsupportedOperation::ReallocDiffAlign(old, new) => {
-                write!(f, "realloc diff align from {old} to {new}")
-            }
-            UnsupportedOperation::ShrinkInPlace => write!(f, "shrink in place"),
-        }
-    }
-}
-
-impl core::error::Error for UnsupportedOperation {}
 
 /// FFI bindings to allocation libraries.
 pub mod ffi {

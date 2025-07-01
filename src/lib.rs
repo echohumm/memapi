@@ -39,9 +39,6 @@
 
 // TODO: maybe update the readme
 
-// TODO: improve all of the error stuff (is missing in owned.rs, very out of order and messy
-//  elsewhere)
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
@@ -53,7 +50,6 @@
 extern crate alloc;
 extern crate core;
 
-use crate::error::DefaultError;
 #[cfg(feature = "alloc_ext")]
 pub use alloc_ext::*;
 #[cfg(feature = "resize_in_place")]
@@ -88,7 +84,6 @@ use alloc::alloc::{
 };
 use core::{
     cmp::Ordering,
-    error::Error,
     ptr::{null_mut, NonNull},
 };
 
@@ -167,18 +162,14 @@ default_alloc_impl!(DefaultAlloc);
 /// A memory allocation interface.
 ///
 /// This trait does _not_ require `Self: Allocator` and is `no_std`-compatible.
-///
-/// # Type parameters
-///
-/// - `OErr: Error = DefaultError`: The type which [`AllocError::Other(OErr)`] wraps.
-pub trait Alloc<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
+pub trait Alloc {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError<OErr, UOErr>>;
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
     ///
@@ -188,7 +179,7 @@ pub trait Alloc<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         match self.alloc(layout) {
             Ok(p) => {
                 unsafe {
@@ -228,7 +219,7 @@ pub trait Alloc<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    ) -> Result<NonNull<u8>, AllocError> {
         grow(
             self,
             ptr,
@@ -258,7 +249,7 @@ pub trait Alloc<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    ) -> Result<NonNull<u8>, AllocError> {
         grow(
             self,
             ptr,
@@ -287,7 +278,7 @@ pub trait Alloc<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    ) -> Result<NonNull<u8>, AllocError> {
         shrink(self, ptr, old_layout, new_layout)
     }
 
@@ -312,7 +303,7 @@ pub trait Alloc<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    ) -> Result<NonNull<u8>, AllocError> {
         ralloc(
             self,
             ptr,
@@ -341,7 +332,7 @@ pub trait Alloc<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    ) -> Result<NonNull<u8>, AllocError> {
         ralloc(
             self,
             ptr,
@@ -421,16 +412,16 @@ pub(crate) mod nightly {
     default_alloc_impl!(Global);
 }
 
-impl<OErr: Error, UOErr: Error, A: Alloc<OErr, UOErr> + ?Sized> Alloc<OErr, UOErr> for &A {
+impl<A: Alloc + ?Sized> Alloc for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         (**self).alloc(layout)
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         (**self).alloc_zeroed(layout)
     }
 
@@ -442,27 +433,30 @@ impl<OErr: Error, UOErr: Error, A: Alloc<OErr, UOErr> + ?Sized> Alloc<OErr, UOEr
 }
 
 #[cfg(feature = "std")]
+#[cfg_attr(miri, track_caller)]
+#[inline]
+fn zsl_check_alloc<A: GlobalAlloc>(
+    a: &A,
+    layout: Layout,
+    alloc: unsafe fn(&A, Layout) -> *mut u8,
+) -> Result<NonNull<u8>, AllocError> {
+    zsl_check(layout, |layout: Layout| {
+        null_q(unsafe { alloc(a, layout) }, layout)
+    })
+}
+
+#[cfg(feature = "std")]
 impl Alloc for std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        zsl_check(layout, |layout| {
-            match NonNull::new(unsafe { GlobalAlloc::alloc(self, layout) }) {
-                Some(ptr) => Ok(ptr),
-                None => Err(AllocError::AllocFailed(layout)),
-            }
-        })
+        zsl_check_alloc(self, layout, GlobalAlloc::alloc)
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        zsl_check(layout, |layout| {
-            match NonNull::new(unsafe { GlobalAlloc::alloc_zeroed(self, layout) }) {
-                Some(ptr) => Ok(ptr),
-                None => Err(AllocError::AllocFailed(layout)),
-            }
-        })
+        zsl_check_alloc(self, layout, GlobalAlloc::alloc_zeroed)
     }
 
     #[cfg_attr(miri, track_caller)]
@@ -476,21 +470,16 @@ impl Alloc for std::alloc::System {
 /// reallocating using `new_layout`, filling new bytes using `pattern.`
 #[inline]
 #[cfg_attr(miri, track_caller)]
-pub(crate) fn grow<
-    OErr: Error,
-    UOErr: Error,
-    A: Alloc<OErr, UOErr> + ?Sized,
-    F: Fn(usize) -> u8 + Clone,
->(
+pub(crate) unsafe fn grow<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
     pattern: AllocPattern<F>,
-) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => unsafe { grow_unchecked(a, ptr, old_layout, new_layout, pattern) },
-        Ordering::Equal => Ok(ptr),
+        Ordering::Equal => Err(AllocError::EqualSizeRealloc),
         Ordering::Greater => Err(AllocError::GrowSmallerNewLayout(
             old_layout.size(),
             new_layout.size(),
@@ -502,18 +491,18 @@ pub(crate) fn grow<
 /// reallocating using `new_layout`.
 #[inline]
 #[cfg_attr(miri, track_caller)]
-fn shrink<OErr: Error, UOErr: Error, A: Alloc<OErr, UOErr> + ?Sized>(
+pub(crate) unsafe fn shrink<A: Alloc + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => Err(AllocError::ShrinkBiggerNewLayout(
             old_layout.size(),
             new_layout.size(),
         )),
-        Ordering::Equal => Ok(ptr),
+        Ordering::Equal => Err(AllocError::EqualSizeRealloc),
         Ordering::Greater => unsafe { shrink_unchecked(a, ptr, old_layout, new_layout) },
     }
 }
@@ -527,18 +516,14 @@ fn shrink<OErr: Error, UOErr: Error, A: Alloc<OErr, UOErr> + ?Sized>(
 /// `old_layout.size()`.
 #[inline]
 #[cfg_attr(miri, track_caller)]
-unsafe fn grow_unchecked<
-    OErr: Error,
-    UOErr: Error,
-    A: Alloc<OErr, UOErr> + ?Sized,
-    F: Fn(usize) -> u8 + Clone,
->(
+#[allow(clippy::needless_pass_by_value)]
+unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
     pattern: AllocPattern<F>,
-) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+) -> Result<NonNull<u8>, AllocError> {
     let new_ptr = match pattern {
         AllocPattern::None => a.alloc(new_layout)?.cast::<u8>(),
         #[cfg(feature = "alloc_ext")]
@@ -565,12 +550,12 @@ unsafe fn grow_unchecked<
 /// `old_layout.size()`.
 #[inline]
 #[cfg_attr(miri, track_caller)]
-unsafe fn shrink_unchecked<OErr: Error, UOErr: Error, A: Alloc<OErr, UOErr> + ?Sized>(
+unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+) -> Result<NonNull<u8>, AllocError> {
     let new_ptr = a.alloc(new_layout)?.cast::<u8>();
     unsafe {
         ptr.copy_to_nonoverlapping(new_ptr, new_layout.size());
@@ -582,27 +567,22 @@ unsafe fn shrink_unchecked<OErr: Error, UOErr: Error, A: Alloc<OErr, UOErr> + ?S
 /// Helper for realloc to reduce repetition.
 #[cfg_attr(miri, track_caller)]
 #[inline]
-pub(crate) unsafe fn ralloc<
-    OErr: Error,
-    UOErr: Error,
-    A: Alloc<OErr, UOErr> + ?Sized,
-    F: Fn(usize) -> u8 + Clone,
->(
+pub(crate) unsafe fn ralloc<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     alloc: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
     pat: AllocPattern<F>,
-) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => unsafe { grow_unchecked(&alloc, ptr, old_layout, new_layout, pat) },
-        Ordering::Equal => Ok(ptr),
+        Ordering::Equal => Err(AllocError::EqualSizeRealloc),
         Ordering::Greater => unsafe { shrink_unchecked(&alloc, ptr, old_layout, new_layout) },
     }
 }
 
 /// The pattern to fill new bytes with.
-enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
+pub(crate) enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
     /// Don't fill bytes at all.
     None,
     /// Zero all bytes.
@@ -615,29 +595,22 @@ enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
     Fn(F),
     #[cfg(not(feature = "alloc_ext"))]
     #[allow(dead_code)]
-    /// Just to suppress compiler error when alloc_ext is disabled.
+    /// Just to suppress compiler error when `alloc_ext` is disabled.
     PhantomFn(core::marker::PhantomData<F>),
 }
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
-    use crate::type_props::PtrProps;
     use crate::{
-        error::{AllocError, DefaultError},
-        type_props::SizedProps,
+        error::AllocError,
+        type_props::{PtrProps, SizedProps},
         Alloc,
     };
-    use core::{
-        alloc::Layout, error::Error, marker::PhantomData, mem::forget, num::NonZeroUsize,
-        ops::Deref, ptr::NonNull,
-    };
+    use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
     #[inline]
-    pub(crate) const fn null_q<T, OErr: Error, UOErr: Error>(
-        ptr: *mut T,
-        layout: Layout,
-    ) -> Result<NonNull<u8>, AllocError<OErr, UOErr>> {
+    pub(crate) const fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         if ptr.is_null() {
             Err(AllocError::AllocFailed(layout))
         } else {
@@ -647,20 +620,44 @@ pub mod helpers {
 
     /// Checks layout for being zero-sized, returning an error if it is.
     #[inline]
-    pub(crate) fn zsl_check<
-        Ret,
-        OErr: Error,
-        UOErr: Error,
-        F: Fn(Layout) -> Result<Ret, AllocError<OErr, UOErr>>,
-    >(
+    pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
         layout: Layout,
         ret: F,
-    ) -> Result<Ret, AllocError<OErr, UOErr>> {
+    ) -> Result<Ret, AllocError> {
         if layout.size() == 0 {
             Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
         } else {
             ret(layout)
         }
+    }
+
+    #[cfg(any(feature = "alloc_slice", feature = "owned"))]
+	/// Deallocates `n` elements of type `T` at `ptr` using a reference to an `A`.
+	#[cfg_attr(miri, track_caller)]
+    #[inline]
+    pub(crate) unsafe fn dealloc_n<T, A: Alloc + ?Sized>(a: &A, ptr: NonNull<T>, n: usize) {
+        // Here, we assume the layout is valid as it was presumably used to allocate previously.
+        a.dealloc(
+            ptr.cast(),
+            Layout::from_size_align_unchecked(T::SZ * n, T::ALIGN),
+        );
+    }
+
+	#[cfg(any(feature = "alloc_slice", feature = "owned"))]
+	/// Allocates a slice of `len` elements of type `T` using the given reference to an `A` and an
+	/// allocation function pointer.
+	#[cfg_attr(miri, track_caller)]
+	#[inline]
+    pub(crate) fn alloc_slice<T, A: Alloc + ?Sized>(
+        a: &A,
+        len: usize,
+		alloc: fn(&A, Layout) -> Result<NonNull<u8>, AllocError>,
+    ) -> Result<NonNull<[T]>, AllocError> {
+        let layout = layout_or_sz_align::<T>(len)
+            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
+        alloc(a, layout)
+            .map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), len))
+            .map_err(|_| AllocError::AllocFailed(layout))
     }
 
     /// Aligns the given value up to a non-zero alignment.
@@ -753,29 +750,16 @@ pub mod helpers {
     /// // (commented out for this example as the pointer will not be used)
     /// // let raw = guard.release();
     /// ```
-    pub struct AllocGuard<
-        'a,
-        T: ?Sized,
-        A: Alloc<OErr, UOErr> + ?Sized,
-        OErr: Error = DefaultError,
-        UOErr: Error = DefaultError,
-    > {
+    pub struct AllocGuard<'a, T: ?Sized, A: Alloc + ?Sized> {
         ptr: NonNull<T>,
         alloc: &'a A,
-        _marker: PhantomData<(OErr, UOErr)>,
     }
 
-    impl<'a, T: ?Sized, A: Alloc<OErr, UOErr> + ?Sized, OErr: Error, UOErr: Error>
-        AllocGuard<'a, T, A, OErr, UOErr>
-    {
+    impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
         /// Creates a new guard from a pointer and a reference to an allocator.
         #[inline]
-        pub const fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A, OErr, UOErr> {
-            AllocGuard {
-                ptr,
-                alloc,
-                _marker: PhantomData,
-            }
+        pub const fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A> {
+            AllocGuard { ptr, alloc }
         }
 
         /// Initializes the value by writing to the contained pointer.
@@ -801,9 +785,7 @@ pub mod helpers {
         }
     }
 
-    impl<T: ?Sized, A: Alloc<OErr, UOErr> + ?Sized, OErr: Error, UOErr: Error> Drop
-        for AllocGuard<'_, T, A, OErr, UOErr>
-    {
+    impl<T: ?Sized, A: Alloc + ?Sized> Drop for AllocGuard<'_, T, A> {
         #[cfg_attr(miri, track_caller)]
         fn drop(&mut self) {
             unsafe {
@@ -812,9 +794,7 @@ pub mod helpers {
         }
     }
 
-    impl<T: ?Sized, A: Alloc<OErr, UOErr> + ?Sized, OErr: Error, UOErr: Error> Deref
-        for AllocGuard<'_, T, A, OErr, UOErr>
-    {
+    impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
         type Target = NonNull<T>;
 
         fn deref(&self) -> &Self::Target {
@@ -854,36 +834,22 @@ pub mod helpers {
     // /// // (commented out for this example as the pointer will not be used)
     // /// // let slice_ptr = guard.release();
     // /// ```
-    pub struct SliceAllocGuard<
-        'a,
-        T,
-        A: Alloc<OErr, UOErr> + ?Sized,
-        OErr: Error = DefaultError,
-        UOErr: Error = DefaultError,
-    > {
+    pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
         ptr: NonNull<T>,
         alloc: &'a A,
         init: usize,
         full: usize,
-        _marker: PhantomData<(OErr, UOErr)>,
     }
 
-    impl<'a, T, A: Alloc<OErr, UOErr> + ?Sized, OErr: Error, UOErr: Error>
-        SliceAllocGuard<'a, T, A, OErr, UOErr>
-    {
+    impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         /// Creates a new slice guard for `full` elements at `ptr` in the given allocator.
         #[inline]
-        pub const fn new(
-            ptr: NonNull<T>,
-            alloc: &'a A,
-            full: usize,
-        ) -> SliceAllocGuard<'a, T, A, OErr, UOErr> {
+        pub const fn new(ptr: NonNull<T>, alloc: &'a A, full: usize) -> SliceAllocGuard<'a, T, A> {
             SliceAllocGuard {
                 ptr,
                 alloc,
                 init: 0,
                 full,
-                _marker: PhantomData,
             }
         }
 
@@ -1001,9 +967,7 @@ pub mod helpers {
         }
     }
 
-    impl<T, A: Alloc<OErr, UOErr> + ?Sized, OErr: Error, UOErr: Error> Drop
-        for SliceAllocGuard<'_, T, A, OErr, UOErr>
-    {
+    impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
         fn drop(&mut self) {
             unsafe {
                 NonNull::slice_from_raw_parts(self.ptr, self.init).drop_in_place();
@@ -1015,9 +979,7 @@ pub mod helpers {
         }
     }
 
-    impl<T, A: Alloc<OErr, UOErr> + ?Sized, OErr: Error, UOErr: Error> Deref
-        for SliceAllocGuard<'_, T, A, OErr, UOErr>
-    {
+    impl<T, A: Alloc + ?Sized> Deref for SliceAllocGuard<'_, T, A> {
         type Target = NonNull<T>;
 
         fn deref(&self) -> &Self::Target {

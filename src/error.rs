@@ -6,14 +6,9 @@ use core::{
 };
 
 /// Errors for allocation operations.
-///
-/// # Type parameters
-///
-/// - `O`: The type which the `Other` variant wraps.
-/// - `UO`: The type which `UnsupportedOperation::`[`UOp::Other`] wraps.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
 #[repr(u8)]
-pub enum AllocError<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
+pub enum AllocError {
     /// The layout computed with the given size and alignment is invalid.
     LayoutError(usize, usize),
     /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
@@ -27,26 +22,15 @@ pub enum AllocError<OErr: Error = DefaultError, UOErr: Error = DefaultError> {
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger layout.
     ShrinkBiggerNewLayout(usize, usize),
+	/// Attempted to reallocate, grow, or shrink to the same size.
+	EqualSizeRealloc,
     /// An operation unsupported by the allocator was attempted.
-    UnsupportedOperation(UOErr),
+    UnsupportedOperation(&'static str),
     /// Any other kind of error.
-    Other(OErr),
+    Other(&'static str),
 }
 
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Hash)]
-/// A zero-sized struct, which exists only to be a default type for [`AllocError::Other`] and
-/// [`UOp::Other`].
-pub struct DefaultError;
-
-impl Display for DefaultError {
-    fn fmt(&self, _: &mut Formatter<'_>) -> fmt::Result {
-        Ok(())
-    }
-}
-
-impl Error for DefaultError {}
-
-impl<OErr: Error, UOErr: Error> Display for AllocError<OErr, UOErr> {
+impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             AllocError::LayoutError(sz, align) => {
@@ -64,6 +48,8 @@ impl<OErr: Error, UOErr: Error> Display for AllocError<OErr, UOErr> {
                 f,
                 "attempted to shrink from a size of {old} to a larger size of {new}"
             ),
+			AllocError::EqualSizeRealloc => write!(f, "attempted to reallocate, grow, or shrink to \
+			the same size"),
             AllocError::UnsupportedOperation(op) => {
                 write!(f, "unsupported operation: attempted to {op}")
             }

@@ -1,8 +1,10 @@
+#![allow(unused_qualifications)]
+
 use crate::{
     stats::AllocRes::{Fail, Succ},
     Alloc, AllocError, DefaultAlloc,
 };
-use alloc::{alloc::Layout, boxed::Box, format, rc::Rc, string::ToString, sync::Arc};
+use alloc::{alloc::Layout, format, string::ToString};
 use core::{
     fmt::{self, Display, Formatter},
     ptr::{null_mut, NonNull},
@@ -117,9 +119,9 @@ macro_rules! delegate_logger {
 
 delegate_logger!(&L);
 delegate_logger!(&mut L);
-delegate_logger!(Box<L>);
-delegate_logger!(Rc<L>);
-delegate_logger!(Arc<L>);
+delegate_logger!(alloc::boxed::Box<L>);
+delegate_logger!(alloc::rc::Rc<L>);
+delegate_logger!(alloc::sync::Arc<L>);
 
 #[cfg(feature = "std")]
 /// An IO buffer that can be used to log statistics.

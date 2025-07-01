@@ -1,4 +1,6 @@
-use alloc::{alloc::Layout, boxed::Box, rc::Rc, sync::Arc};
+#![allow(unused_qualifications)]
+
+use alloc::{alloc::Layout};
 use core::ptr::NonNull;
 
 /// A trait containing constants for sized types.
@@ -115,7 +117,7 @@ impl_ptr_props!(
 
     NonNull<T>, as_ptr
 
-    Box<T>
-    Rc<T>
-    Arc<T>
+    alloc::boxed::Box<T>
+    alloc::rc::Rc<T>
+    alloc::sync::Arc<T>
 );
