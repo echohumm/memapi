@@ -1,26 +1,35 @@
 use crate::{
-	helpers::{
-		layout_or_sz_align,
-		SliceAllocGuard,
-		alloc_slice,
-		dealloc_n
-	},
-	owned::VariableError::{Hard, Soft},
-	type_props::SizedProps,
-	Alloc,
-	AllocError,
-	DefaultAlloc,
+    helpers::{alloc_slice, dealloc_n, layout_or_sz_align, SliceAllocGuard, TRUNC_LGR},
+    owned::VariableError::{Hard, Soft},
+    type_props::SizedProps,
+    Alloc, AllocError, DefaultAlloc,
 };
 use core::{
     alloc::Layout,
     borrow::{Borrow, BorrowMut},
+    cmp::Ordering,
     error::Error,
     fmt::{self, Debug, Display, Formatter},
+    hash::{Hash, Hasher},
+    marker::PhantomData,
     mem::{forget, transmute, ManuallyDrop, MaybeUninit},
     ops::{Deref, DerefMut},
     ptr::{self, replace, NonNull},
     slice,
 };
+// TODO: add any missing traits which make sense
+// TODO: more array utilities like into_array, into_chunks<N> -> OB<[T;N], A>, into_flattened() to
+//  reverse into_chunks, etc.
+
+/// Calculates the actual size for a buffer, taking into account `T`'s potentially ZST status.
+#[inline]
+const fn actual_size<T>(sz: usize) -> usize {
+    if T::IS_ZST {
+        0
+    } else {
+        sz
+    }
+}
 
 /// An error which can be soft or hard.
 pub enum VariableError<S, H> {
@@ -31,8 +40,8 @@ pub enum VariableError<S, H> {
 }
 
 impl<S: Debug, H: Debug> Debug for VariableError<S, H> {
-	//noinspection DuplicatedCode
-	fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    //noinspection DuplicatedCode
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Soft(s) => write!(f, "Soft error: {s:?}"),
             Hard(h) => write!(f, "Hard error: {h:?}"),
@@ -41,7 +50,7 @@ impl<S: Debug, H: Debug> Debug for VariableError<S, H> {
 }
 
 impl<S: Display, H: Display> Display for VariableError<S, H> {
-	//noinspection DuplicatedCode
+    //noinspection DuplicatedCode
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Soft(s) => write!(f, "Soft error: {s}"),
@@ -70,16 +79,7 @@ pub struct OwnedBuf<T, A: Alloc = DefaultAlloc> {
     size: usize,
     /// The allocator.
     alloc: A,
-}
-
-impl<T, A: Alloc> Debug for OwnedBuf<T, A> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OwnedBuf")
-            .field("buf", &self.buf)
-            .field("init", &self.init)
-            .field("size", &self.size)
-            .finish_non_exhaustive()
-    }
+    _marker: PhantomData<T>,
 }
 
 impl<T> OwnedBuf<T> {
@@ -115,10 +115,15 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[inline]
     pub fn new_in(len: usize, alloc: A) -> Result<OwnedBuf<T, A>, AllocError> {
         Ok(OwnedBuf {
-            buf: alloc_slice::<T, A>(&alloc, len, A::alloc)?.cast(),
+            buf: if T::IS_ZST {
+                NonNull::dangling()
+            } else {
+                alloc_slice::<T, A>(&alloc, len, A::alloc)?.cast()
+            },
             init: 0,
             size: len,
             alloc,
+            _marker: PhantomData,
         })
     }
 
@@ -132,6 +137,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             init: 0,
             size: 0,
             alloc,
+            _marker: PhantomData,
         }
     }
 
@@ -159,15 +165,20 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         OwnedBuf {
             buf,
             init,
-            size,
+            size: actual_size::<T>(size),
             alloc,
+            _marker: PhantomData,
         }
     }
 
     /// Returns the total number of elements in the buffer.
     #[inline]
     pub const fn size(&self) -> usize {
-        self.size
+        if T::IS_ZST {
+            usize::MAX
+        } else {
+            self.size
+        }
     }
 
     /// Returns the number of initialized elements in the buffer.
@@ -437,7 +448,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         self.init += 1;
     }
 
-    // TD: add slice replacing and extending
+    // TODO: add slice replacing and extending
 
     #[allow(clippy::type_complexity)]
     /// Attempts to insert `slice` at `idx`, growing if necessary.
@@ -842,6 +853,8 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
+    // TODO: helper to reduce repetition between these three try_get fns
+
     /// Gets a pointer to a portion of the initialized buffer if in bounds, or a pointer to a
     /// portion of the buffer if not.
     ///
@@ -960,6 +973,26 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         Ok(())
     }
 
+    /// Truncates the buffer down to a new length, dropping any removed elements.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::Other("attempted to truncate a slice to a larger size")`] if
+    ///   `len > self.initialized()`.
+    pub fn truncate(&mut self, len: usize) -> Result<(), AllocError> {
+        if len > self.init {
+            return Err(AllocError::Other(TRUNC_LGR));
+        }
+
+        unsafe {
+            NonNull::slice_from_raw_parts(self.as_nonnull().add(len), self.init - len)
+                .drop_in_place();
+        }
+        self.init = len;
+
+        Ok(())
+    }
+
     /// Shrinks the vector's capacity to fit only as many elements as it has.
     ///
     /// # Errors
@@ -971,14 +1004,18 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     pub fn shrink_to_fit(&mut self) -> Result<(), AllocError> {
         if self.init < self.size {
             self.buf = unsafe {
-                self.alloc
-                    .shrink(
-                        self.buf.cast::<u8>(),
-                        // we were able to allocate with this earlier, so it is valid.
-                        Layout::from_size_align_unchecked(self.size * T::SZ, T::ALIGN),
-                        Layout::from_size_align_unchecked(self.init * T::SZ, T::ALIGN),
-                    )?
-                    .cast::<T>()
+                match self.alloc.shrink(
+                    self.buf.cast::<u8>(),
+                    // we were able to allocate with this earlier, so it is valid.
+                    Layout::from_size_align_unchecked(self.size * T::SZ, T::ALIGN),
+                    Layout::from_size_align_unchecked(self.init * T::SZ, T::ALIGN),
+                ) {
+                    // if we already fit, we consider that a success.
+                    Err(AllocError::EqualSizeRealloc) => self.buf,
+                    Err(e) => return Err(e),
+                    Ok(new_buf) => new_buf.cast::<T>(),
+                }
+                .cast::<T>()
             };
             self.size = self.init;
         }
@@ -1017,6 +1054,9 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     pub unsafe fn set_size_unchecked(&mut self, new_size: usize) -> Result<(), AllocError> {
         if new_size == self.size {
             return Ok(());
+        } else if T::IS_ZST {
+            self.size = new_size;
+            return Ok(());
         }
         let layout = layout_or_sz_align::<T>(new_size)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
@@ -1025,9 +1065,9 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             .alloc(layout)
             .map_err(|_| AllocError::AllocFailed(layout))?
             .cast();
-        if self.buf != NonNull::dangling() {
+        if self.size != 0 {
             self.buf.copy_to_nonoverlapping(new_buf, self.init);
-			dealloc_n(self.alloc(), self.buf, self.size);
+            dealloc_n(self.alloc(), self.buf, self.size);
         }
         self.buf = new_buf;
         self.size = new_size;
@@ -1041,7 +1081,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         if self.buf != NonNull::dangling() {
             unsafe {
                 NonNull::<[T]>::slice_from_raw_parts(self.buf, self.init).drop_in_place();
-				dealloc_n(self.alloc(), self.buf, self.size);
+                dealloc_n(self.alloc(), self.buf, self.size);
             }
         }
     }
@@ -1059,7 +1099,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 )
                 .drop_in_place();
                 self.buf.as_ptr().write_bytes(0, self.size);
-				dealloc_n(self.alloc(), self.buf, self.size);
+                dealloc_n(self.alloc(), self.buf, self.size);
             }
         }
     }
@@ -1075,7 +1115,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                     self.init,
                 )
                 .drop_in_place();
-				dealloc_n(self.alloc(), self.buf, self.size);
+                dealloc_n(self.alloc(), self.buf, self.size);
                 self.init = 0;
                 self.size = 0;
                 self.buf = NonNull::dangling();
@@ -1139,6 +1179,8 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr().cast(), self.size) }
     }
 
+    // TODO: helper to reduce repetition between these three try_as fns
+
     /// Gets a pointer to the initialized portion of the buffer if it exists. Otherwise, gets an
     /// uninitialized pointer to the entire buffer.
     ///
@@ -1193,23 +1235,23 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-	/// Gets a [`NonNull`] pointer to the start of the buffer.
-	#[inline]
-	pub const fn as_nonnull(&self) -> NonNull<T> {
-		self.buf
-	}
+    /// Gets a [`NonNull`] pointer to the start of the buffer.
+    #[inline]
+    pub const fn as_nonnull(&self) -> NonNull<T> {
+        self.buf
+    }
 
-	/// Gets an immutable pointer to the start of the buffer.
-	#[inline]
-	pub const fn as_ptr(&self) -> *const T {
-		self.buf.as_ptr()
-	}
+    /// Gets an immutable pointer to the start of the buffer.
+    #[inline]
+    pub const fn as_ptr(&self) -> *const T {
+        self.buf.as_ptr()
+    }
 
-	/// Gets a mutable pointer to the start of the buffer.
-	#[inline]
-	pub const fn as_mut_ptr(&mut self) -> *mut T {
-		self.buf.as_ptr()
-	}
+    /// Gets a mutable pointer to the start of the buffer.
+    #[inline]
+    pub const fn as_mut_ptr(&mut self) -> *mut T {
+        self.buf.as_ptr()
+    }
 
     /// Gets a reference to the buffer as a [`Buf`].
     pub const fn as_buf(&self) -> Buf<'_, T> {
@@ -1222,12 +1264,32 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// Gets a reference to the buffer as a [`Buf`].
     ///
     /// The data will be considered unowned after this operation.
-    pub fn into_buf<'s>(self) -> Buf<'s, T> {
+    pub fn into_buf(self) -> Buf<'static, T> {
         let (buf, init, size, _) = self.into_raw_parts();
         Buf {
             buf: unsafe { slice::from_raw_parts(buf.as_ptr().cast(), size) },
             init,
         }
+    }
+}
+
+// TODO: make sure all non-const traits which can be const (but aren't because they're in a trait)
+//  have const, inherent versions.
+
+impl<T, A: Alloc> Debug for OwnedBuf<T, A> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OwnedBuf")
+            .field("buf", &self.buf)
+            .field("init", &self.init)
+            .field("size", &self.size)
+            .finish_non_exhaustive()
+    }
+}
+
+impl<T, A: Alloc + Default> Default for OwnedBuf<T, A> {
+    #[inline]
+    fn default() -> OwnedBuf<T, A> {
+        OwnedBuf::new_unallocated_in(A::default())
     }
 }
 
@@ -1250,14 +1312,14 @@ impl<T, A: Alloc> DerefMut for OwnedBuf<T, A> {
 impl<T, A: Alloc> AsRef<[T]> for OwnedBuf<T, A> {
     #[inline]
     fn as_ref(&self) -> &[T] {
-        self
+        self.as_slice()
     }
 }
 
 impl<T, A: Alloc> AsMut<[T]> for OwnedBuf<T, A> {
     #[inline]
     fn as_mut(&mut self) -> &mut [T] {
-        self
+        self.as_slice_mut()
     }
 }
 
@@ -1277,21 +1339,28 @@ impl<T, A: Alloc> AsMut<[MaybeUninit<T>]> for OwnedBuf<T, A> {
 
 impl<'s, T, A: Alloc> From<&'s OwnedBuf<T, A>> for Buf<'s, T> {
     #[inline]
-    fn from(owned: &'s OwnedBuf<T, A>) -> Self {
-        Buf::from(unsafe { &*(owned.as_uninit_slice_ptr().as_ptr() as *mut [T]) })
+    fn from(owned: &'s OwnedBuf<T, A>) -> Buf<'s, T> {
+        owned.as_buf()
     }
 }
 
 impl<'s, T, A: Alloc> From<&'s mut OwnedBuf<T, A>> for Buf<'s, T> {
     #[inline]
-    fn from(owned: &'s mut OwnedBuf<T, A>) -> Self {
-        Buf::from(unsafe { &*(owned.as_uninit_slice_ptr().as_ptr() as *mut [T]) })
+    fn from(owned: &'s mut OwnedBuf<T, A>) -> Buf<'s, T> {
+        owned.as_buf()
+    }
+}
+
+impl<T, A: Alloc> From<OwnedBuf<T, A>> for Buf<'static, T> {
+    #[inline]
+    fn from(owned: OwnedBuf<T, A>) -> Buf<'static, T> {
+        owned.into_buf()
     }
 }
 
 impl<T, A: Alloc> Borrow<[T]> for OwnedBuf<T, A> {
     fn borrow(&self) -> &[T] {
-        self
+        self.as_slice()
     }
 }
 
@@ -1303,7 +1372,7 @@ impl<T, A: Alloc> Borrow<[MaybeUninit<T>]> for OwnedBuf<T, A> {
 
 impl<T, A: Alloc> BorrowMut<[T]> for OwnedBuf<T, A> {
     fn borrow_mut(&mut self) -> &mut [T] {
-        self
+        self.as_slice_mut()
     }
 }
 
@@ -1336,6 +1405,26 @@ macro_rules! spec_impl {
                 OwnedBuf::from(&*slice)
             }
         }
+
+        impl<T: Clone, A: Alloc + Default, const N: usize> From<&[T; N]>
+			for OwnedBuf<T, A>
+		{
+            #[track_caller]
+            #[inline]
+            $($extra_token)? fn from(b_arr: &[T; N]) -> OwnedBuf<T, A> {
+                OwnedBuf::from(b_arr.as_slice())
+            }
+        }
+
+        impl<T: Clone, A: Alloc + Default, const N: usize> From<&mut [T; N]>
+			for OwnedBuf<T, A>
+		{
+            #[track_caller]
+            #[inline]
+            $($extra_token)? fn from(b_arr: &mut [T; N]) -> OwnedBuf<T, A> {
+                OwnedBuf::from(b_arr.as_mut_slice())
+            }
+        }
     };
 }
 
@@ -1365,12 +1454,132 @@ impl<T: Copy, A: Alloc + Default> From<&mut [T]> for OwnedBuf<T, A> {
     }
 }
 
-/// An unowned buffer of multiple `T`.
+#[cfg(feature = "specialization")]
+impl<T: Copy, A: Alloc + Default, const N: usize> From<&[T; N]> for OwnedBuf<T, A> {
+    #[track_caller]
+    #[inline]
+    fn from(b_arr: &[T; N]) -> OwnedBuf<T, A> {
+        Buf::from(b_arr)
+            .copy_into_owned_in(A::default())
+            .expect("`<From<&[T; N]>>::from` failed")
+    }
+}
+
+#[cfg(feature = "specialization")]
+impl<T: Copy, A: Alloc + Default, const N: usize> From<&mut [T; N]> for OwnedBuf<T, A> {
+    #[track_caller]
+    #[inline]
+    fn from(b_arr: &mut [T; N]) -> OwnedBuf<T, A> {
+        OwnedBuf::from(&*b_arr)
+    }
+}
+
+impl<T: Clone, A: Alloc + Clone> Clone for OwnedBuf<T, A> {
+    fn clone(&self) -> OwnedBuf<T, A> {
+        Buf::from(self)
+            .clone_into_owned_in(self.alloc.clone())
+            .expect("`OwnedBuf::clone` failed")
+    }
+}
+
+impl<T: PartialEq, A: Alloc> PartialEq for OwnedBuf<T, A> {
+    fn eq(&self, other: &OwnedBuf<T, A>) -> bool {
+        self.eq(other.as_slice())
+    }
+}
+impl<T: Eq, A: Alloc> Eq for OwnedBuf<T, A> {}
+
+impl<T: PartialEq, A: Alloc> PartialEq<[T]> for OwnedBuf<T, A> {
+    fn eq(&self, other: &[T]) -> bool {
+        self.as_slice().eq(other)
+    }
+}
+impl<'s, T: PartialEq, A: Alloc> PartialEq<Buf<'s, T>> for OwnedBuf<T, A> {
+    fn eq(&self, other: &Buf<'s, T>) -> bool {
+        self.as_buf().eq(other)
+    }
+}
+
+impl<T: PartialOrd, A: Alloc> PartialOrd for OwnedBuf<T, A> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.as_slice().partial_cmp(other.as_slice())
+    }
+}
+impl<T: PartialOrd, A: Alloc> PartialOrd<[T]> for OwnedBuf<T, A> {
+    fn partial_cmp(&self, other: &[T]) -> Option<Ordering> {
+        self.as_slice().partial_cmp(other)
+    }
+}
+
+impl<T: Ord, A: Alloc> Ord for OwnedBuf<T, A> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.as_slice().cmp(other.as_slice())
+    }
+}
+
+impl<T: Hash, A: Alloc> Hash for OwnedBuf<T, A> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_slice().hash(state);
+    }
+}
+
+// TODO: fromiterator (requires spec and complex logic, so not doing yet)
+
+impl<'s, T, A: Alloc> IntoIterator for &'s OwnedBuf<T, A> {
+    type Item = &'s T;
+    type IntoIter = slice::Iter<'s, T>;
+
+    fn into_iter(self) -> slice::Iter<'s, T> {
+        self.as_slice().iter()
+    }
+}
+impl<'s, T, A: Alloc> IntoIterator for &'s mut OwnedBuf<T, A> {
+    type Item = &'s mut T;
+    type IntoIter = slice::IterMut<'s, T>;
+
+    fn into_iter(self) -> slice::IterMut<'s, T> {
+        self.as_slice_mut().iter_mut()
+    }
+}
+
+// wip
+// pub struct OwnedIter<T, A: Alloc> {
+//     buf: NonNull<T>,
+//     _marker: PhantomData<T>,
+//     size: usize,
+//     alloc: ManuallyDrop<A>,
+//     ptr: NonNull<T>,
+//     end: *const T,
+// }
+
+/// A buffer of multiple `MaybeUninit<T>`, with an initialization counter.
+///
+/// This is the 'unowned' form of [`OwnedBuf`].
+#[derive(Debug)]
 pub struct Buf<'s, T> {
     /// The buffer.
     pub buf: &'s [MaybeUninit<T>],
     /// The count of initialized elements in the buffer.
     pub init: usize,
+}
+
+impl<T> Copy for Buf<'_, T> {}
+impl<'s, T> Clone for Buf<'s, T> {
+    fn clone(&self) -> Buf<'s, T> {
+        *self
+    }
+}
+
+impl<'s, T> Default for Buf<'s, T> {
+    fn default() -> Buf<'s, T> {
+        Buf { buf: &[], init: 0 }
+    }
+}
+
+impl<T: Hash> Hash for Buf<'_, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.init_buf().hash(state);
+    }
 }
 
 impl<'s, T> From<&'s [T]> for Buf<'s, T> {
@@ -1383,10 +1592,56 @@ impl<'s, T> From<&'s [T]> for Buf<'s, T> {
     }
 }
 
+impl<'s, T> From<Buf<'s, T>> for &'s [T] {
+    #[inline]
+    fn from(val: Buf<'s, T>) -> Self {
+        val.init_buf()
+    }
+}
+
+impl<'s, T> From<Buf<'s, T>> for &'s [MaybeUninit<T>] {
+    #[inline]
+    fn from(val: Buf<'s, T>) -> Self {
+        val.buf
+    }
+}
+
 impl<'s, T> From<&'s mut [T]> for Buf<'s, T> {
     #[inline]
-    fn from(value: &'s mut [T]) -> Buf<'s, T> {
-        Buf::from(&*value)
+    fn from(elems: &'s mut [T]) -> Buf<'s, T> {
+        Buf::from(&*elems)
+    }
+}
+
+impl<'s, T, const N: usize> From<&'s [T; N]> for Buf<'s, T> {
+    #[inline]
+    fn from(elems: &'s [T; N]) -> Buf<'s, T> {
+        Buf::from(elems.as_slice())
+    }
+}
+
+impl<'s, T, const N: usize> From<&'s mut [T; N]> for Buf<'s, T> {
+    #[inline]
+    fn from(elems: &'s mut [T; N]) -> Buf<'s, T> {
+        Buf::from(elems.as_mut_slice())
+    }
+}
+
+impl<'s, T> IntoIterator for Buf<'s, T> {
+    type Item = &'s T;
+    type IntoIter = slice::Iter<'s, T>;
+
+    fn into_iter(self) -> slice::Iter<'s, T> {
+        self.init_buf().iter()
+    }
+}
+
+impl<'s, T> IntoIterator for &'s Buf<'s, T> {
+    type Item = &'s T;
+    type IntoIter = slice::Iter<'s, T>;
+
+    fn into_iter(self) -> slice::Iter<'s, T> {
+        self.init_buf().iter()
     }
 }
 
@@ -1394,8 +1649,21 @@ impl<T> Deref for Buf<'_, T> {
     type Target = [T];
 
     #[inline]
-    fn deref(&self) -> &Self::Target {
-        unsafe { slice::from_raw_parts(ptr::from_ref(self.buf).cast(), self.init) }
+    fn deref(&self) -> &[T] {
+        self.init_buf()
+    }
+}
+
+impl<T: PartialEq> PartialEq for Buf<'_, T> {
+    fn eq(&self, other: &Buf<'_, T>) -> bool {
+        self.init == other.init && self.init_buf().eq(other.init_buf())
+    }
+}
+impl<T: Eq> Eq for Buf<'_, T> {}
+
+impl<T: PartialEq> PartialEq<[T]> for Buf<'_, T> {
+    fn eq(&self, other: &[T]) -> bool {
+        self.init == other.len() && self.init_buf().eq(other)
     }
 }
 
@@ -1473,6 +1741,7 @@ impl<T> Buf<'_, T> {
             init: self.init,
             size,
             alloc,
+            _marker: PhantomData,
         })
     }
 
@@ -1518,15 +1787,80 @@ impl<T> Buf<'_, T> {
             init: self.init,
             size,
             alloc,
+            _marker: PhantomData,
         })
     }
 
-    /// Assumes that this borrowed [`Buf`] is not currently owned, and thus can be directly
-    /// converted back into an [`OwnedBuf`].
+    /// Gets a pointer to the entire buffer.
+    #[allow(clippy::must_use_candidate)]
+    #[inline]
+    pub const fn buf_ptr(&self) -> NonNull<[MaybeUninit<T>]> {
+        NonNull::from_ref(self.buf)
+    }
+
+    /// Gets a pointer to the initialized portion of the buffer.
+    #[allow(clippy::must_use_candidate)]
+    #[inline]
+    pub const fn init_buf_ptr(&self) -> NonNull<[T]> {
+        NonNull::slice_from_raw_parts(
+            unsafe { NonNull::new_unchecked(self.buf.as_ptr().cast_mut().cast::<T>()) },
+            self.init,
+        )
+    }
+
+    /// Gets a pointer to the uninitialized portion of the buffer.
+    #[allow(clippy::must_use_candidate)]
+    #[inline]
+    pub const fn uninit_buf_ptr(&self) -> NonNull<[MaybeUninit<T>]> {
+        NonNull::slice_from_raw_parts(
+            unsafe {
+                NonNull::new_unchecked(
+                    self.buf
+                        .as_ptr()
+                        .add(self.init)
+                        .cast_mut()
+                        .cast::<MaybeUninit<T>>(),
+                )
+            },
+            self.buf.len() - self.init,
+        )
+    }
+}
+
+impl<'s, T> Buf<'s, T> {
+    /// Gets a slice of the entire buffer.
+    #[allow(clippy::must_use_candidate)]
+    #[inline]
+    pub const fn buf(&self) -> &'s [MaybeUninit<T>] {
+        self.buf
+    }
+
+    /// Gets a slice of the initialized portion of the buffer.
+    #[allow(clippy::must_use_candidate)]
+    #[inline]
+    pub const fn init_buf(&self) -> &'s [T] {
+        unsafe { slice::from_raw_parts(self.buf.as_ptr().cast(), self.init) }
+    }
+
+    /// Gets a slice of the uninitialized portion of the buffer.
+    #[allow(clippy::must_use_candidate)]
+    #[inline]
+    pub const fn uninit_buf(&self) -> &'s [MaybeUninit<T>] {
+        unsafe {
+            slice::from_raw_parts(self.buf.as_ptr().add(self.init), self.buf.len() - self.init)
+        }
+    }
+}
+
+impl<T> Buf<'static, T> {
+    /// Converts back into an [`OwnedBuf`] with the given allocator.
+    ///
+    /// This method assumes the elements are unowned. If this method has already been called on a
+    /// copy of this buffer, this may result in undefined behavior.
     ///
     /// # Safety
     ///
-    /// The contained elements must be unowned.
+    /// The contained elements must be unowned allocated using `alloc`.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn into_owned<A: Alloc>(self, alloc: A) -> OwnedBuf<T, A> {
@@ -1536,6 +1870,7 @@ impl<T> Buf<'_, T> {
             init,
             size: elems.len(),
             alloc,
+            _marker: PhantomData,
         }
     }
 }

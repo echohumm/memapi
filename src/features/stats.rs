@@ -20,14 +20,14 @@ pub struct Stats<A, L: StatsLogger>(pub A, pub L);
 
 impl<L: StatsLogger> Stats<DefaultAlloc, L> {
     /// Create a new stats‐collecting allocator wrapper.
-    pub const fn new(logger: L) -> Self {
+    pub const fn new(logger: L) -> Stats<DefaultAlloc, L> {
         Stats(DefaultAlloc, logger)
     }
 }
 
 impl<A, L: StatsLogger> Stats<A, L> {
     /// Create a new stats‐collecting allocator wrapper.
-    pub const fn new_in(inner: A, logger: L) -> Self {
+    pub const fn new_in(inner: A, logger: L) -> Stats<A, L> {
         Stats(inner, logger)
     }
 }
@@ -209,7 +209,7 @@ impl<W: std::io::Write> From<W> for IOLog<W> {
 
 #[cfg(feature = "std")]
 impl<W: fmt::Write> From<W> for FmtLog<W> {
-    fn from(w: W) -> Self {
+    fn from(w: W) -> FmtLog<W> {
         FmtLog::new(w)
     }
 }

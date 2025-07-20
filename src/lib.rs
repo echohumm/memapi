@@ -47,6 +47,22 @@
 #![allow(unsafe_op_in_unsafe_fn, internal_features)]
 #![deny(missing_docs)]
 
+// it is used, the compiler is just stupid
+#[allow(unused_macros)]
+macro_rules! realloc {
+    ($fun:ident, $self:ident, $ptr:ident, $len:expr, $new_len:expr, $ty:ty $(,$pat:ident)?) => {
+		$fun(
+            $self,
+            $ptr.cast(),
+            Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALIGN),
+            layout_or_sz_align::<$ty>($new_len)
+                .map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?,
+            $(AllocPattern::<fn(usize) -> u8>::$pat)?
+        )
+        .map(NonNull::cast)
+	};
+}
+
 extern crate alloc;
 extern crate core;
 
@@ -206,6 +222,7 @@ pub trait Alloc {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
+    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -236,6 +253,7 @@ pub trait Alloc {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] in `new_layout.size() < old_layout.size()`.
+    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -265,6 +283,7 @@ pub trait Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ShrinkBiggerNewLayout`] if `new_layout.size() > old_layout.size()`.
+    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -291,6 +310,7 @@ pub trait Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
+    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///
@@ -320,6 +340,7 @@ pub trait Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
+    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///
@@ -601,12 +622,14 @@ pub(crate) enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
-    use crate::{
-        error::AllocError,
-        type_props::{PtrProps, SizedProps},
-        Alloc,
-    };
+    #[allow(unused_imports)]
+    // once again,                 this   is used, the compiler is just stupid
+    use crate::{error::AllocError, shrink, type_props::{PtrProps, SizedProps}, Alloc};
     use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
+
+    // yet again.
+    #[allow(dead_code)]
+    pub(crate) const TRUNC_LGR: &str = "attempted to truncate a slice to a larger size";
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
     #[inline]
@@ -797,7 +820,7 @@ pub mod helpers {
     impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
         type Target = NonNull<T>;
 
-        fn deref(&self) -> &Self::Target {
+        fn deref(&self) -> &NonNull<T> {
             &self.ptr
         }
     }
@@ -982,7 +1005,7 @@ pub mod helpers {
     impl<T, A: Alloc + ?Sized> Deref for SliceAllocGuard<'_, T, A> {
         type Target = NonNull<T>;
 
-        fn deref(&self) -> &Self::Target {
+        fn deref(&self) -> &NonNull<T> {
             &self.ptr
         }
     }

@@ -9,7 +9,8 @@ pub mod jemalloc;
 /// Module for [mimalloc](https://microsoft.github.io/mimalloc/) support.
 pub mod mimalloc;
 
-pub(crate) const REALLOC_DIFF_ALIGN: &str = "reallocate with a different alignment";
+pub(crate) const REALLOC_DIFF_ALIGN: &str =
+    "unsupported operation: attempted to reallocate with a different alignment";
 
 #[allow(dead_code)]
 #[cfg_attr(miri, track_caller)]
@@ -23,7 +24,7 @@ pub(crate) unsafe fn resize<F: Fn() -> *mut c_void>(
     is_grow: bool,
 ) -> Result<NonNull<u8>, AllocError> {
     if need_same_align && new_layout.align() != old_layout.align() {
-        return Err(AllocError::UnsupportedOperation(REALLOC_DIFF_ALIGN));
+        return Err(AllocError::Other(REALLOC_DIFF_ALIGN));
     }
 
     let old_size = old_layout.size();

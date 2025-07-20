@@ -158,6 +158,23 @@ impl Alloc for Jemalloc {
         )
     }
 
+    /// Reallocate a block, growing or shrinking as needed.
+    ///
+    /// On grow, preserves existing contents up to `old_layout.size()`, and
+    /// on shrink, truncates to `new_layout.size()`.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
+    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
+    /// - [`AllocError::Other`]`("unsupported operation: attempted to reallocate with a different 
+    ///   alignment")` if `new_layout.align() != old_layout.align()`.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block previously allocated with this allocator.
+    /// - `old_layout` must describe exactly that block.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(
@@ -167,7 +184,7 @@ impl Alloc for Jemalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         if new_layout.align() != old_layout.align() {
-            return Err(AllocError::UnsupportedOperation(REALLOC_DIFF_ALIGN));
+            return Err(AllocError::Other(REALLOC_DIFF_ALIGN));
         }
         null_q(
             ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),

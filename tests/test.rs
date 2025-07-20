@@ -521,6 +521,13 @@ mod owned_tests {
 
         buf.drop_and_dealloc();
     }
+
+    // #[test]
+    // fn test_zst() {
+    //     struct Zst;
+    //
+    //     let mut buf = OwnedBuf::<Zst>::new(8);
+    // }
 }
 
 #[cfg(all(feature = "jemalloc", not(miri)))]

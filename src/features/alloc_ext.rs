@@ -355,6 +355,7 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
+    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -379,7 +380,8 @@ pub trait AllocExt: Alloc {
     ///
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::GrowSmallerNewLayout`] in `new_layout.size() < old_layout.size()`.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
+    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -411,6 +413,7 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
+    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///
@@ -435,6 +438,7 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
+    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///

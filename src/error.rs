@@ -22,10 +22,8 @@ pub enum AllocError {
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger layout.
     ShrinkBiggerNewLayout(usize, usize),
-	/// Attempted to reallocate, grow, or shrink to the same size.
-	EqualSizeRealloc,
-    /// An operation unsupported by the allocator was attempted.
-    UnsupportedOperation(&'static str),
+    /// Attempted to reallocate, grow, or shrink to the same size.
+    EqualSizeRealloc,
     /// Any other kind of error.
     Other(&'static str),
 }
@@ -48,11 +46,11 @@ impl Display for AllocError {
                 f,
                 "attempted to shrink from a size of {old} to a larger size of {new}"
             ),
-			AllocError::EqualSizeRealloc => write!(f, "attempted to reallocate, grow, or shrink to \
-			the same size"),
-            AllocError::UnsupportedOperation(op) => {
-                write!(f, "unsupported operation: attempted to {op}")
-            }
+            AllocError::EqualSizeRealloc => write!(
+                f,
+                "attempted to reallocate, grow, or shrink to \
+			the same size"
+            ),
             AllocError::Other(other) => write!(f, "{other}"),
         }
     }
