@@ -35,8 +35,14 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           profile: minimal
-          components: clippy  # always install clippy
+          components: clippy
           default: true
+
+      - name: Ensure Default
+        run: |
+          rustup default ${{ matrix.rust }}
+          rustc --version
+          cargo --version
 
       - name: Run tests or clippy
         run: |
