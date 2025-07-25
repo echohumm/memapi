@@ -74,7 +74,6 @@ def main():
         else:
             print(f"{'Clippy checking' if args.clippy else 'Testing'} with no features")
         cmd += extra_args
-
         try:
             subprocess.run(cmd, check=True, env=env)
         except subprocess.CalledProcessError as e:
