@@ -1,7 +1,7 @@
 [package]
 name = "memapi"
 # major will probably always be 0
-version = "0.13.0"
+version = "0.13.1"
 edition = "2021"
 rust-version = "1.56.0"
 description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
