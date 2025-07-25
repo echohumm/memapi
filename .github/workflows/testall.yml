@@ -1,4 +1,4 @@
-name: CI
+name: test all
 
 on:
   push:
@@ -37,12 +37,18 @@ jobs:
           profile: minimal
           components: clippy  # always install clippy
 
-      - name: Run tests / clippy
+      - name: Run tests or clippy
         run: |
-          python3 testall.py \
-            $([[ "${{ matrix.mode }}" == "clippy" ]] && echo "--clippy")
+          if [[ "${{ matrix.mode }}" == "clippy" ]]; then
+            echo "::group::clippy"
+            python3 testall.py --clippy
+            echo "::endgroup::"
+          else
+            echo "::group::test"
+            python3 testall.py
+            echo "::endgroup::"
+          fi
         env:
-          # make tests warnings‐strict
           RUSTFLAGS: $([[ "${{ matrix.mode }}" == "clippy" ]] && echo "" || echo "-D warnings")
 
   # ---------------------------------------------------
