@@ -37,30 +37,34 @@
 // //! unsafe { allocator.dealloc_n(ptr, 4) };
 // //! ```
 
-// TODO: maybe update the readme
+// maybedo: maybe update the readme and the docs above
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "specialization", feature(min_specialization))]
+#![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 #![allow(unsafe_op_in_unsafe_fn, internal_features)]
 #![deny(missing_docs)]
 
 // it is used, the compiler is just stupid
 #[allow(unused_macros)]
 macro_rules! realloc {
-    ($fun:ident, $self:ident, $ptr:ident, $len:expr, $new_len:expr, $ty:ty $(,$pat:ident)?) => {
-		$fun(
+    ($fun:ident, $self:ident, $ptr:ident, $len:expr, $new_len:expr, $ty:ty $(,$pat:ident$(($val:ident))?)?) => {
+		realloc!(fn(usize) -> u8, $fun, $self, $ptr, $len, $new_len, $ty $(,$pat$(($val))?)?)
+	};
+    ($f:ty, $fun:ident, $self:ident, $ptr:ident, $len:expr, $new_len:expr, $ty:ty $(,$pat:ident$(($val:ident))?)?) => {
+        $fun(
             $self,
             $ptr.cast(),
             Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALIGN),
             layout_or_sz_align::<$ty>($new_len)
                 .map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?,
-            $(AllocPattern::<fn(usize) -> u8>::$pat)?
+            $(AllocPattern::<$f>::$pat$(($val))?)?
         )
         .map(NonNull::cast)
-	};
+    }
 }
 
 extern crate alloc;
@@ -222,7 +226,6 @@ pub trait Alloc {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -253,7 +256,6 @@ pub trait Alloc {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] in `new_layout.size() < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -283,7 +285,6 @@ pub trait Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ShrinkBiggerNewLayout`] if `new_layout.size() > old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -310,7 +311,6 @@ pub trait Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///
@@ -340,7 +340,6 @@ pub trait Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///
@@ -500,7 +499,13 @@ pub(crate) unsafe fn grow<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => unsafe { grow_unchecked(a, ptr, old_layout, new_layout, pattern) },
-        Ordering::Equal => Err(AllocError::EqualSizeRealloc),
+        Ordering::Equal => {
+            if new_layout.align() == old_layout.align() {
+                Ok(ptr)
+            } else {
+                unsafe { grow_unchecked(&a, ptr, old_layout, new_layout, pattern) }
+            }
+        }
         Ordering::Greater => Err(AllocError::GrowSmallerNewLayout(
             old_layout.size(),
             new_layout.size(),
@@ -523,7 +528,13 @@ pub(crate) unsafe fn shrink<A: Alloc + ?Sized>(
             old_layout.size(),
             new_layout.size(),
         )),
-        Ordering::Equal => Err(AllocError::EqualSizeRealloc),
+        Ordering::Equal => {
+            if new_layout.align() == old_layout.align() {
+                Ok(ptr)
+            } else {
+                unsafe { shrink_unchecked(&a, ptr, old_layout, new_layout) }
+            }
+        }
         Ordering::Greater => unsafe { shrink_unchecked(a, ptr, old_layout, new_layout) },
     }
 }
@@ -553,7 +564,9 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
         #[cfg(feature = "alloc_ext")]
         AllocPattern::All(n) => a.alloc_filled(new_layout, n)?.cast::<u8>(),
         #[cfg(not(feature = "alloc_ext"))]
-        AllocPattern::PhantomFn(_) => unreachable!(),
+        AllocPattern::PhantomFn(_) => {
+            unreachable!("if this is reached, somebody did something really wrong")
+        }
     };
     unsafe {
         ptr.copy_to_nonoverlapping(new_ptr, old_layout.size());
@@ -589,16 +602,22 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
 #[cfg_attr(miri, track_caller)]
 #[inline]
 pub(crate) unsafe fn ralloc<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
-    alloc: &A,
+    a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
     pat: AllocPattern<F>,
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => unsafe { grow_unchecked(&alloc, ptr, old_layout, new_layout, pat) },
-        Ordering::Equal => Err(AllocError::EqualSizeRealloc),
-        Ordering::Greater => unsafe { shrink_unchecked(&alloc, ptr, old_layout, new_layout) },
+        Ordering::Less => unsafe { grow_unchecked(&a, ptr, old_layout, new_layout, pat) },
+        Ordering::Greater => unsafe { shrink_unchecked(&a, ptr, old_layout, new_layout) },
+        Ordering::Equal => {
+            if new_layout.align() == old_layout.align() {
+                Ok(ptr)
+            } else {
+                unsafe { grow_unchecked(&a, ptr, old_layout, new_layout, pat) }
+            }
+        }
     }
 }
 
@@ -616,16 +635,26 @@ pub(crate) enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
     Fn(F),
     #[cfg(not(feature = "alloc_ext"))]
     #[allow(dead_code)]
-    /// Just to suppress compiler error when `alloc_ext` is disabled.
     PhantomFn(core::marker::PhantomData<F>),
 }
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
     #[allow(unused_imports)]
-    // once again,                 this   is used, the compiler is just stupid
-    use crate::{error::AllocError, shrink, type_props::{PtrProps, SizedProps}, Alloc};
-    use core::{alloc::Layout, mem::forget, num::NonZeroUsize, ops::Deref, ptr::NonNull};
+    // once again, this is used; the compiler is just stupid
+    use crate::{
+        error::AllocError,
+        shrink,
+        type_props::{PtrProps, SizedProps},
+        Alloc,
+    };
+    use core::{
+        alloc::Layout,
+        mem::forget,
+        num::NonZeroUsize,
+        ops::Deref,
+        ptr::{eq as peq, NonNull},
+    };
 
     // yet again.
     #[allow(dead_code)]
@@ -655,8 +684,8 @@ pub mod helpers {
     }
 
     #[cfg(any(feature = "alloc_slice", feature = "owned"))]
-	/// Deallocates `n` elements of type `T` at `ptr` using a reference to an `A`.
-	#[cfg_attr(miri, track_caller)]
+    /// Deallocates `n` elements of type `T` at `ptr` using a reference to an `A`.
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub(crate) unsafe fn dealloc_n<T, A: Alloc + ?Sized>(a: &A, ptr: NonNull<T>, n: usize) {
         // Here, we assume the layout is valid as it was presumably used to allocate previously.
@@ -666,21 +695,62 @@ pub mod helpers {
         );
     }
 
-	#[cfg(any(feature = "alloc_slice", feature = "owned"))]
-	/// Allocates a slice of `len` elements of type `T` using the given reference to an `A` and an
-	/// allocation function pointer.
-	#[cfg_attr(miri, track_caller)]
-	#[inline]
+    #[cfg(any(feature = "alloc_slice", feature = "owned"))]
+    /// Allocates a slice of `len` elements of type `T` using the given reference to an `A` and an
+    /// allocation function pointer.
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
     pub(crate) fn alloc_slice<T, A: Alloc + ?Sized>(
         a: &A,
         len: usize,
-		alloc: fn(&A, Layout) -> Result<NonNull<u8>, AllocError>,
+        alloc: fn(&A, Layout) -> Result<NonNull<u8>, AllocError>,
     ) -> Result<NonNull<[T]>, AllocError> {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         alloc(a, layout)
             .map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), len))
-            .map_err(|_| AllocError::AllocFailed(layout))
+    }
+
+    #[cfg(all(any(feature = "alloc_ext", feature = "owned"), feature = "metadata"))]
+    /// Allocates space for a copy of the value behind `data`, and copies it into the new memory.
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    pub(crate) unsafe fn alloc_copy_ptr_to_unchecked<T: ?Sized, A: Alloc + ?Sized>(
+        a: &A,
+        data: *const T,
+    ) -> Result<NonNull<T>, AllocError> {
+        match a.alloc(data.layout()) {
+            Ok(ptr) => Ok({
+                NonNull::new_unchecked(data.cast_mut().cast())
+                    .copy_to_nonoverlapping(ptr, data.size());
+                NonNull::from_raw_parts(ptr, core::ptr::metadata(data))
+            }),
+            Err(e) => Err(e),
+        }
+    }
+
+    #[cfg(any(feature = "alloc_ext", feature = "owned"))]
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    pub(crate) fn alloc_write<T, A: Alloc + ?Sized>(
+        a: &A,
+        val: T,
+    ) -> Result<NonNull<T>, AllocError> {
+        match a.alloc(T::LAYOUT) {
+            Ok(ptr) => Ok(unsafe {
+                let ptr = ptr.cast();
+                ptr.write(val);
+                ptr
+            }),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// Checks equality between two [`NonNull`] pointers.
+    #[must_use]
+    #[inline]
+    pub fn nonnull_eq<T: ?Sized>(a: NonNull<T>, b: NonNull<T>) -> bool {
+        peq(a.as_ptr().cast_const(), b.as_ptr().cast_const())
     }
 
     /// Aligns the given value up to a non-zero alignment.
@@ -713,7 +783,7 @@ pub mod helpers {
     ///
     /// # Safety
     ///
-    /// The caller must ensure the valid `alignment` would not result in a null pointer.
+    /// The caller must ensure the `alignment` is a valid power of two.
     #[must_use]
     #[inline]
     pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
@@ -996,7 +1066,7 @@ pub mod helpers {
                 NonNull::slice_from_raw_parts(self.ptr, self.init).drop_in_place();
                 self.alloc.dealloc(
                     self.ptr.cast(),
-                    Layout::from_size_align_unchecked(size_of::<T>() * self.full, align_of::<T>()),
+                    Layout::from_size_align_unchecked(T::SZ * self.full, align_of::<T>()),
                 );
             }
         }

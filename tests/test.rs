@@ -97,6 +97,7 @@ fn test_repeat_layout_variants() {
 mod alloc_ext_tests {
     use core::alloc::Layout;
     use memapi::{Alloc, AllocExt, DefaultAlloc};
+    use memapi::type_props::SizedProps;
 
     #[test]
     #[allow(clippy::cast_possible_truncation)]
@@ -133,21 +134,21 @@ mod alloc_ext_tests {
             .unwrap();
         assert_eq!(unsafe { *ptr.as_ptr() }, 42);
         unsafe {
-            allocator.dealloc(ptr.cast(), Layout::new::<u32>());
+            allocator.dealloc(ptr.cast(), u32::LAYOUT);
         }
 
         // alloc_default
         let dptr = allocator.alloc_default::<u32>().unwrap();
         assert_eq!(unsafe { *dptr.as_ptr() }, u32::default());
         unsafe {
-            allocator.dealloc(dptr.cast(), Layout::new::<u32>());
+            allocator.dealloc(dptr.cast(), u32::LAYOUT);
         }
 
         // alloc_write
         let wptr = allocator.alloc_write(7u32).unwrap();
         assert_eq!(unsafe { *wptr.as_ptr() }, 7);
         unsafe {
-            allocator.dealloc(wptr.cast(), Layout::new::<u32>());
+            allocator.dealloc(wptr.cast(), u32::LAYOUT);
         }
     }
 
@@ -386,7 +387,10 @@ mod owned_tests {
         let v = 0xFF;
         assert_eq!(buf.try_init_next(v).unwrap_err(), v);
 
-        buf.drop_and_dealloc();
+        #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+        {
+            buf.drop_and_dealloc();
+        }
     }
 
     #[test]
@@ -421,7 +425,10 @@ mod owned_tests {
         assert!(buf.get_ptr(10).is_none());
         assert!(buf.get_ptr(1).is_some());
 
-        buf.drop_and_dealloc();
+        #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+        {
+            buf.drop_and_dealloc();
+        }
     }
 
     #[test]
@@ -446,7 +453,10 @@ mod owned_tests {
             assert_eq!(v, (i as i16) * 10);
         }
 
-        buf2.drop_and_dealloc();
+        #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+        {
+            buf2.drop_and_dealloc();
+        }
     }
 
     #[test]
@@ -475,8 +485,11 @@ mod owned_tests {
         assert_eq!(buf2.initialized(), 2);
         assert_eq!(buf2.init_buf(), &[10, 20]);
 
-        buf.drop_and_dealloc();
-        buf2.drop_and_dealloc();
+        #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+        {
+            buf.drop_and_dealloc();
+            buf2.drop_and_dealloc();
+        }
     }
 
     #[test]
@@ -495,8 +508,11 @@ mod owned_tests {
         // original buffer should have had 6 init, now 13 left
         assert_eq!(buf.initialized(), 13);
 
-        buf.drop_and_dealloc();
-        slice_res.drop_and_dealloc();
+        #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+        {
+            buf.drop_and_dealloc();
+            slice_res.drop_and_dealloc();
+        }
     }
 
     #[test]
@@ -519,7 +535,10 @@ mod owned_tests {
         assert!(ls.contains("oops"));
         assert!(lh.contains("boom"));
 
-        buf.drop_and_dealloc();
+        #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+        {
+            buf.drop_and_dealloc();
+        }
     }
 
     // #[test]

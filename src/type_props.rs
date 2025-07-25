@@ -1,7 +1,11 @@
 #![allow(unused_qualifications)]
 
-use alloc::{alloc::Layout};
-use core::ptr::NonNull;
+use alloc::alloc::Layout;
+use core::{
+    ptr::{
+        NonNull,
+    }
+};
 
 /// A trait containing constants for sized types.
 pub trait SizedProps: Sized {
@@ -121,3 +125,68 @@ impl_ptr_props!(
     alloc::rc::Rc<T>
     alloc::sync::Arc<T>
 );
+
+#[cfg(feature = "metadata")]
+/// Trait for unsized types whose metadata is `usize` (e.g., slices, `str`).
+///
+/// # Safety
+///
+/// The implementor guarantees that the `ALIGN` constant accurately represents the
+/// alignment requirement of the type in any safe context.
+pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
+    /// The alignment of the type.
+    const ALIGN: usize;
+}
+
+#[cfg(feature = "metadata")]
+unsafe impl VarSized for str {
+    const ALIGN: usize = u8::ALIGN;
+}
+
+#[cfg(feature = "metadata")]
+unsafe impl VarSized for core::ffi::CStr {
+    const ALIGN: usize = u8::ALIGN;
+}
+#[cfg(all(feature = "std", feature = "metadata"))]
+// `OsStr == [u8]` and `[u8]: UnsizedCopy`
+unsafe impl VarSized for std::ffi::OsStr {
+    const ALIGN: usize = u8::ALIGN;
+}
+
+#[cfg(all(feature = "std", feature = "metadata"))]
+unsafe impl VarSized for std::path::Path {
+    const ALIGN: usize = u8::ALIGN;
+}
+
+#[cfg(feature = "metadata")]
+unsafe impl<T> VarSized for [T] {
+    const ALIGN: usize = T::ALIGN;
+}
+
+// not associated to reduce clutter, and so they can be const
+
+#[cfg(feature = "metadata")]
+/// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
+///
+#[must_use]
+#[inline]
+pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
+    // SAFETY: `ALIGN` is guaranteed to be a valid alignment for `Self`.
+    unsafe { NonNull::from_raw_parts(crate::helpers::dangling_nonnull(T::ALIGN), 0) }
+}
+
+#[cfg(feature = "metadata")]
+/// Creates a dangling, zero-length mutable pointer with the proper alignment.
+#[must_use]
+#[inline]
+pub const fn varsized_dangling_ptr_mut<T: ?Sized + VarSized>() -> *mut T {
+    core::ptr::from_raw_parts_mut(core::ptr::without_provenance_mut::<()>(T::ALIGN), 0)
+}
+
+#[cfg(feature = "metadata")]
+/// Creates a dangling, zero-length immutable pointer with the proper alignment.
+#[must_use]
+#[inline]
+pub const fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *const T {
+    core::ptr::from_raw_parts(core::ptr::without_provenance::<()>(T::ALIGN), 0)
+}

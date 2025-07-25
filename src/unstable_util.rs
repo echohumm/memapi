@@ -1,4 +1,4 @@
-use crate::AllocError;
+use crate::{error::ArithOp, AllocError};
 use alloc::alloc::Layout;
 
 #[cfg(feature = "metadata")]
@@ -77,8 +77,7 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
 /// # Errors
 ///
 /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-/// - [`AllocError::Other`]`("arithmetic operation overflowed")` if an arithmetic operation
-///   overflows.
+/// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
 #[inline]
 pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
     if let Some(size) = layout.size().checked_mul(count) {
@@ -88,7 +87,7 @@ pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout
             Err(_) => Err(AllocError::LayoutError(layout.size(), layout.align())),
         }
     } else {
-        Err(AllocError::Other(ARITH_OF))
+        Err(AllocError::ArithmeticOverflow(layout.size(), ArithOp::Mul, count))
     }
 }
 
@@ -98,5 +97,3 @@ const fn size_rounded_up_to_align(sz: usize, align: usize) -> usize {
         sz.unchecked_add(sub1) & !sub1
     }
 }
-
-pub(crate) const ARITH_OF: &str = "arithmetic operation overflowed";

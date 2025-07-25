@@ -1,10 +1,14 @@
 use crate::{
     error::AllocError,
     grow,
-    helpers::AllocGuard,
+    helpers::{
+        AllocGuard,
+        alloc_write
+    },
     ralloc,
     type_props::{PtrProps, SizedProps},
-    Alloc, AllocPattern,
+    Alloc,
+    AllocPattern,
 };
 use core::{alloc::Layout, ptr::NonNull};
 
@@ -37,7 +41,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_default<T: Default>(&self) -> Result<NonNull<T>, AllocError> {
-        self.alloc_write(T::default())
+        alloc_write(self, T::default())
     }
 
     /// Allocates uninitialized memory for a single `T` and writes `data` into it.
@@ -49,14 +53,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_write<T>(&self, data: T) -> Result<NonNull<T>, AllocError> {
-        match self.alloc(Layout::new::<T>()) {
-            Ok(ptr) => Ok(unsafe {
-                let ptr = ptr.cast();
-                ptr.write(data);
-                ptr
-            }),
-            Err(e) => Err(e),
-        }
+        alloc_write(self, data)
     }
 
     #[cfg(not(feature = "clone_to_uninit"))]
@@ -69,7 +66,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_clone_to<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
-        match self.alloc(Layout::new::<T>()) {
+        match self.alloc(T::LAYOUT) {
             Ok(ptr) => Ok(unsafe {
                 let guard = AllocGuard::new(ptr.cast(), self);
                 guard.write(data.clone());
@@ -156,7 +153,7 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
-    #[cfg_attr(miri, track_caller)]
+    #[track_caller]
     #[inline]
     fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
@@ -297,7 +294,7 @@ pub trait AllocExt: Alloc {
             Ok(ptr) => Ok({
                 NonNull::from_ref(data)
                     .cast()
-                    .copy_to_nonoverlapping(ptr, size_of_val::<T>(data));
+                    .copy_to_nonoverlapping(ptr, data.size());
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(&raw const *data))
             }),
             Err(e) => Err(e),
@@ -322,14 +319,7 @@ pub trait AllocExt: Alloc {
         &self,
         data: *const T,
     ) -> Result<NonNull<T>, AllocError> {
-        match self.alloc(data.layout()) {
-            Ok(ptr) => Ok({
-                NonNull::new_unchecked(data.cast_mut().cast())
-                    .copy_to_nonoverlapping(ptr, size_of_val::<T>(&*data));
-                NonNull::from_raw_parts(ptr, core::ptr::metadata(data))
-            }),
-            Err(e) => Err(e),
-        }
+        crate::helpers::alloc_copy_ptr_to_unchecked(self, data)
     }
 
     /// Allocates memory for an uninitialized `T` and returns an [`AllocGuard`] around it to ensure
@@ -355,14 +345,13 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
-    #[cfg_attr(miri, track_caller)]
+    #[track_caller]
     #[inline]
     unsafe fn grow_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
@@ -381,7 +370,6 @@ pub trait AllocExt: Alloc {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `new_layout.size() == old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// # Safety
@@ -413,13 +401,12 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
-    #[cfg_attr(miri, track_caller)]
+    #[track_caller]
     #[inline]
     unsafe fn realloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
@@ -438,7 +425,6 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     ///
     /// # Safety
     ///

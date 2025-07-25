@@ -21,7 +21,7 @@ macro_rules! assume {
 
 /// Handle to the jemalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`](Alloc).
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Jemalloc;
 
 unsafe impl GlobalAlloc for Jemalloc {
@@ -167,7 +167,6 @@ impl Alloc for Jemalloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_layout.size()`.
     /// - [`AllocError::Other`]`("unsupported operation: attempted to reallocate with a different 
     ///   alignment")` if `new_layout.align() != old_layout.align()`.
     ///

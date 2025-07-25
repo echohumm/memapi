@@ -12,6 +12,7 @@ use core::{
 
 /// Handle to the mimalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`](Alloc).
+#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MiMalloc;
 
 unsafe impl GlobalAlloc for MiMalloc {

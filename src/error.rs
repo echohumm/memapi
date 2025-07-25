@@ -1,12 +1,13 @@
 use alloc::alloc::Layout;
 use core::{
     error::Error,
-    fmt::{self, Display, Formatter},
+    fmt::{Display, Formatter, Result as FmtResult},
     ptr::NonNull,
 };
+use core::fmt::Debug;
 
 /// Errors for allocation operations.
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum AllocError {
     /// The layout computed with the given size and alignment is invalid.
@@ -22,14 +23,42 @@ pub enum AllocError {
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger layout.
     ShrinkBiggerNewLayout(usize, usize),
-    /// Attempted to reallocate, grow, or shrink to the same size.
-    EqualSizeRealloc,
-    /// Any other kind of error.
+    /// An arithmetic operation overflowed. This error contains the left-hand and right-hand side
+    /// values as well as the operation.
+    ArithmeticOverflow(usize, ArithOp, usize),
+    /// Any other kind of error, in the form of a string.
     Other(&'static str),
+    /// Any other kind of error, in the form of a `&dyn `[`Error`].
+    OtherErr(&'static dyn Error),
 }
 
+// manual implementations because of the `OtherErr` variant, which can't be PEq, Eq, or Hash
+impl PartialEq for AllocError {
+    fn eq(&self, other: &Self) -> bool {
+        use AllocError::{
+            AllocFailed, GrowSmallerNewLayout, LayoutError, Other, OtherErr, ShrinkBiggerNewLayout,
+            ZeroSizedLayout,
+        };
+
+        match (self, other) {
+            (LayoutError(sz1, aln1), LayoutError(sz2, aln2)) => sz1 == sz2 && aln1 == aln2,
+            (ZeroSizedLayout(a), ZeroSizedLayout(b)) => a == b,
+            (AllocFailed(l1), AllocFailed(l2)) => l1 == l2,
+            (GrowSmallerNewLayout(old1, new1), GrowSmallerNewLayout(old2, new2))
+            | (ShrinkBiggerNewLayout(old1, new1), ShrinkBiggerNewLayout(old2, new2)) => {
+                old1 == old2 && new1 == new2
+            }
+            (Other(a), Other(b)) => a == b,
+            (OtherErr(_), OtherErr(_)) => true,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for AllocError {}
+
 impl Display for AllocError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             AllocError::LayoutError(sz, align) => {
                 write!(f, "computed invalid layout: size: {sz}, align: {align}")
@@ -46,14 +75,41 @@ impl Display for AllocError {
                 f,
                 "attempted to shrink from a size of {old} to a larger size of {new}"
             ),
-            AllocError::EqualSizeRealloc => write!(
+            AllocError::ArithmeticOverflow(lhs, op, rhs) => write!(
                 f,
-                "attempted to reallocate, grow, or shrink to \
-			the same size"
+                "arithmetic operation overflowed: {lhs} {op} {rhs}"
             ),
             AllocError::Other(other) => write!(f, "{other}"),
+            AllocError::OtherErr(other) => write!(f, "{other}"),
         }
     }
 }
 
 impl Error for AllocError {}
+
+/// An arithmetic operation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ArithOp {
+    /// Addition. (+)
+    Add,
+    /// Subtraction. (-)
+    Sub,
+    /// Multiplication. (*)
+    Mul,
+    /// Division. (/)
+    Div,
+    /// Modulo. (%)
+    Rem,
+}
+
+impl Display for ArithOp {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            ArithOp::Add => write!(f, "+"),
+            ArithOp::Sub => write!(f, "-"),
+            ArithOp::Mul => write!(f, "*"),
+            ArithOp::Div => write!(f, "/"),
+            ArithOp::Rem => write!(f, "%"),
+        }
+    }
+}

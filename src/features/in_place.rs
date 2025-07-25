@@ -1,14 +1,17 @@
-use crate::error::AllocError;
 use core::{alloc::Layout, ptr::NonNull};
+use crate::{
+    Alloc,
+    error::AllocError,
+    helpers::SliceAllocGuard
+};
 
-/// Extension trait for [`Alloc`](crate::Alloc) which provides interfaces to reallocate in-place.
-pub trait ResizeInPlace {
+/// Extension trait for [`Alloc`](Alloc) which provides interfaces to reallocate in-place.
+pub trait ResizeInPlace: Alloc {
     /// Grow the given block to a new, larger layout.
     ///
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_size < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the growth operation could not be
     ///   completed in-place.
@@ -30,7 +33,6 @@ pub trait ResizeInPlace {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_size < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the growth operation could not be
     ///   completed in-place.
@@ -56,7 +58,6 @@ pub trait ResizeInPlace {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_size < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the growth operation could not be
     ///   completed in-place.
@@ -75,10 +76,12 @@ pub trait ResizeInPlace {
         pattern: F,
     ) -> Result<(), AllocError> {
         self.grow_in_place(ptr, old_layout, new_size)?;
-        let start_num = old_layout.size();
-        let start = ptr.add(start_num);
-        for i in 0..new_size - old_layout.size() {
-            start.add(i).write(pattern(start_num + i));
+        
+        let start_idx = old_layout.size();
+        let mut start = SliceAllocGuard::new(ptr.add(start_idx), &self, new_size - start_idx);
+        
+        for i in 0..new_size - start_idx {
+            start.init_unchecked(pattern(start_idx + i));
         }
         Ok(())
     }
@@ -88,7 +91,6 @@ pub trait ResizeInPlace {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_size < old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the growth operation could not be
     ///   completed in-place.
@@ -118,7 +120,6 @@ pub trait ResizeInPlace {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ShrinkBiggerNewLayout`] if `new_size > old_layout.size()`.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the shrink operation could not be
     ///   completed in-place.
@@ -143,7 +144,6 @@ pub trait ResizeInPlace {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the reallocation operation could not
     ///   be completed in-place.
@@ -175,7 +175,6 @@ pub trait ResizeInPlace {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the reallocation operation could not
     ///   be completed in-place.
@@ -208,7 +207,6 @@ pub trait ResizeInPlace {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the reallocation operation could not
     ///   be completed in-place.
@@ -242,7 +240,6 @@ pub trait ResizeInPlace {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::EqualSizeRealloc`] if `old_layout.size() == new_size`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the reallocation operation could not
     ///   be completed in-place.
@@ -387,3 +384,6 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         Err(AllocError::Other(SHRINK_IP))
     }
 }
+
+// TODO: the absolutely hellish task of adding in-place operations parallel to alloc_ext's and
+//  alloc_slice's methods

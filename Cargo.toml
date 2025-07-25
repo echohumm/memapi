@@ -1,14 +1,14 @@
 [package]
 name = "memapi"
 # major will always be 0 ngl
-version = "0.12.5"
+version = "0.13.0"
 edition = "2021"
 description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/afemboylol/memapi"
 keywords = ["allocator", "no_std", "memory", "allocation"]
 categories = ["no-std", "memory-management"]
-exclude = ["/tests", "/bin", "testall.py"]
+exclude = ["/tests", "/bin", "testall.py", "src/expanded"]
 
 [package.metadata.docs.rs]
 features = ["full"]
@@ -17,7 +17,10 @@ features = ["full"]
 nightly = []
 std = []
 
+auto_alloc_for_allocator = ["specialization"]
+
 metadata = ["nightly"]
+sized_hierarchy = ["nightly"]
 clone_to_uninit = ["nightly"]
 specialization = ["nightly"]
 
@@ -26,7 +29,10 @@ alloc_slice = ["alloc_ext"]
 resize_in_place = []
 
 stats = []
-owned = []
+owned = ["metadata"]
+
+drop_for_owned = ["owned"]
+zero_drop_for_owned = ["owned"]
 
 jemalloc = ["dep:tikv-jemalloc-sys"]
 jemalloc_in_place = ["jemalloc", "resize_in_place"]
@@ -35,9 +41,10 @@ mimalloc = ["dep:libmimalloc-sys"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
 
 full = [
-    "specialization",
+    "auto_alloc_for_allocator",
     "std",
     "metadata",
+    "sized_hierarchy",
     "clone_to_uninit",
     "alloc_slice",
     "stats",

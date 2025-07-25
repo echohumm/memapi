@@ -23,7 +23,7 @@ unsafe impl UnsizedCopy for std::ffi::OsStr {}
 // `Path == OsStr` and `OsStr: UnsizedCopy`.
 unsafe impl UnsizedCopy for std::path::Path {}
 
-#[cfg(feature = "metadata")]
+#[cfg(all(feature = "metadata", not(feature = "sized_hierarchy")))]
 /// Trait indicating that a type has no metadata.
 ///
 /// This usually means `Self: Sized` or `Self` is `extern`.
@@ -32,13 +32,27 @@ unsafe impl UnsizedCopy for std::path::Path {}
 ///
 // invalid block type here suppresses an (incorrect) error in my ide
 /// ```rs
-/// # use memapi::{SizedProps, Thin};
+/// # use memapi::type_props::{SizedProps, Thin};
 ///
 /// fn safe<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
 /// }
 /// ```
 pub trait Thin: core::ptr::Pointee<Metadata = ()> {}
+#[cfg(all(feature = "metadata", feature = "sized_hierarchy"))]
+/// Trait indicating that a type has no metadata and may or may not have a size.
+///
+/// # Example
+///
+// invalid block type here suppresses an (incorrect) error in my ide
+/// ```rs
+/// # use memapi::type_props::{SizedProps, Thin};
+///
+/// fn safe<T: Thin>() {
+///     assert_eq!(<&T>::SZ, usize::SZ)
+/// }
+/// ```
+pub trait Thin: core::ptr::Pointee<Metadata = ()> + core::marker::PointeeSized {}
 
 #[cfg(feature = "metadata")]
 impl<P: core::ptr::Pointee<Metadata = ()>> Thin for P {}

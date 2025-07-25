@@ -142,6 +142,16 @@ pub struct FmtLog<W: fmt::Write> {
 }
 
 #[cfg(feature = "std")]
+/// A logger that pushes all statistics to a vector.
+pub struct StatCollectingLog {
+    // maybe i should use crate::owned::OwnedBuf here
+    /// The vector which results are passed to.
+    pub results: std::sync::Mutex<Vec<AllocRes>>,
+    /// The total number of bytes allocated.
+    pub total: AtomicUsize,
+}
+
+#[cfg(feature = "std")]
 impl<W: std::io::Write> StatsLogger for IOLog<W> {
     #[inline]
     fn log(&self, stat: AllocRes) {
@@ -164,6 +174,19 @@ impl<W: fmt::Write> StatsLogger for FmtLog<W> {
             .expect("inner `Mutex<W>` for `FmtLog` was poisoned")
             .write_fmt(format_args!("{stat}\n"))
             .expect("failed to write to inner `W` of `FmtLog`");
+    }
+
+    atomic_total_ops!(self, total);
+}
+
+#[cfg(feature = "std")]
+impl StatsLogger for StatCollectingLog {
+    #[inline]
+    fn log(&self, stat: AllocRes) {
+        self.results
+            .lock()
+            .expect("inner `Mutex<Vec<AllocRes>>` for `StatCollectingLog` was poisoned")
+            .push(stat);
     }
 
     atomic_total_ops!(self, total);
@@ -194,6 +217,16 @@ impl<W: fmt::Write + Default> Default for FmtLog<W> {
     fn default() -> FmtLog<W> {
         FmtLog {
             buf: std::sync::Mutex::new(W::default()),
+            total: AtomicUsize::new(0),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl Default for StatCollectingLog {
+    fn default() -> StatCollectingLog {
+        StatCollectingLog {
+            results: std::sync::Mutex::new(Vec::new()),
             total: AtomicUsize::new(0),
         }
     }
@@ -247,6 +280,29 @@ impl<W: fmt::Write> FmtLog<W> {
         self.buf
             .lock()
             .expect("inner `Mutex<W>` for `FmtLog` was poisoned")
+    }
+}
+
+#[cfg(feature = "std")]
+impl StatCollectingLog {
+    /// Creates a new [`StatCollectingLog`].
+    #[must_use]
+    #[inline]
+    pub const fn new() -> StatCollectingLog {
+        StatCollectingLog {
+            results: std::sync::Mutex::new(Vec::new()),
+            total: AtomicUsize::new(0),
+        }
+    }
+
+    /// Creates a new [`StatCollectingLog`] with the given capacity.
+    #[must_use]
+    #[inline]
+    pub fn with_capacity(cap: usize) -> StatCollectingLog {
+        StatCollectingLog {
+            results: std::sync::Mutex::new(Vec::with_capacity(cap)),
+            total: AtomicUsize::new(0),
+        }
     }
 }
 
@@ -331,7 +387,7 @@ impl Display for AllocRes {
                             AllocKind::Zeroed => "zeroed".to_string(),
                             AllocKind::Filled(n) => format!("filled with the byte {n}"),
                             AllocKind::Patterned => "filled with a pattern".to_string(),
-                            AllocKind::Shrink => unreachable!(),
+                            AllocKind::Shrink => unsafe { core::hint::unreachable_unchecked() },
                         }
                     )
                 }
@@ -385,7 +441,7 @@ impl Display for AllocRes {
                     )
                 }
                 // free is "infallible"
-                AllocStat::Free { .. } => unreachable!(),
+                AllocStat::Free { .. } => unsafe { core::hint::unreachable_unchecked() },
             },
         }
     }
@@ -479,7 +535,9 @@ pub enum AllocKind {
     /// New bytes were filled with a constant value.
     Filled(u8),
     /// New bytes were filled with a pattern.
-    // FIXME: contain the pattern
+    // dontfixme: contain the pattern
+    // why though, me? why the hell would we contain the pattern??
+    // for anyone reading this, yes i am going insane.
     Patterned,
     /// There were no new bytes.
     Shrink,
