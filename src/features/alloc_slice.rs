@@ -1,4 +1,4 @@
-use crate::helpers::TRUNC_LGR;
+use crate::helpers::{nonnull_slice_from_raw_parts, nonnull_slice_len, TRUNC_LGR};
 use crate::{
     error::AllocError,
     grow,
@@ -7,7 +7,11 @@ use crate::{
     type_props::{PtrProps, SizedProps},
     Alloc, AllocPattern,
 };
-use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
+use core::{
+    alloc::Layout,
+    mem::MaybeUninit,
+    ptr::{self, NonNull},
+};
 // TODO: slice growth and realloc with defaulting, initializing, and with a predicate
 //  F: Fn(usize) -> T.
 
@@ -75,8 +79,11 @@ pub trait AllocSlice: Alloc {
         match self.alloc(unsafe { data.layout() }) {
             Ok(ptr) => Ok(unsafe {
                 let p = ptr.cast::<T>();
-                (&raw const *data).cast::<T>().copy_to_nonoverlapping(p.as_ptr(), data.len());
-                NonNull::slice_from_raw_parts(p, data.len())
+                (&raw const *data)
+                    .cast::<T>()
+                    .copy_to_nonoverlapping(p.as_ptr(), data.len());
+
+                nonnull_slice_from_raw_parts(p, data.len())
             }),
             Err(e) => Err(e),
         }
@@ -152,7 +159,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
-        NonNull::slice_from_raw_parts(ptr.cast::<T>(), init).drop_in_place();
+        ptr::slice_from_raw_parts_mut(ptr.as_ptr().cast::<T>(), init).drop_in_place();
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
@@ -167,12 +174,15 @@ pub trait AllocSlice: Alloc {
     #[inline]
     unsafe fn drop_zero_and_dealloc_uninit_slice<T>(
         &self,
-        ptr: NonNull<[MaybeUninit<T>]>,
+        slice: NonNull<[MaybeUninit<T>]>,
         init: usize,
     ) {
-        NonNull::slice_from_raw_parts(ptr.cast::<T>(), init).drop_in_place();
-        ptr.cast::<T>().write_bytes(0, ptr.len());
-        self.dealloc(ptr.cast::<u8>(), ptr.layout());
+        ptr::slice_from_raw_parts_mut(slice.as_ptr().cast::<T>(), init).drop_in_place();
+        slice
+            .as_ptr()
+            .cast::<T>()
+            .write_bytes(0, nonnull_slice_len(slice));
+        self.dealloc(slice.cast::<u8>(), slice.layout());
     }
 
     /// Allocates memory for a slice of uninitialized `T` with the given length and returns a
@@ -214,8 +224,8 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice(slice.cast::<T>(), slice.len(), new_len)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.grow_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Grows a slice to a new length given the pointer to its first element, current length, and
@@ -264,8 +274,8 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice_zeroed(slice.cast::<T>(), slice.len(), new_len)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.grow_raw_slice_zeroed(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Grows a slice to a new length given the pointer to its first element, current length, and
@@ -312,8 +322,8 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.shrink_raw_slice(slice.cast::<T>(), slice.len(), new_len)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.shrink_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Shrinks a slice to a new length given the pointer to its first element, current length, and
@@ -362,8 +372,8 @@ pub trait AllocSlice: Alloc {
         init: usize,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.truncate_raw_slice(slice.cast::<T>(), slice.len(), init, new_len)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.truncate_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), init, new_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Shrinks a slice to a new length given the pointer to its first element, current length, and
@@ -396,7 +406,7 @@ pub trait AllocSlice: Alloc {
 
         if new_len < init {
             let to_drop = init - new_len;
-            NonNull::slice_from_raw_parts(ptr.add(new_len), to_drop).drop_in_place();
+            ptr::slice_from_raw_parts_mut(ptr.as_ptr().add(new_len), to_drop).drop_in_place();
         }
 
         self.shrink_raw_slice(ptr, len, new_len)
@@ -422,8 +432,8 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.realloc_raw_slice(slice.cast::<T>(), slice.len(), new_len)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.realloc_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Reallocates a slice to a new length given the pointer to its first element, current length,
@@ -475,8 +485,8 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.realloc_raw_slice_zeroed(slice.cast::<T>(), slice.len(), new_len)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.realloc_raw_slice_zeroed(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Reallocates a slice to a new length given the pointer to its first element, current length,
@@ -543,7 +553,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        NonNull::slice_from_raw_parts(ptr, n).drop_in_place();
+        ptr::slice_from_raw_parts_mut(ptr.as_ptr(), n).drop_in_place();
         self.dealloc_n(ptr, n);
     }
 }
@@ -568,7 +578,7 @@ pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_filled(layout, n)
-            .map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), len))
+            .map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
     }
 
     /// Attempts to allocate a block of memory for `len` instances of `T` and
@@ -589,7 +599,7 @@ pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
         self.alloc_patterned(layout, pattern)
-            .map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), len))
+            .map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
     }
 
     /// Grows a slice to a new length, filling any newly allocated bytes with `n`.
@@ -611,8 +621,8 @@ pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
         new_len: usize,
         n: u8,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice_filled(slice.cast::<T>(), slice.len(), new_len, n)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.grow_raw_slice_filled(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Grows a slice to a new length given the pointer to its first element, current length, and
@@ -661,8 +671,13 @@ pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
         new_len: usize,
         pattern: F,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice_patterned(slice.cast::<T>(), slice.len(), new_len, pattern.clone())
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.grow_raw_slice_patterned(
+            slice.cast::<T>(),
+            nonnull_slice_len(slice),
+            new_len,
+            pattern.clone(),
+        )
+        .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Grows a slice to a new length given the pointer to its first element, current length, and
@@ -712,8 +727,8 @@ pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
         new_len: usize,
         n: u8,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.realloc_raw_slice_filled(slice.cast::<T>(), slice.len(), new_len, n)
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.realloc_raw_slice_filled(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Reallocates a slice to a new length given the pointer to its first element, current length, and
@@ -763,8 +778,13 @@ pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
         new_len: usize,
         pattern: F,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.realloc_raw_slice_patterned(slice.cast::<T>(), slice.len(), new_len, pattern.clone())
-            .map(|p| NonNull::slice_from_raw_parts(p, new_len))
+        self.realloc_raw_slice_patterned(
+            slice.cast::<T>(),
+            nonnull_slice_len(slice),
+            new_len,
+            pattern.clone(),
+        )
+        .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
     /// Reallocates a slice to a new length given the pointer to its first element, current length,

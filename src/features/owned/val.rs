@@ -101,7 +101,7 @@ impl<T, A: Alloc> HeapVal<T, A> {
     }
 
     pub const fn unwrap(self) -> T {
-        let val = unsafe { self.ptr.read() };
+        let val = unsafe { self.ptr.as_ptr().read() };
         forget(self);
         val
     }
@@ -235,7 +235,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn reset(&self) {
-        self.ptr.drop_in_place();
+        self.ptr.as_ptr().drop_in_place();
         self.alloc.dealloc(self.ptr.cast(), self.ptr.layout());
     }
 
@@ -251,9 +251,9 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn reset_zero(&self) {
-        self.ptr.drop_in_place();
+        self.ptr.as_ptr().drop_in_place();
         let layout = self.ptr.layout();
-        self.ptr.cast::<u8>().write_bytes(0, layout.size());
+        self.ptr.as_ptr().cast::<u8>().write_bytes(0, layout.size());
         self.alloc.dealloc(self.ptr.cast(), layout);
     }
 

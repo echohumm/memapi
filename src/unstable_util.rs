@@ -25,10 +25,8 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
         return usize::MAX;
     }
 
-    unsafe {
-        let sz = layout.size();
-        size_rounded_up_to_align(sz, align).unchecked_sub(sz)
-    }
+    let sz = layout.size();
+    size_rounded_up_to_align(sz, align) - sz
 }
 
 /// Creates a layout by rounding the size of this layout up to a multiple of the layout's alignment.
@@ -87,13 +85,15 @@ pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout
             Err(_) => Err(AllocError::LayoutError(layout.size(), layout.align())),
         }
     } else {
-        Err(AllocError::ArithmeticOverflow(layout.size(), ArithOp::Mul, count))
+        Err(AllocError::ArithmeticOverflow(
+            layout.size(),
+            ArithOp::Mul,
+            count,
+        ))
     }
 }
 
 const fn size_rounded_up_to_align(sz: usize, align: usize) -> usize {
-    unsafe {
-        let sub1 = align.unchecked_sub(1);
-        sz.unchecked_add(sub1) & !sub1
-    }
+    let sub1 = align - 1;
+    (sz + sub1) & !sub1
 }

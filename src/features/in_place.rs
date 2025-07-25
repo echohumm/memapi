@@ -1,9 +1,5 @@
+use crate::{error::AllocError, helpers::SliceAllocGuard, Alloc};
 use core::{alloc::Layout, ptr::NonNull};
-use crate::{
-    Alloc,
-    error::AllocError,
-    helpers::SliceAllocGuard
-};
 
 /// Extension trait for [`Alloc`](Alloc) which provides interfaces to reallocate in-place.
 pub trait ResizeInPlace: Alloc {
@@ -76,10 +72,14 @@ pub trait ResizeInPlace: Alloc {
         pattern: F,
     ) -> Result<(), AllocError> {
         self.grow_in_place(ptr, old_layout, new_size)?;
-        
+
         let start_idx = old_layout.size();
-        let mut start = SliceAllocGuard::new(ptr.add(start_idx), &self, new_size - start_idx);
-        
+        let mut start = SliceAllocGuard::new(
+            NonNull::new_unchecked(ptr.as_ptr().add(start_idx)),
+            &self,
+            new_size - start_idx,
+        );
+
         for i in 0..new_size - start_idx {
             start.init_unchecked(pattern(start_idx + i));
         }
@@ -109,7 +109,7 @@ pub trait ResizeInPlace: Alloc {
         n: u8,
     ) -> Result<(), AllocError> {
         self.grow_in_place(ptr, old_layout, new_size)?;
-        ptr.add(old_layout.size())
+        ptr.as_ptr().add(old_layout.size())
             .write_bytes(n, new_size - old_layout.size());
         Ok(())
     }

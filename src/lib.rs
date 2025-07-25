@@ -203,7 +203,7 @@ pub trait Alloc {
         match self.alloc(layout) {
             Ok(p) => {
                 unsafe {
-                    p.write_bytes(0, layout.size());
+                    p.as_ptr().write_bytes(0, layout.size());
                 }
                 Ok(p)
             }
@@ -569,7 +569,8 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
         }
     };
     unsafe {
-        ptr.copy_to_nonoverlapping(new_ptr, old_layout.size());
+        ptr.as_ptr()
+            .copy_to_nonoverlapping(new_ptr.as_ptr(), old_layout.size());
         a.dealloc(ptr, old_layout);
     }
     Ok(new_ptr)
@@ -592,7 +593,8 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
 ) -> Result<NonNull<u8>, AllocError> {
     let new_ptr = a.alloc(new_layout)?.cast::<u8>();
     unsafe {
-        ptr.copy_to_nonoverlapping(new_ptr, new_layout.size());
+        ptr.as_ptr()
+            .copy_to_nonoverlapping(new_ptr.as_ptr(), new_layout.size());
         a.dealloc(ptr, old_layout);
     }
     Ok(new_ptr)
@@ -653,12 +655,37 @@ pub mod helpers {
         mem::{forget, transmute},
         num::NonZeroUsize,
         ops::Deref,
-        ptr::{eq as peq, NonNull},
+        ptr::{self, eq as peq, NonNull},
     };
 
     // yet again.
     #[allow(dead_code)]
     pub(crate) const TRUNC_LGR: &str = "attempted to truncate a slice to a larger size";
+
+    /// Creates a `NonNull<[T]>` from a pointer and a length.
+    ///
+    /// This is a helper used in place of [`NonNull::slice_from_raw_parts`], which was stabilized
+    /// after this crate's MSRV.
+    #[must_use]
+    #[inline]
+    pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
+        unsafe { NonNull::new_unchecked(ptr::slice_from_raw_parts_mut(p.as_ptr(), len)) }
+    }
+
+    /// Returns the length of a [`NonNull`] slice pointer.
+    ///
+    /// This is a helper used in place of [`NonNull::len`], which was stabilized after this crate's
+    /// MSRV.
+    #[must_use]
+    #[inline]
+    pub const fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
+        // TODO: try alternative methods:
+        //  - transmute to (usize, usize) because pointer with usize metadata is just two usizes
+        //  - divide ptr.size() by T::SZ
+        unsafe {
+            (&*ptr.as_ptr()).len()
+        }
+    }
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
     #[inline]
@@ -707,7 +734,7 @@ pub mod helpers {
     ) -> Result<NonNull<[T]>, AllocError> {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        alloc(a, layout).map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), len))
+        alloc(a, layout).map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
     }
 
     #[cfg(all(any(feature = "alloc_ext", feature = "owned"), feature = "metadata"))]
@@ -720,8 +747,8 @@ pub mod helpers {
     ) -> Result<NonNull<T>, AllocError> {
         match a.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                NonNull::new_unchecked(data.cast_mut().cast())
-                    .copy_to_nonoverlapping(ptr, data.size());
+                data.cast::<u8>()
+                    .copy_to_nonoverlapping(ptr.as_ptr(), data.size());
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(data))
             }),
             Err(e) => Err(e),
@@ -737,8 +764,8 @@ pub mod helpers {
     ) -> Result<NonNull<T>, AllocError> {
         match a.alloc(T::LAYOUT) {
             Ok(ptr) => Ok(unsafe {
-                let ptr = ptr.cast();
-                ptr.write(val);
+                let ptr: NonNull<T> = ptr.cast();
+                ptr.as_ptr().write(val);
                 ptr
             }),
             Err(e) => Err(e),
@@ -749,7 +776,7 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub fn nonnull_eq<T: ?Sized>(a: NonNull<T>, b: NonNull<T>) -> bool {
-        peq(a.as_ptr().cast_const(), b.as_ptr().cast_const())
+        peq(a.as_ptr() as *const T, b.as_ptr() as *const T)
     }
 
     /// Aligns the given value up to a non-zero alignment.
@@ -767,7 +794,7 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const unsafe fn align_up_unchecked(n: usize, align: usize) -> usize {
-        let m1 = unsafe { align.unchecked_sub(1) };
+        let m1 = align - 1;
         (n + m1) & !m1
     }
 
@@ -798,18 +825,11 @@ pub mod helpers {
     pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
         let (sz, align) = (T::SZ, T::ALIGN);
 
-        if sz != 0
-            && n > unsafe { (isize::MAX as usize).unchecked_add(1).unchecked_sub(align) } / sz
-        {
+        if sz != 0 && n > (((isize::MAX as usize) + 1) - align) / sz {
             return Err((sz, align));
         }
 
-        unsafe {
-            Ok(Layout::from_size_align_unchecked(
-                sz.unchecked_mul(n),
-                align,
-            ))
-        }
+        unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
     }
 
     /// A RAII guard that owns a single allocation and ensures it is deallocated unless explicitly
@@ -862,7 +882,7 @@ pub mod helpers {
             T: Sized,
         {
             unsafe {
-                self.ptr.write(elem);
+                self.ptr.as_ptr().write(elem);
             }
         }
 
@@ -949,7 +969,7 @@ pub mod helpers {
         #[inline]
         #[must_use]
         pub const fn release(self) -> NonNull<[T]> {
-            let ret = NonNull::slice_from_raw_parts(self.ptr, self.init);
+            let ret = nonnull_slice_from_raw_parts(self.ptr, self.init);
             forget(self);
             ret
         }
@@ -977,7 +997,7 @@ pub mod helpers {
         /// The caller must ensure that the slice is not at capacity. (`initialized() < full()`)
         #[inline]
         pub const unsafe fn init_unchecked(&mut self, elem: T) {
-            self.ptr.add(self.init).write(elem);
+            self.ptr.as_ptr().add(self.init).write(elem);
             self.init += 1;
         }
 
@@ -999,7 +1019,7 @@ pub mod helpers {
                 }
                 match iter.next() {
                     Some(elem) => unsafe {
-                        self.ptr.add(self.init).write(elem);
+                        self.ptr.as_ptr().add(self.init).write(elem);
                         self.init += 1;
                     },
                     None => return Ok(()),
@@ -1062,7 +1082,7 @@ pub mod helpers {
     impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
         fn drop(&mut self) {
             unsafe {
-                NonNull::slice_from_raw_parts(self.ptr, self.init).drop_in_place();
+                ptr::slice_from_raw_parts_mut(self.ptr.as_ptr(), self.init).drop_in_place();
                 self.alloc.dealloc(
                     self.ptr.cast(),
                     Layout::from_size_align_unchecked(T::SZ * self.full, align_of::<T>()),

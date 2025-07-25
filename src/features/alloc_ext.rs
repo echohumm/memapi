@@ -63,9 +63,9 @@ pub trait AllocExt: Alloc {
     #[inline]
     fn alloc_clone_to<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
         match self.alloc(T::LAYOUT) {
-            Ok(ptr) => Ok(unsafe {
+            Ok(ptr) => Ok({
                 let guard = AllocGuard::new(ptr.cast(), self);
-                guard.write(data.clone());
+                guard.init(data.clone());
                 guard.release()
             }),
             Err(e) => Err(e),
@@ -179,7 +179,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr.drop_in_place();
+        ptr.as_ptr().drop_in_place();
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
@@ -215,7 +215,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr.cast::<u8>().write_bytes(0, ptr.size());
+        ptr.as_ptr().cast::<u8>().write_bytes(0, ptr.size());
         self.dealloc_typed(ptr);
     }
 
@@ -228,7 +228,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_zero_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr.drop_in_place();
+        ptr.as_ptr().drop_in_place();
         self.zero_and_dealloc_typed(ptr);
     }
 
@@ -288,9 +288,9 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                NonNull::new_unchecked((&raw const *data).cast_mut())
-                    .cast()
-                    .copy_to_nonoverlapping(ptr, data.size());
+                (&raw const *data)
+                    .cast::<u8>()
+                    .copy_to_nonoverlapping(ptr.as_ptr(), data.size());
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(&raw const *data))
             }),
             Err(e) => Err(e),

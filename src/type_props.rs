@@ -34,19 +34,19 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// The pointer must be valid.
+    /// The pointer must be valid as a reference.
     unsafe fn size(&self) -> usize;
     /// Gets the alignment of the value.
     ///
     /// # Safety
     ///
-    /// The pointer must be valid.
+    /// The pointer must be valid as a reference.
     unsafe fn align(&self) -> usize;
     /// Gets the memory layout for the value.
     ///
     /// # Safety
     ///
-    /// The pointer must be valid.
+    /// The pointer must be valid as a reference.
     unsafe fn layout(&self) -> Layout;
 
     #[cfg(feature = "metadata")]
@@ -54,14 +54,14 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// The pointer must be valid.
+    /// The pointer must be valid as a reference.
     unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata;
 
     /// Checks whether the value is zero-sized.
     ///
     /// # Safety
     ///
-    /// The pointer must be valid.
+    /// The pointer must be valid as a reference.
     unsafe fn is_zst(&self) -> bool {
         self.size() == 0
     }
@@ -70,7 +70,7 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// The pointer must be valid.
+    /// The pointer must be valid as a reference.
     // this has almost no real use case as far as i can tell
     unsafe fn max_slice_len(&self) -> usize {
         match self.size() {
