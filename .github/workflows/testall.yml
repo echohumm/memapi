@@ -45,6 +45,7 @@ jobs:
           cargo --version
 
       - name: Run tests or clippy
+        shell: bash
         run: |
           N_FLAG=""
           if [[ "${{ matrix.rust }}" != "nightly" ]]; then
