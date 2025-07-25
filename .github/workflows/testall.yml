@@ -49,7 +49,7 @@ jobs:
             echo "::endgroup::"
           fi
         env:
-          RUSTFLAGS: $([[ "${{ matrix.mode }}" == "clippy" ]] && echo "" || echo "-D warnings")
+          RUSTFLAGS: "-D warnings"
 
   # ---------------------------------------------------
   # 2) miri only on nightly + ubuntu
