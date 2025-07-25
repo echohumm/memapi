@@ -1,8 +1,9 @@
 [package]
 name = "memapi"
-# major will always be 0 ngl
+# major will probably always be 0
 version = "0.13.0"
 edition = "2021"
+rust-version = "1.80.0"
 description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/afemboylol/memapi"
@@ -16,8 +17,6 @@ features = ["full"]
 [features]
 nightly = []
 std = []
-
-auto_alloc_for_allocator = ["specialization"]
 
 metadata = ["nightly"]
 sized_hierarchy = ["nightly"]
@@ -40,17 +39,31 @@ jemalloc_in_place = ["jemalloc", "resize_in_place"]
 mimalloc = ["dep:libmimalloc-sys"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
 
-full = [
-    "auto_alloc_for_allocator",
+full_no_std_no_nightly = [
+    "alloc_slice",
+    "stats",
+    "jemalloc_in_place",
+    "mimalloc_in_place",
+]
+
+full_no_nightly = [
     "std",
+
+    "full_no_std_no_nightly"
+]
+
+full_no_std = [
     "metadata",
     "sized_hierarchy",
     "clone_to_uninit",
-    "alloc_slice",
-    "stats",
     "owned",
-    "jemalloc_in_place",
-    "mimalloc_in_place",
+
+    "full_no_std_no_nightly",
+]
+
+full = [
+    "std",
+    "full_no_std"
 ]
 
 [[test]]

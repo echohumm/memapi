@@ -1,14 +1,10 @@
 use crate::{
     error::AllocError,
     grow,
-    helpers::{
-        AllocGuard,
-        alloc_write
-    },
+    helpers::{alloc_write, AllocGuard},
     ralloc,
     type_props::{PtrProps, SizedProps},
-    Alloc,
-    AllocPattern,
+    Alloc, AllocPattern,
 };
 use core::{alloc::Layout, ptr::NonNull};
 
@@ -292,7 +288,7 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                NonNull::from_ref(data)
+                NonNull::new_unchecked((&raw const *data).cast_mut())
                     .cast()
                     .copy_to_nonoverlapping(ptr, data.size());
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(&raw const *data))

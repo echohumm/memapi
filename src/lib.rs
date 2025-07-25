@@ -650,7 +650,7 @@ pub mod helpers {
     };
     use core::{
         alloc::Layout,
-        mem::forget,
+        mem::{forget, transmute},
         num::NonZeroUsize,
         ops::Deref,
         ptr::{eq as peq, NonNull},
@@ -707,8 +707,7 @@ pub mod helpers {
     ) -> Result<NonNull<[T]>, AllocError> {
         let layout = layout_or_sz_align::<T>(len)
             .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        alloc(a, layout)
-            .map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), len))
+        alloc(a, layout).map(|ptr| NonNull::slice_from_raw_parts(ptr.cast(), len))
     }
 
     #[cfg(all(any(feature = "alloc_ext", feature = "owned"), feature = "metadata"))]
@@ -787,7 +786,7 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
-        NonNull::without_provenance(unsafe { NonZeroUsize::new_unchecked(align) })
+        transmute::<NonZeroUsize, NonNull<u8>>(unsafe { NonZeroUsize::new_unchecked(align) })
     }
 
     /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.

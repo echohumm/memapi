@@ -73,6 +73,12 @@ impl<T: ?Sized> HeapVal<T> {
         HeapVal::copy_from_ptr_in(val, DefaultAlloc)
     }
 
+    /// Constructs a new [`HeapVal`] using the given pointer and the default allocator.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the given pointer points to a valid `T` allocated using the default
+    /// allocator.
     #[must_use]
     #[inline]
     pub const unsafe fn from_raw(ptr: NonNull<T>) -> HeapVal<T> {
@@ -201,6 +207,12 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
         ))
     }
 
+    /// Constructs a new [`HeapVal`] using the given pointer and allocator.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the given pointer points to a valid `T` allocated using the given
+    /// allocator.
     #[must_use]
     #[inline]
     pub const unsafe fn from_raw_in(ptr: NonNull<T>, alloc: A) -> HeapVal<T, A> {

@@ -7,7 +7,6 @@ import os
 FEATURES = [
     "nightly",
     "std",
-    "auto_alloc_for_allocator",
     "metadata",
     "clone_to_uninit",
     "specialization",
@@ -23,8 +22,24 @@ FEATURES = [
     "jemalloc_in_place",
     "mimalloc",
     "mimalloc_in_place",
+    "full_no_std_no_nightly",
+    "full_no_std",
+    "full_no_nightly",
     "full"
 ]
+
+NIGHTLY_FEATURES = {
+    "nightly",
+    "metadata",
+    "sized_hierarchy",
+    "clone_to_uninit",
+    "specialization",
+    "owned",
+    "drop_for_owned",
+    "zero_drop_for_owned",
+    "full_no_std",
+    "full"
+}
 
 def all_feature_combinations(features):
     for r in range(len(features) + 1):
@@ -44,6 +59,11 @@ def main():
         "-C", "--clippy",
         action="store_true",
         help="Use `cargo clippy -- -D clippy::all -D clippy::pedantic`."
+    )
+    parser.add_argument(
+        "-N", "--no-nightly",
+        action="store_true",
+        help="Skip any combinations that include nightly-only features"
     )
     args = parser.parse_args()
 
@@ -65,6 +85,9 @@ def main():
         env["RUSTFLAGS"] = "-D warnings"
 
     for combo in all_feature_combinations(FEATURES):
+        if args.no_nightly and any(f in NIGHTLY_FEATURES for f in combo):
+            continue
+
         cmd = list(cargo_cmd)
         cmd.append("--no-default-features")
         if combo:

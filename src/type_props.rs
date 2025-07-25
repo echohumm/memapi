@@ -180,7 +180,7 @@ pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
 #[must_use]
 #[inline]
 pub const fn varsized_dangling_ptr_mut<T: ?Sized + VarSized>() -> *mut T {
-    core::ptr::from_raw_parts_mut(core::ptr::without_provenance_mut::<()>(T::ALIGN), 0)
+    core::ptr::from_raw_parts_mut(T::ALIGN as *mut (), 0)
 }
 
 #[cfg(feature = "metadata")]
@@ -188,5 +188,5 @@ pub const fn varsized_dangling_ptr_mut<T: ?Sized + VarSized>() -> *mut T {
 #[must_use]
 #[inline]
 pub const fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *const T {
-    core::ptr::from_raw_parts(core::ptr::without_provenance::<()>(T::ALIGN), 0)
+    core::ptr::from_raw_parts(T::ALIGN as *mut (), 0)
 }
