@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ---------------------------------------------------
+  # 1) test & clippy on all OS + nightly
+  # ---------------------------------------------------
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        rust: [nightly]
+        mode: [test, clippy]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          components: clippy  # always install clippy
+
+      - name: Run tests / clippy
+        run: |
+          python3 testall.py \
+            $([[ "${{ matrix.mode }}" == "clippy" ]] && echo "--clippy")
+        env:
+          # make tests warnings‐strict
+          RUSTFLAGS: $([[ "${{ matrix.mode }}" == "clippy" ]] && echo "" || echo "-D warnings")
+
+  # ---------------------------------------------------
+  # 2) miri only on nightly + ubuntu
+  # ---------------------------------------------------
+  miri:
+    name: Miri tests
+    runs-on: ubuntu-latest
+    if: always()  # run on all PRs/pushes
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Cache cargo registry and build
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-miri-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install nightly toolchain + miri
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          profile: minimal
+          components: miri
+
+      - name: Set up Miri
+        run: |
+          rustup component add miri --toolchain nightly
+          cargo +nightly miri setup
+
+      - name: Run Miri tests
+        run: python3 testall.py --miri
+        env:
+          RUSTFLAGS: -D warnings
