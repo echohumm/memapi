@@ -15,7 +15,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        rust: [nightly]
+        rust: [stable, nightly]
         mode: [test, clippy]
     steps:
       - name: Checkout code
@@ -33,20 +33,21 @@ jobs:
       - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: 1.90.0
+          toolchain: ${{ matrix.rust }}
           profile: minimal
           components: clippy  # always install clippy
 
       - name: Run tests or clippy
         run: |
+          N_FLAG=""
+          if [[ "${{ matrix.rust }}" != "nightly" ]]; then
+            N_FLAG="-N"
+          fi
+
           if [[ "${{ matrix.mode }}" == "clippy" ]]; then
-            echo "::group::clippy"
-            python3 testall.py --clippy
-            echo "::endgroup::"
+            python3 testall.py -C $N_FLAG
           else
-            echo "::group::test"
-            python3 testall.py
-            echo "::endgroup::"
+            python3 testall.py $N_FLAG
           fi
         env:
           RUSTFLAGS: "-D warnings"
