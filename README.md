@@ -4,6 +4,8 @@
 
 A minimal, `no_std`-friendly memory allocation interface for managing raw buffers, suitable for use in collections.
 
+MSRV: 1.56.0
+
 # note: this readme is ***VERY*** outdated
 
 ---
