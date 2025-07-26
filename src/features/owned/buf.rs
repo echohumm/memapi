@@ -1391,13 +1391,14 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
 // TODO: make sure all non-const traits which can be const (but aren't because they're in a trait)
 //  have const, inherent versions.
 
-impl<T, A: Alloc> Debug for OwnedBuf<T, A> {
+impl<T, A: Alloc + Debug> Debug for OwnedBuf<T, A> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         f.debug_struct("OwnedBuf")
             .field("buf", &self.buf)
             .field("init", &self.init)
             .field("size", &self.size)
-            .finish_non_exhaustive()
+            .field("alloc", &self.alloc)
+            .finish()
     }
 }
 
@@ -1987,7 +1988,7 @@ impl<T> Buf<'_, T> {
         let mut buf = SliceAllocGuard::new(buf, &alloc, size);
         for i in 0..self.init {
             unsafe {
-                match buf.init(self.buf.get_unchecked(i).assume_init_ref().clone()) {
+                match buf.init((&*self.buf.get_unchecked(i).as_ptr()).clone()) {
                     Ok(()) => {}
                     Err(_) => core::hint::unreachable_unchecked(),
                 }

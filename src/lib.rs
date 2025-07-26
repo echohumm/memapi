@@ -679,9 +679,6 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
-        // TODO: try alternative methods:
-        //  - transmute to (usize, usize) because pointer with usize metadata is just two usizes
-        //  - divide ptr.size() by T::SZ
         unsafe {
             (&*ptr.as_ptr()).len()
         }

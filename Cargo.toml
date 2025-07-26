@@ -1,9 +1,10 @@
 [package]
 name = "memapi"
 # major will probably always be 0
-version = "0.13.1"
 edition = "2021"
 rust-version = "1.56.0"
+version = "0.13.2"
+readme = "README.md"
 description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/afemboylol/memapi"

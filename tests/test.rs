@@ -96,8 +96,8 @@ fn test_repeat_layout_variants() {
 #[cfg(feature = "alloc_ext")]
 mod alloc_ext_tests {
     use core::alloc::Layout;
-    use memapi::{Alloc, AllocExt, DefaultAlloc};
     use memapi::type_props::SizedProps;
+    use memapi::{Alloc, AllocExt, DefaultAlloc};
 
     #[test]
     #[allow(clippy::cast_possible_truncation)]
@@ -596,7 +596,9 @@ mod jemalloc_tests {
             let usable = usable_size(ptr.as_ptr());
             assert!(
                 usable >= size,
-                "usable_size {usable} should be >= requested {size}",
+                "usable_size {} should be >= requested {}",
+                usable,
+                size
             );
             alloc.dealloc(ptr, layout);
         }
