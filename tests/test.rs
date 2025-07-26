@@ -1,8 +1,12 @@
 use core::alloc::Layout;
-use memapi::unstable_util::{
-    pad_layout_for, pad_layout_to_align, repeat_layout, repeat_layout_packed,
+use memapi::{
+    unstable_util::{
+        pad_layout_for, pad_layout_to_align, repeat_layout, repeat_layout_packed,
+    },
+    error::AllocError,
+    Alloc,
+    DefaultAlloc
 };
-use memapi::{error::AllocError, Alloc, DefaultAlloc};
 
 #[test]
 fn test_alloc_and_dealloc() {

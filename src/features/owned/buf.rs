@@ -1,7 +1,10 @@
-use crate::helpers::nonnull_slice_from_raw_parts;
+use crate::type_props::USIZE_MAX;
 use crate::{
     error::ArithOp,
-    helpers::{alloc_slice, dealloc_n, layout_or_sz_align, SliceAllocGuard, TRUNC_LGR},
+    helpers::{
+        alloc_slice, dealloc_n, layout_or_sz_align, nonnull_slice_from_raw_parts,
+        slice_ptr_from_raw_parts, SliceAllocGuard, TRUNC_LGR,
+    },
     owned::VariableError::{Hard, Soft},
     type_props::SizedProps,
     Alloc, AllocError, DefaultAlloc,
@@ -14,7 +17,8 @@ use core::{
     fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
     marker::PhantomData,
-    mem::{forget, transmute, MaybeUninit},
+    mem::ManuallyDrop,
+    mem::{transmute, MaybeUninit},
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr::{self, replace, NonNull},
     slice::{self, SliceIndex},
@@ -145,9 +149,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// Breaks the owned buffer into its raw data.
     pub const fn into_raw_parts(self) -> (NonNull<T>, usize, usize, A) {
         let out = (self.buf, self.init, self.size, unsafe {
+            #[allow(clippy::incompatible_msrv)]
             ptr::read(&raw const self.alloc)
         });
-        forget(self);
+        let _ = ManuallyDrop::new(self);
         out
     }
 
@@ -177,7 +182,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[inline]
     pub const fn size(&self) -> usize {
         if T::IS_ZST {
-            usize::MAX
+            USIZE_MAX
         } else {
             self.size
         }
@@ -228,6 +233,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     pub const fn uninit_buf_ptr(&self) -> NonNull<[MaybeUninit<T>]> {
         nonnull_slice_from_raw_parts(
             unsafe {
+                #[allow(clippy::incompatible_msrv)]
                 NonNull::new_unchecked(self.buf.as_ptr().add(self.init).cast::<MaybeUninit<T>>())
             },
             self.size - self.init,
@@ -312,6 +318,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn init_next_unchecked(&mut self, val: T) {
+        #[allow(clippy::incompatible_msrv)]
         self.buf.as_ptr().add(self.init).write(val);
         self.init += 1;
     }
@@ -336,6 +343,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[inline]
     pub const unsafe fn remove_last_unchecked(&mut self) -> T {
         self.init -= 1;
+        #[allow(clippy::incompatible_msrv)]
         self.buf.as_ptr().add(self.init).read()
     }
 
@@ -358,8 +366,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[inline]
     pub const unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
         let src = self.get_ptr_unchecked(idx);
+        #[allow(clippy::incompatible_msrv)]
         let value = src.as_ptr().read();
         unsafe {
+            #[allow(clippy::incompatible_msrv)]
             src.as_ptr()
                 .add(1)
                 .copy_to(src.as_ptr(), self.init - idx - 1);
@@ -386,7 +396,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[inline]
     pub const fn replace(&mut self, idx: usize, val: T) -> Result<T, T> {
         if idx <= self.init {
-            Ok(unsafe { replace(self.get_ptr_unchecked(idx).as_ptr(), val) })
+            Ok(unsafe {
+                #[allow(clippy::incompatible_msrv)]
+                replace(self.get_ptr_unchecked(idx).as_ptr(), val)
+            })
         } else {
             Err(val)
         }
@@ -447,9 +460,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     pub const unsafe fn insert_unchecked(&mut self, idx: usize, val: T) {
         let dst = self.get_ptr_unchecked(idx);
         if idx != self.init {
+            #[allow(clippy::incompatible_msrv)]
             dst.as_ptr()
                 .copy_to_nonoverlapping(dst.as_ptr().add(1), self.init - idx);
         }
+        #[allow(clippy::incompatible_msrv)]
         dst.as_ptr().write(val);
         self.init += 1;
     }
@@ -622,7 +637,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             Layout::from_size_align_unchecked(T::SZ * slice.size, align_of::<T>()),
         );
         // noop but stops the non-consumed warning.
-        forget(slice);
+        let _ = ManuallyDrop::new(slice);
         // update initialized element count
         self.init += len;
     }
@@ -840,6 +855,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub const unsafe fn get_ptr_unchecked(&self, idx: usize) -> NonNull<T> {
+        #[allow(clippy::incompatible_msrv)]
         unsafe { NonNull::new_unchecked(self.buf.as_ptr().add(idx)) }
     }
 
@@ -907,6 +923,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             // transmute works here because they have the same underlying type (*mut T, and the same
             //  metadata.)
             Some(unsafe {
+                #[allow(clippy::incompatible_msrv)]
                 transmute::<NonNull<[T]>, NonNull<[MaybeUninit<T>]>>(
                     self.get_slice_ptr_unchecked(start, len),
                 )
@@ -1072,7 +1089,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         match len.cmp(&self.init) {
             Ordering::Greater => return Err(AllocError::Other(TRUNC_LGR)),
             Ordering::Equal => unsafe {
-                ptr::slice_from_raw_parts_mut(self.as_mut_ptr().add(len), self.init - len)
+                slice_ptr_from_raw_parts(self.as_mut_ptr().add(len), self.init - len)
                     .drop_in_place();
                 self.init = len;
             },
@@ -1167,7 +1184,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[inline]
     fn clear_inner(&self) {
         unsafe {
-            ptr::slice_from_raw_parts_mut(self.buf.as_ptr(), self.init).drop_in_place();
+            slice_ptr_from_raw_parts(self.buf.as_ptr(), self.init).drop_in_place();
         }
     }
 
@@ -1203,7 +1220,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     pub fn reset(&mut self) {
         if self.buf != NonNull::dangling() {
             unsafe {
-                ptr::slice_from_raw_parts_mut(self.buf.as_ptr(), self.init).drop_in_place();
+                slice_ptr_from_raw_parts(self.buf.as_ptr(), self.init).drop_in_place();
                 dealloc_n(self.alloc(), self.buf, self.size);
                 self.init = 0;
                 self.size = 0;
@@ -1237,12 +1254,14 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// Gets a reference to the initialized portion of the buffer.
     #[inline]
     pub const fn as_slice(&self) -> &[T] {
+        #[allow(clippy::incompatible_msrv)]
         unsafe { slice::from_raw_parts(self.buf.as_ptr(), self.init) }
     }
 
     /// Gets a mutable reference to the initialized portion of the buffer.
     #[inline]
     pub const fn as_slice_mut(&mut self) -> &mut [T] {
+        #[allow(clippy::incompatible_msrv)]
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr(), self.init) }
     }
 
@@ -1255,12 +1274,14 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// Gets a reference to the entire buffer.
     #[inline]
     pub const fn as_uninit_slice(&self) -> &[MaybeUninit<T>] {
+        #[allow(clippy::incompatible_msrv)]
         unsafe { slice::from_raw_parts(self.buf.as_ptr().cast(), self.size) }
     }
 
     /// Gets a mutable reference to the entire buffer.
     #[inline]
     pub const fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<T>] {
+        #[allow(clippy::incompatible_msrv)]
         unsafe { slice::from_raw_parts_mut(self.buf.as_ptr().cast(), self.size) }
     }
 
@@ -2072,6 +2093,7 @@ impl<T> Buf<'_, T> {
     pub const fn uninit_buf_ptr(&self) -> NonNull<[MaybeUninit<T>]> {
         nonnull_slice_from_raw_parts(
             unsafe {
+                #[allow(clippy::incompatible_msrv)]
                 NonNull::new_unchecked(self.buf.as_ptr().add(self.init) as *mut MaybeUninit<T>)
             },
             self.buf.len() - self.init,
@@ -2091,6 +2113,7 @@ impl<'s, T> Buf<'s, T> {
     #[allow(clippy::must_use_candidate)]
     #[inline]
     pub const fn init_buf(&self) -> &'s [T] {
+        #[allow(clippy::incompatible_msrv)]
         unsafe { slice::from_raw_parts(self.buf.as_ptr().cast(), self.init) }
     }
 
@@ -2099,6 +2122,7 @@ impl<'s, T> Buf<'s, T> {
     #[inline]
     pub const fn uninit_buf(&self) -> &'s [MaybeUninit<T>] {
         unsafe {
+            #[allow(clippy::incompatible_msrv)]
             slice::from_raw_parts(self.buf.as_ptr().add(self.init), self.buf.len() - self.init)
         }
     }

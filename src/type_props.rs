@@ -7,6 +7,10 @@ use core::{
     }
 };
 
+/// The maximum value of a `usize`. This exists as `usize::MAX` was stabilized in 1.43.0, which is 
+/// after this crate's MSRV.
+pub const USIZE_MAX: usize = !0;
+
 /// A trait containing constants for sized types.
 pub trait SizedProps: Sized {
     /// The size of the type.
@@ -21,8 +25,8 @@ pub trait SizedProps: Sized {
 
     /// The largest safe length for a `[Self]`.
     const MAX_SLICE_LEN: usize = match Self::SZ {
-        0 => usize::MAX,
-        sz => (isize::MAX as usize) / sz,
+        0 => USIZE_MAX,
+        sz => (USIZE_MAX >> 1) / sz,
     };
 }
 
@@ -74,8 +78,8 @@ pub trait PtrProps<T: ?Sized> {
     // this has almost no real use case as far as i can tell
     unsafe fn max_slice_len(&self) -> usize {
         match self.size() {
-            0 => usize::MAX,
-            sz => (isize::MAX as usize) / sz,
+            0 => USIZE_MAX,
+            sz => (USIZE_MAX >> 1) / sz,
         }
     }
 }

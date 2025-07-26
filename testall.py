@@ -19,13 +19,7 @@ FEATURES = [
     "drop_for_owned",
     "zero_drop_for_owned",
     "jemalloc",
-    "jemalloc_in_place",
     "mimalloc",
-    "mimalloc_in_place",
-    "full_no_std_no_nightly",
-    "full_no_std",
-    "full_no_nightly",
-    "full"
 ]
 
 NIGHTLY_FEATURES = {
@@ -37,8 +31,6 @@ NIGHTLY_FEATURES = {
     "owned",
     "drop_for_owned",
     "zero_drop_for_owned",
-    "full_no_std",
-    "full"
 }
 
 def all_feature_combinations(features):

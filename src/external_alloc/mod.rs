@@ -52,7 +52,7 @@ pub mod ffi {
 
         use core::{
             alloc::Layout,
-            ffi::{c_int, c_void},
+            ffi::c_void,
         };
 
         #[cfg(any(
@@ -80,10 +80,12 @@ pub mod ffi {
         /// memory allocation APIs (e.g. `malloc`) are guaranteed to have.
         pub const ALIGNOF_MAX_ALIGN_T: usize = 16;
 
+        #[cfg(feature = "jemalloc")]
         /// Converts a size and alignment to flags in the form of a `c_int`.
         #[inline]
         #[must_use]
-        pub fn layout_to_flags(size: usize, align: usize) -> c_int {
+        #[allow(clippy::incompatible_msrv)]
+        pub fn layout_to_flags(size: usize, align: usize) -> cty::c_int {
             if align <= ALIGNOF_MAX_ALIGN_T && align <= size {
                 0
             } else {

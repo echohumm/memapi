@@ -38,6 +38,7 @@ dependencies = [
 name = "memapi"
 version = "0.13.2"
 dependencies = [
+ "cty",
  "libmimalloc-sys",
  "tikv-jemalloc-sys",
 ]

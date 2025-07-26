@@ -1,17 +1,24 @@
-use crate::helpers::{nonnull_slice_from_raw_parts, nonnull_slice_len, TRUNC_LGR};
 use crate::{
+    helpers::{
+        nonnull_slice_from_raw_parts,
+        nonnull_slice_len,
+        slice_ptr_from_raw_parts,
+        TRUNC_LGR,
+        alloc_slice,
+        dealloc_n,
+        layout_or_sz_align,
+        AllocGuard,
+        SliceAllocGuard
+    },
     error::AllocError,
     grow,
-    helpers::{alloc_slice, dealloc_n, layout_or_sz_align, AllocGuard, SliceAllocGuard},
-    ralloc, shrink,
+    ralloc,
+    shrink,
     type_props::{PtrProps, SizedProps},
-    Alloc, AllocPattern,
+    Alloc,
+    AllocPattern
 };
-use core::{
-    alloc::Layout,
-    mem::MaybeUninit,
-    ptr::{self, NonNull},
-};
+use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 // TODO: slice growth and realloc with defaulting, initializing, and with a predicate
 //  F: Fn(usize) -> T.
 
@@ -159,7 +166,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
-        ptr::slice_from_raw_parts_mut(ptr.as_ptr().cast::<T>(), init).drop_in_place();
+        slice_ptr_from_raw_parts(ptr.as_ptr().cast::<T>(), init).drop_in_place();
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
@@ -177,7 +184,7 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[MaybeUninit<T>]>,
         init: usize,
     ) {
-        ptr::slice_from_raw_parts_mut(slice.as_ptr().cast::<T>(), init).drop_in_place();
+        slice_ptr_from_raw_parts(slice.as_ptr().cast::<T>(), init).drop_in_place();
         slice
             .as_ptr()
             .cast::<T>()
@@ -406,7 +413,7 @@ pub trait AllocSlice: Alloc {
 
         if new_len < init {
             let to_drop = init - new_len;
-            ptr::slice_from_raw_parts_mut(ptr.as_ptr().add(new_len), to_drop).drop_in_place();
+            slice_ptr_from_raw_parts(ptr.as_ptr().add(new_len), to_drop).drop_in_place();
         }
 
         self.shrink_raw_slice(ptr, len, new_len)
@@ -553,7 +560,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        ptr::slice_from_raw_parts_mut(ptr.as_ptr(), n).drop_in_place();
+        slice_ptr_from_raw_parts(ptr.as_ptr(), n).drop_in_place();
         self.dealloc_n(ptr, n);
     }
 }

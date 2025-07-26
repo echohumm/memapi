@@ -5,6 +5,9 @@
 A minimal, `no_std`-friendly memory allocation interface for managing raw buffers, suitable for use in collections.
 
 MSRV: 1.56.0
+Const[^1] MSRV: 1.84
+
+[^1]: certain functions are only able to be used in const contexts in higher versions of Rust.
 
 # note: this readme is ***VERY*** outdated
 
@@ -30,7 +33,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.13.1"
+memapi = "0.13.2"
 ```
 
 Or, the recommended way:
@@ -40,7 +43,7 @@ Or, the recommended way:
 allocator_api = ["memapi/nightly"]
 
 [dependencies]
-memapi = "0.13.1"
+memapi = "0.13.2"
 ```
 
 ---

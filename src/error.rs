@@ -1,10 +1,9 @@
 use alloc::alloc::Layout;
 use core::{
     error::Error,
-    fmt::{Display, Formatter, Result as FmtResult},
+    fmt::{Display, Debug, Formatter, Result as FmtResult},
     ptr::NonNull,
 };
-use core::fmt::Debug;
 
 /// Errors for allocation operations.
 #[derive(Debug, Clone, Copy)]

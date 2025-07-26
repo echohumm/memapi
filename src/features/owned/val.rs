@@ -10,9 +10,9 @@ use core::{
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     hash::{Hash, Hasher},
     marker::PhantomData,
-    mem::forget,
     ops::{Deref, DerefMut},
     ptr::NonNull,
+    mem::ManuallyDrop
 };
 
 /// A single value of type `T`, allocated using `A`.
@@ -101,8 +101,9 @@ impl<T, A: Alloc> HeapVal<T, A> {
     }
 
     pub const fn unwrap(self) -> T {
+        #[allow(clippy::incompatible_msrv)]
         let val = unsafe { self.ptr.as_ptr().read() };
-        forget(self);
+        let _ = ManuallyDrop::new(self);
         val
     }
 }
@@ -261,7 +262,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[inline]
     pub const fn into_ptr(self) -> NonNull<T> {
         let ptr = self.ptr;
-        forget(self);
+        let _ = ManuallyDrop::new(self);
         ptr
     }
 
@@ -284,7 +285,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[inline]
     pub const fn leak<'a>(self) -> &'a mut T {
         let ptr = self.ptr;
-        forget(self);
+        let _ = ManuallyDrop::new(self);
         unsafe { &mut *ptr.as_ptr() }
     }
 
@@ -292,8 +293,9 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[inline]
     pub const fn leak_with_alloc<'a>(self) -> (&'a mut T, A) {
         let ptr = self.ptr;
+        #[allow(clippy::incompatible_msrv)]
         let alloc = unsafe { (&raw const self.alloc).read() };
-        forget(self);
+        let _ = ManuallyDrop::new(self);
         (unsafe { &mut *ptr.as_ptr() }, alloc)
     }
 }

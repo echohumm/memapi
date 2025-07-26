@@ -39,6 +39,8 @@
 
 // maybedo: maybe update the readme and the docs above
 
+// #![allow(clippy::incompatible_msrv)]
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
@@ -642,6 +644,7 @@ pub(crate) enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
+    use crate::type_props::USIZE_MAX;
     #[allow(unused_imports)]
     // once again, this is used; the compiler is just stupid
     use crate::{
@@ -652,10 +655,10 @@ pub mod helpers {
     };
     use core::{
         alloc::Layout,
-        mem::{forget, transmute},
+        mem::{transmute, ManuallyDrop},
         num::NonZeroUsize,
         ops::Deref,
-        ptr::{self, eq as peq, NonNull},
+        ptr::{eq as peq, NonNull},
     };
 
     // yet again.
@@ -669,7 +672,23 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
-        unsafe { NonNull::new_unchecked(ptr::slice_from_raw_parts_mut(p.as_ptr(), len)) }
+        unsafe { NonNull::new_unchecked(slice_ptr_from_raw_parts(p.as_ptr(), len)) }
+    }
+
+    /// Creates a `*mut [T]` from a pointer and a length.
+    ///
+    /// This is a helper used in place of [`ptr::slice_from_raw_parts_mut`], which was stabilized
+    /// after this crate's MSRV.
+    ///
+    #[doc = "## Small disclaimer: you must guarantee this function will work, as Rust's fat \
+    pointers changing layout would result in this function causing UB."]
+    #[must_use]
+    #[inline]
+    pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
+        unsafe {
+            #[allow(clippy::incompatible_msrv)]
+            transmute::<(*mut T, usize), *mut [T]>((p, len))
+        }
     }
 
     /// Returns the length of a [`NonNull`] slice pointer.
@@ -679,15 +698,17 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
-        unsafe {
-            (&*ptr.as_ptr()).len()
-        }
+        unsafe { (&*ptr.as_ptr()).len() }
     }
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
     #[inline]
     pub(crate) const fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        if ptr.is_null() {
+        #[allow(clippy::blocks_in_conditions)]
+        if {
+            #[allow(clippy::incompatible_msrv)]
+            ptr.is_null()
+        } {
             Err(AllocError::AllocFailed(layout))
         } else {
             Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
@@ -799,6 +820,7 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
+        #[allow(clippy::incompatible_msrv)]
         unsafe { dangling_nonnull(layout.align()) }
     }
 
@@ -810,6 +832,7 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
+        #[allow(clippy::incompatible_msrv)]
         transmute::<NonZeroUsize, NonNull<u8>>(unsafe { NonZeroUsize::new_unchecked(align) })
     }
 
@@ -822,7 +845,7 @@ pub mod helpers {
     pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
         let (sz, align) = (T::SZ, T::ALIGN);
 
-        if sz != 0 && n > (((isize::MAX as usize) + 1) - align) / sz {
+        if sz != 0 && n > (((USIZE_MAX >> 1) + 1) - align) / sz {
             return Err((sz, align));
         }
 
@@ -879,6 +902,7 @@ pub mod helpers {
             T: Sized,
         {
             unsafe {
+                #[allow(clippy::incompatible_msrv)]
                 self.ptr.as_ptr().write(elem);
             }
         }
@@ -889,7 +913,7 @@ pub mod helpers {
         #[must_use]
         pub const fn release(self) -> NonNull<T> {
             let ptr = self.ptr;
-            forget(self);
+            let _ = ManuallyDrop::new(self);
             ptr
         }
     }
@@ -967,7 +991,7 @@ pub mod helpers {
         #[must_use]
         pub const fn release(self) -> NonNull<[T]> {
             let ret = nonnull_slice_from_raw_parts(self.ptr, self.init);
-            forget(self);
+            let _ = ManuallyDrop::new(self);
             ret
         }
 
@@ -994,6 +1018,7 @@ pub mod helpers {
         /// The caller must ensure that the slice is not at capacity. (`initialized() < full()`)
         #[inline]
         pub const unsafe fn init_unchecked(&mut self, elem: T) {
+            #[allow(clippy::incompatible_msrv)]
             self.ptr.as_ptr().add(self.init).write(elem);
             self.init += 1;
         }
@@ -1079,7 +1104,7 @@ pub mod helpers {
     impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
         fn drop(&mut self) {
             unsafe {
-                ptr::slice_from_raw_parts_mut(self.ptr.as_ptr(), self.init).drop_in_place();
+                slice_ptr_from_raw_parts(self.ptr.as_ptr(), self.init).drop_in_place();
                 self.alloc.dealloc(
                     self.ptr.cast(),
                     Layout::from_size_align_unchecked(T::SZ * self.full, align_of::<T>()),

@@ -1,4 +1,4 @@
-use crate::{error::ArithOp, AllocError};
+use crate::{error::ArithOp, type_props::USIZE_MAX, AllocError};
 use alloc::alloc::Layout;
 
 #[cfg(feature = "metadata")]
@@ -22,9 +22,10 @@ pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U
 #[must_use]
 pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
     if !align.is_power_of_two() {
-        return usize::MAX;
+        return USIZE_MAX;
     }
 
+    #[allow(clippy::incompatible_msrv)]
     let sz = layout.size();
     size_rounded_up_to_align(sz, align) - sz
 }
@@ -37,7 +38,9 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
 pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
     unsafe {
         Layout::from_size_align_unchecked(
+            #[allow(clippy::incompatible_msrv)]
             size_rounded_up_to_align(layout.size(), align),
+            #[allow(clippy::incompatible_msrv)]
             layout.align(),
         )
     }
@@ -57,8 +60,10 @@ pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
 ///   overflows.
 #[inline]
 pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usize), AllocError> {
+    #[allow(clippy::incompatible_msrv)]
     let padded = pad_layout_to_align(layout, layout.align());
     match repeat_layout_packed(padded, count) {
+        #[allow(clippy::incompatible_msrv)]
         Ok(repeated) => Ok((repeated, padded.size())),
         Err(e) => Err(e),
     }
@@ -78,14 +83,25 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
 /// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
 #[inline]
 pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
-    if let Some(size) = layout.size().checked_mul(count) {
+
+    if let Some(size) = {
+        #[allow(clippy::incompatible_msrv)]
+        layout.size().checked_mul(count)
+    } {
+        #[allow(clippy::incompatible_msrv)]
         let align = layout.align();
-        match Layout::from_size_align(size, align) {
+        #[allow(clippy::blocks_in_conditions)]
+        match {
+            #[allow(clippy::incompatible_msrv)]
+            Layout::from_size_align(size, align)
+        } {
             Ok(layout) => Ok(layout),
+            #[allow(clippy::incompatible_msrv)]
             Err(_) => Err(AllocError::LayoutError(layout.size(), layout.align())),
         }
     } else {
         Err(AllocError::ArithmeticOverflow(
+            #[allow(clippy::incompatible_msrv)]
             layout.size(),
             ArithOp::Mul,
             count,
