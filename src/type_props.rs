@@ -1,7 +1,10 @@
 #![allow(unused_qualifications)]
 
 use alloc::alloc::Layout;
-use core::ptr::NonNull;
+use core::{
+    mem::{align_of, align_of_val, size_of, size_of_val},
+    ptr::NonNull,
+};
 
 /// The maximum value of a `usize`. This is used because `usize::MAX` was stabilized in 1.43.0,
 /// which is after this crate's MSRV.

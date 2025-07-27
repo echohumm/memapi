@@ -4,10 +4,15 @@
 
 A minimal, `no_std`-friendly memory allocation interface for managing raw buffers, suitable for use in collections.
 
-MSRV: 1.56.0
-Const[^1] MSRV: 1.84
+[//]: # (MSRV: 1.63.0)
 
-[^1]: certain functions are only able to be used in const contexts in higher versions of Rust.
+[//]: # ()
+[//]: # (Jemalloc MSRV: 1.71.0)
+
+[//]: # ()
+[//]: # (Const[^1] MSRV: 1.84)
+
+[//]: # ([^1]: certain functions are only able to be used in const contexts in higher versions of Rust.)
 
 # note: this readme is ***VERY*** outdated
 

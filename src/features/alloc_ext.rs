@@ -295,8 +295,8 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                ((&raw const *data) as *mut u8).copy_to_nonoverlapping(ptr.as_ptr(), data.size());
-                NonNull::from_raw_parts(ptr, core::ptr::metadata(&raw const *data))
+                (data as *const T as *const u8).copy_to_nonoverlapping(ptr.as_ptr(), data.size());
+                NonNull::from_raw_parts(ptr, core::ptr::metadata(data as *const T))
             }),
             Err(e) => Err(e),
         }

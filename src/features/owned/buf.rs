@@ -1637,8 +1637,7 @@ impl<T, A: Alloc + alloc::alloc::Allocator> From<alloc::vec::Vec<T, A>> for Owne
     }
 }
 
-// how the fuck has it taken 6 years to stabilize vec's into_parts method? who the hell runs ts, the
-//  sloth from zootopia??
+// how has it taken 6 years to stabilize vec's into_parts method???
 //
 // #[cfg(not(feature = "nightly"))]
 // impl<T> From<alloc::vec::Vec<T>> for OwnedBuf<T> {

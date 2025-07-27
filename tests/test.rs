@@ -275,7 +275,7 @@ mod alloc_slice_tests {
         let len = 3;
         // alloc_init_slice
         let sptr = allocator
-            .alloc_init_slice::<u32, _>(
+            .alloc_slice_init::<u32, _>(
                 |p| {
                     let p = p.cast::<u32>();
                     for i in 0..len {
@@ -294,7 +294,7 @@ mod alloc_slice_tests {
         }
 
         // alloc_default_slice
-        let dptr = allocator.alloc_default_slice::<u32>(len).unwrap();
+        let dptr = allocator.alloc_slice_default::<u32>(len).unwrap();
         let dslice: &[u32] = unsafe { dptr.as_ref() };
         assert_eq!(dslice, &[0; 3]);
         unsafe {

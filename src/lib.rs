@@ -39,15 +39,14 @@
 
 // maybedo: maybe update the readme and the docs above
 
-// #![allow(clippy::incompatible_msrv)]
-
+#![allow(clippy::ptr_as_ptr)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "specialization", feature(min_specialization))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
-#![allow(unsafe_op_in_unsafe_fn, internal_features)]
+#![allow(unknown_lints, unsafe_op_in_unsafe_fn, internal_features)]
 #![deny(missing_docs)]
 
 // it is used, the compiler is just stupid
@@ -502,12 +501,12 @@ pub(crate) unsafe fn grow<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     pattern: AllocPattern<F>,
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => unsafe { grow_unchecked(a, ptr, old_layout, new_layout, pattern) },
+        Ordering::Less => grow_unchecked(a, ptr, old_layout, new_layout, pattern),
         Ordering::Equal => {
             if new_layout.align() == old_layout.align() {
                 Ok(ptr)
             } else {
-                unsafe { grow_unchecked(&a, ptr, old_layout, new_layout, pattern) }
+                grow_unchecked(&a, ptr, old_layout, new_layout, pattern)
             }
         }
         Ordering::Greater => Err(AllocError::GrowSmallerNewLayout(
@@ -536,10 +535,10 @@ pub(crate) unsafe fn shrink<A: Alloc + ?Sized>(
             if new_layout.align() == old_layout.align() {
                 Ok(ptr)
             } else {
-                unsafe { shrink_unchecked(&a, ptr, old_layout, new_layout) }
+                shrink_unchecked(&a, ptr, old_layout, new_layout)
             }
         }
-        Ordering::Greater => unsafe { shrink_unchecked(a, ptr, old_layout, new_layout) },
+        Ordering::Greater => shrink_unchecked(a, ptr, old_layout, new_layout),
     }
 }
 
@@ -572,11 +571,11 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
             unreachable!("if this is reached, somebody did something really wrong")
         }
     };
-    unsafe {
-        ptr.as_ptr()
-            .copy_to_nonoverlapping(new_ptr.as_ptr(), old_layout.size());
-        a.dealloc(ptr, old_layout);
-    }
+
+    ptr.as_ptr()
+        .copy_to_nonoverlapping(new_ptr.as_ptr(), old_layout.size());
+    a.dealloc(ptr, old_layout);
+
     Ok(new_ptr)
 }
 
@@ -596,11 +595,11 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
     new_layout: Layout,
 ) -> Result<NonNull<u8>, AllocError> {
     let new_ptr = a.alloc(new_layout)?.cast::<u8>();
-    unsafe {
-        ptr.as_ptr()
-            .copy_to_nonoverlapping(new_ptr.as_ptr(), new_layout.size());
-        a.dealloc(ptr, old_layout);
-    }
+
+    ptr.as_ptr()
+        .copy_to_nonoverlapping(new_ptr.as_ptr(), new_layout.size());
+    a.dealloc(ptr, old_layout);
+
     Ok(new_ptr)
 }
 
@@ -615,13 +614,13 @@ pub(crate) unsafe fn ralloc<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     pat: AllocPattern<F>,
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => unsafe { grow_unchecked(&a, ptr, old_layout, new_layout, pat) },
-        Ordering::Greater => unsafe { shrink_unchecked(&a, ptr, old_layout, new_layout) },
+        Ordering::Less => grow_unchecked(&a, ptr, old_layout, new_layout, pat),
+        Ordering::Greater => shrink_unchecked(&a, ptr, old_layout, new_layout),
         Ordering::Equal => {
             if new_layout.align() == old_layout.align() {
                 Ok(ptr)
             } else {
-                unsafe { grow_unchecked(&a, ptr, old_layout, new_layout, pat) }
+                grow_unchecked(&a, ptr, old_layout, new_layout, pat)
             }
         }
     }
@@ -651,9 +650,10 @@ pub mod helpers {
         type_props::{PtrProps, SizedProps, USIZE_MAX_NO_HIGH_BIT},
         Alloc,
     };
+    use const_if_macro::const_if;
     use core::{
         alloc::Layout,
-        mem::{transmute, ManuallyDrop},
+        mem::{align_of, transmute, ManuallyDrop},
         num::NonZeroUsize,
         ops::Deref,
         ptr::{eq as peq, NonNull},
@@ -693,9 +693,10 @@ pub mod helpers {
     ///
     /// This is a helper used in place of [`NonNull::len`], which was stabilized after this crate's
     /// MSRV.
+    #[const_if(not(feature = "v1_63_support"))]
     #[must_use]
     #[inline]
-    pub const fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
+    pub fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
         #[allow(clippy::incompatible_msrv)]
         unsafe {
             (&*ptr.as_ptr()).len()
@@ -704,7 +705,7 @@ pub mod helpers {
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
     #[inline]
-    pub(crate) const fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    pub(crate) fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         #[allow(clippy::blocks_in_conditions)]
         if {
             #[allow(clippy::incompatible_msrv)]
@@ -835,7 +836,7 @@ pub mod helpers {
     #[inline]
     pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
         #[allow(clippy::incompatible_msrv)]
-        transmute::<NonZeroUsize, NonNull<u8>>(unsafe { NonZeroUsize::new_unchecked(align) })
+        transmute::<NonZeroUsize, NonNull<u8>>(NonZeroUsize::new_unchecked(align))
     }
 
     /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
@@ -897,9 +898,10 @@ pub mod helpers {
         }
 
         /// Initializes the value by writing to the contained pointer.
+        #[const_if(not(feature = "v1_63_support"))]
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        pub const fn init(&self, elem: T)
+        pub fn init(&self, elem: T)
         where
             T: Sized,
         {
@@ -992,9 +994,39 @@ pub mod helpers {
         #[must_use]
         #[inline]
         pub const fn release(self) -> NonNull<[T]> {
-            let ret = nonnull_slice_from_raw_parts(self.ptr, self.init);
+            let ret = self.get_init_part();
             let _ = ManuallyDrop::new(self);
             ret
+        }
+
+        /// Release ownership of the slice without deallocating memory, returning a `NonNull<T>`
+        /// pointer to the slice's first element.
+        #[must_use]
+        #[inline]
+        pub const fn release_first(self) -> NonNull<T> {
+            let ret = self.ptr;
+            let _ = ManuallyDrop::new(self);
+            ret
+        }
+
+        /// Gets a `NonNull<[T]>` pointer to the initialized elements of the slice.
+        #[must_use]
+        #[inline]
+        pub const fn get_init_part(&self) -> NonNull<[T]> {
+            nonnull_slice_from_raw_parts(self.ptr, self.init)
+        }
+
+        /// Gets a `NonNull<[T]>` pointer to the uninitialized elements of the slice.
+        #[must_use]
+        #[inline]
+        pub const fn get_uninit_part(&self) -> NonNull<[T]> {
+            nonnull_slice_from_raw_parts(
+                #[allow(clippy::incompatible_msrv)]
+                unsafe {
+                    NonNull::new_unchecked(self.ptr.as_ptr().add(self.init))
+                },
+                self.full - self.init,
+            )
         }
 
         /// Sets the initialized element count.
@@ -1002,8 +1034,9 @@ pub mod helpers {
         /// # Safety
         ///
         /// The caller must ensure the new count is correct.
+        #[const_if(not(feature = "v1_63_support"))]
         #[inline]
-        pub const unsafe fn set_init(&mut self, init: usize) {
+        pub unsafe fn set_init(&mut self, init: usize) {
             self.init = init;
         }
 
@@ -1012,8 +1045,9 @@ pub mod helpers {
         /// # Errors
         ///
         /// Returns `Err(elem)` if the slice is at capacity.
+        #[const_if(not(feature = "v1_63_support"))]
         #[inline]
-        pub const fn init(&mut self, elem: T) -> Result<(), T> {
+        pub fn init(&mut self, elem: T) -> Result<(), T> {
             if self.init == self.full {
                 return Err(elem);
             }
@@ -1028,8 +1062,9 @@ pub mod helpers {
         /// # Safety
         ///
         /// The caller must ensure that the slice is not at capacity. (`initialized() < full()`)
+        #[const_if(not(feature = "v1_63_support"))]
         #[inline]
-        pub const unsafe fn init_unchecked(&mut self, elem: T) {
+        pub unsafe fn init_unchecked(&mut self, elem: T) {
             #[allow(clippy::incompatible_msrv)]
             self.ptr.as_ptr().add(self.init).write(elem);
             self.init += 1;

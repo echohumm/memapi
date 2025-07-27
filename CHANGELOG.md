@@ -13,7 +13,11 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - reduce inlining [size]
   - use helpers for repetitive code [size]
 - Lower const MSRV (if possible)
-- Split AllocExt into multiple traits (only in consideration)
+- Split AllocSlice/AllocExt into multiple traits (only in consideration)
+
+## Version 0.14.1 [Predicted]
+
+- Fix MSRV as best as I can
 
 ## Version 0.14.0 
 
@@ -32,10 +36,14 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - Add missing `#![allow(missing_docs)]` to `alloc_slice` module to allow compilation before docs are added
 
-### Commit 3 [Predicted]
+### Commit 3 (2025-7-27)
 
-- Add missing docs for `AllocSlice` methods
-- Small fixes (if any issues are found)
+- Add missing docs for most `AllocSlice` methods (two left)
+- Fix README mistake
+- Fix MSRV a bit (1.36 → 1.63?)
+  - requires the v1_63_support feature to be enabled, which makes a few helpers non-const
+  - it's not my fault, okay? cargo is inconsistent. clippy says the msrv is fine, but then you go to compile with the 
+    actual msrv and it fails
 
 ## Version 0.13.2 (2025-7-25)
 

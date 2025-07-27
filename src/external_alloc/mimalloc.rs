@@ -85,7 +85,7 @@ impl Alloc for MiMalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
-            || unsafe {
+            || {
                 ffi::mi_realloc_aligned(
                     ptr.as_ptr() as *mut c_void,
                     new_layout.size(),
@@ -109,7 +109,7 @@ impl Alloc for MiMalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
-            || unsafe {
+            || {
                 ffi::mi_realloc_aligned(
                     ptr.as_ptr() as *mut c_void,
                     new_layout.size(),

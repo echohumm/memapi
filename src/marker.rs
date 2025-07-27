@@ -1,3 +1,4 @@
+#[cfg(feature = "c_str")]
 use core::ffi::CStr;
 
 /// Unsafe marker trait for types that can be copied, including unsized types such as slices.
@@ -14,6 +15,7 @@ unsafe impl<T: Copy> UnsizedCopy for T {}
 unsafe impl<T: Copy> UnsizedCopy for [T] {}
 // `str == [u8]` and `u8: Copy`.
 unsafe impl UnsizedCopy for str {}
+#[cfg(feature = "c_str")]
 // `CStr == [u8]` and `u8: Copy`
 unsafe impl UnsizedCopy for CStr {}
 #[cfg(feature = "std")]

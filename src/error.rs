@@ -1,9 +1,11 @@
 use alloc::alloc::Layout;
 use core::{
-    error::Error,
     fmt::{Display, Debug, Formatter, Result as FmtResult},
     ptr::NonNull,
 };
+
+#[cfg(feature = "std")]
+use std::error::Error;
 
 /// Errors for allocation operations.
 #[derive(Debug, Clone, Copy)]
@@ -27,15 +29,13 @@ pub enum AllocError {
     ArithmeticOverflow(usize, ArithOp, usize),
     /// Any other kind of error, in the form of a string.
     Other(&'static str),
-    /// Any other kind of error, in the form of a `&dyn `[`Error`].
-    OtherErr(&'static dyn Error),
 }
 
 // manual implementations because of the `OtherErr` variant, which can't be PEq, Eq, or Hash
 impl PartialEq for AllocError {
     fn eq(&self, other: &Self) -> bool {
         use AllocError::{
-            AllocFailed, GrowSmallerNewLayout, LayoutError, Other, OtherErr, ShrinkBiggerNewLayout,
+            AllocFailed, GrowSmallerNewLayout, LayoutError, Other, ShrinkBiggerNewLayout,
             ZeroSizedLayout,
         };
 
@@ -48,7 +48,6 @@ impl PartialEq for AllocError {
                 old1 == old2 && new1 == new2
             }
             (Other(a), Other(b)) => a == b,
-            (OtherErr(_), OtherErr(_)) => true,
             _ => false,
         }
     }
@@ -79,11 +78,11 @@ impl Display for AllocError {
                 "arithmetic operation overflowed: {lhs} {op} {rhs}"
             ),
             AllocError::Other(other) => write!(f, "{other}"),
-            AllocError::OtherErr(other) => write!(f, "{other}"),
         }
     }
 }
 
+#[cfg(feature = "std")]
 impl Error for AllocError {}
 
 /// An arithmetic operation.

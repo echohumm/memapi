@@ -4,7 +4,7 @@ name = "memapi"
 version = "0.14.0"
 edition = "2018"
 readme = "README.md"
-rust-version = "1.36.0"
+rust-version = "1.63.0"
 description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/afemboylol/memapi"
@@ -19,10 +19,14 @@ features = ["full"]
 nightly = []
 std = []
 
+v1_63_support = []
+
 metadata = ["nightly"]
 sized_hierarchy = ["nightly"]
 clone_to_uninit = ["nightly"]
 specialization = ["nightly"]
+
+c_str = []
 
 all_nightly = ["metadata", "sized_hierarchy", "clone_to_uninit", "specialization"]
 
@@ -36,18 +40,18 @@ owned = ["metadata"]
 drop_for_owned = ["owned"]
 zero_drop_for_owned = ["owned"]
 
-external_alloc = ["dep:cty"]
+external_alloc = ["cty"]
+#
+#jemalloc = ["tikv-jemalloc-sys", "external_alloc"]
+#jemalloc_in_place = ["jemalloc", "resize_in_place"]
 
-jemalloc = ["dep:tikv-jemalloc-sys", "external_alloc"]
-jemalloc_in_place = ["jemalloc", "resize_in_place"]
-
-mimalloc = ["dep:libmimalloc-sys", "external_alloc"]
+mimalloc = ["libmimalloc-sys", "external_alloc"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
 
 full_no_std_no_nightly = [
     "alloc_slice",
     "stats",
-    "jemalloc_in_place",
+#    "jemalloc_in_place",
     "mimalloc_in_place",
 ]
 
@@ -82,3 +86,4 @@ path = "tests/potential_ub.rs"
 tikv-jemalloc-sys = { version = "0.6.0", optional = true }
 cty = { version = "0.2.2", optional = true }
 libmimalloc-sys = { version = "0.1.43", optional = true, features = ["extended", "cty"] }
+const_if_macro = { path = "const_if_macro" }
