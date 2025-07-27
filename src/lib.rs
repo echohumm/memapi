@@ -93,8 +93,10 @@ mod features;
 #[allow(unused_imports)]
 pub use features::*;
 
+#[cfg(feature = "external_alloc")]
 pub(crate) mod external_alloc;
 
+#[cfg(feature = "external_alloc")]
 pub use external_alloc::*;
 
 use crate::{
@@ -644,13 +646,9 @@ pub(crate) enum AllocPattern<F: Fn(usize) -> u8 + Clone> {
 
 /// Helpers which tend to be useful in other libraries as well.
 pub mod helpers {
-    use crate::type_props::USIZE_MAX;
-    #[allow(unused_imports)]
-    // once again, this is used; the compiler is just stupid
     use crate::{
         error::AllocError,
-        shrink,
-        type_props::{PtrProps, SizedProps},
+        type_props::{PtrProps, SizedProps, USIZE_MAX_NO_HIGH_BIT},
         Alloc,
     };
     use core::{
@@ -698,7 +696,10 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
-        unsafe { (&*ptr.as_ptr()).len() }
+        #[allow(clippy::incompatible_msrv)]
+        unsafe {
+            (&*ptr.as_ptr()).len()
+        }
     }
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
@@ -711,7 +712,7 @@ pub mod helpers {
         } {
             Err(AllocError::AllocFailed(layout))
         } else {
-            Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
+            Ok(unsafe { NonNull::new_unchecked(ptr as *mut u8) })
         }
     }
 
@@ -765,8 +766,7 @@ pub mod helpers {
     ) -> Result<NonNull<T>, AllocError> {
         match a.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                data.cast::<u8>()
-                    .copy_to_nonoverlapping(ptr.as_ptr(), data.size());
+                (data as *const u8).copy_to_nonoverlapping(ptr.as_ptr(), data.size());
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(data))
             }),
             Err(e) => Err(e),
@@ -821,7 +821,9 @@ pub mod helpers {
     #[inline]
     pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
         #[allow(clippy::incompatible_msrv)]
-        unsafe { dangling_nonnull(layout.align()) }
+        unsafe {
+            dangling_nonnull(layout.align())
+        }
     }
 
     /// Returns a [`NonNull`] which has the given alignment as its address.
@@ -845,7 +847,7 @@ pub mod helpers {
     pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
         let (sz, align) = (T::SZ, T::ALIGN);
 
-        if sz != 0 && n > (((USIZE_MAX >> 1) + 1) - align) / sz {
+        if sz != 0 && n > (((USIZE_MAX_NO_HIGH_BIT) + 1) - align) / sz {
             return Err((sz, align));
         }
 
@@ -987,12 +989,22 @@ pub mod helpers {
         }
 
         /// Release ownership of the slice without deallocating memory.
-        #[inline]
         #[must_use]
+        #[inline]
         pub const fn release(self) -> NonNull<[T]> {
             let ret = nonnull_slice_from_raw_parts(self.ptr, self.init);
             let _ = ManuallyDrop::new(self);
             ret
+        }
+
+        /// Sets the initialized element count.
+        ///
+        /// # Safety
+        ///
+        /// The caller must ensure the new count is correct.
+        #[inline]
+        pub const unsafe fn set_init(&mut self, init: usize) {
+            self.init = init;
         }
 
         /// Initializes the next element of the slice with `elem`.

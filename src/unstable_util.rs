@@ -6,7 +6,7 @@ use alloc::alloc::Layout;
 #[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mut U {
-    core::ptr::from_raw_parts_mut(ptr.cast::<()>(), core::ptr::metadata(meta))
+    core::ptr::from_raw_parts_mut(ptr as *mut (), core::ptr::metadata(meta))
 }
 
 #[cfg(feature = "metadata")]
@@ -14,7 +14,7 @@ pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mu
 #[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U) -> *const U {
-    core::ptr::from_raw_parts(ptr.cast::<()>(), core::ptr::metadata(meta))
+    core::ptr::from_raw_parts(ptr as *const (), core::ptr::metadata(meta))
 }
 
 /// Alternative to [`Layout::padding_needed_for`], because it's unstable.

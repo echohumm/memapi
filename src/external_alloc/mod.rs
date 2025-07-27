@@ -1,5 +1,6 @@
 use crate::{error::AllocError, helpers::null_q};
-use core::{alloc::Layout, ffi::c_void, ptr::NonNull};
+use core::{alloc::Layout, ptr::NonNull};
+use cty::c_void;
 
 #[cfg(feature = "jemalloc")]
 /// Module for [jemalloc](https://jemalloc.net/) support.
@@ -50,10 +51,8 @@ pub mod ffi {
     pub mod jem {
         #![allow(unexpected_cfgs)]
 
-        use core::{
-            alloc::Layout,
-            ffi::c_void,
-        };
+        use core::alloc::Layout;
+        use cty::c_void;
 
         #[cfg(any(
             target_arch = "arm",
@@ -107,7 +106,7 @@ pub mod ffi {
         #[inline]
         #[must_use]
         pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
-            malloc_usable_size(ptr.cast())
+            malloc_usable_size(ptr as *const c_void) as usize
         }
 
         #[cfg_attr(miri, track_caller)]
@@ -131,6 +130,8 @@ pub mod ffi {
     #[cfg(feature = "mimalloc")]
     /// Bindings from `mimalloc-sys`.
     pub mod mim {
+        use cty::c_void;
+
         /// Returns the usable size of the allocation pointed to by ptr.
         ///
         /// # Safety
@@ -139,7 +140,7 @@ pub mod ffi {
         #[inline]
         #[must_use]
         pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
-            mi_usable_size(ptr.cast())
+            mi_usable_size(ptr as *const c_void)
         }
 
         pub use libmimalloc_sys::*;

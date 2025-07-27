@@ -9,6 +9,7 @@ use core::{
     alloc::{GlobalAlloc, Layout},
     ptr::NonNull,
 };
+use cty::c_void;
 
 macro_rules! assume {
     ($e:expr) => {
@@ -30,12 +31,11 @@ unsafe impl GlobalAlloc for Jemalloc {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         assume!(layout.size() != 0);
         let flags = ffi::layout_to_flags(layout.size(), layout.align());
-        if flags == 0 {
+        (if flags == 0 {
             ffi::malloc(layout.size())
         } else {
             ffi::mallocx(layout.size(), flags)
-        }
-        .cast()
+        }) as *mut u8
     }
 
     #[cfg_attr(miri, track_caller)]
@@ -44,7 +44,7 @@ unsafe impl GlobalAlloc for Jemalloc {
         assume!(!ptr.is_null());
         assume!(layout.size() != 0);
         ffi::sdallocx(
-            ptr.cast(),
+            ptr as *mut c_void,
             layout.size(),
             ffi::layout_to_flags(layout.size(), layout.align()),
         );
@@ -55,12 +55,11 @@ unsafe impl GlobalAlloc for Jemalloc {
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
         assume!(layout.size() != 0);
         let flags = ffi::layout_to_flags(layout.size(), layout.align());
-        if flags == 0 {
+        (if flags == 0 {
             ffi::calloc(1, layout.size())
         } else {
             ffi::mallocx(layout.size(), flags | ffi::MALLOCX_ZERO)
-        }
-        .cast()
+        }) as *mut u8
     }
 
     #[inline]
@@ -68,12 +67,11 @@ unsafe impl GlobalAlloc for Jemalloc {
         assume!(layout.size() != 0);
         assume!(new_size != 0);
         let flags = ffi::layout_to_flags(new_size, layout.align());
-        if flags == 0 {
-            ffi::realloc(ptr.cast(), new_size)
+        (if flags == 0 {
+            ffi::realloc(ptr as *mut c_void, new_size)
         } else {
-            ffi::rallocx(ptr.cast(), new_size, flags)
-        }
-        .cast()
+            ffi::rallocx(ptr as *mut c_void, new_size, flags)
+        }) as *mut u8
     }
 }
 
@@ -115,7 +113,7 @@ impl Alloc for Jemalloc {
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if layout.size() != 0 {
             ffi::sdallocx(
-                ptr.as_ptr().cast(),
+                ptr.as_ptr() as *mut c_void,
                 layout.size(),
                 ffi::layout_to_flags(layout.size(), layout.align()),
             );
@@ -131,7 +129,7 @@ impl Alloc for Jemalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
-            || unsafe { ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout) },
+            || unsafe { ffi::raw_ralloc(ptr.as_ptr() as *mut c_void, old_layout, new_layout) },
             ptr,
             old_layout,
             new_layout,
@@ -149,7 +147,7 @@ impl Alloc for Jemalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
-            || unsafe { ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout) },
+            || unsafe { ffi::raw_ralloc(ptr.as_ptr() as *mut c_void, old_layout, new_layout) },
             ptr,
             old_layout,
             new_layout,
@@ -167,7 +165,7 @@ impl Alloc for Jemalloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    /// - [`AllocError::Other`]`("unsupported operation: attempted to reallocate with a different 
+    /// - [`AllocError::Other`]`("unsupported operation: attempted to reallocate with a different
     ///   alignment")` if `new_layout.align() != old_layout.align()`.
     ///
     /// # Safety
@@ -186,7 +184,7 @@ impl Alloc for Jemalloc {
             return Err(AllocError::Other(REALLOC_DIFF_ALIGN));
         }
         null_q(
-            ffi::raw_ralloc(ptr.as_ptr().cast(), old_layout, new_layout),
+            ffi::raw_ralloc(ptr.as_ptr() as *mut c_void, old_layout, new_layout),
             new_layout,
         )
     }

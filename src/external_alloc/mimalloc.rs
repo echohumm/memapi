@@ -6,9 +6,9 @@ use crate::{
 };
 use core::{
     alloc::{GlobalAlloc, Layout},
-    ffi::c_void,
     ptr::NonNull,
 };
+use cty::c_void;
 
 /// Handle to the mimalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`](Alloc).
@@ -19,25 +19,25 @@ unsafe impl GlobalAlloc for MiMalloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ffi::mi_malloc_aligned(layout.size(), layout.align()).cast()
+        ffi::mi_malloc_aligned(layout.size(), layout.align()) as *mut u8
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        ffi::mi_free_size_aligned(ptr.cast(), layout.size(), layout.align());
+        ffi::mi_free_size_aligned(ptr as *mut c_void, layout.size(), layout.align());
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        ffi::mi_zalloc_aligned(layout.size(), layout.align()).cast()
+        ffi::mi_zalloc_aligned(layout.size(), layout.align()) as *mut u8
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        ffi::mi_realloc_aligned(ptr.cast(), new_size, layout.align()).cast()
+        ffi::mi_realloc_aligned(ptr as *mut c_void, new_size, layout.align()) as *mut u8
     }
 }
 
@@ -49,7 +49,7 @@ fn zsl_check_alloc(
 ) -> Result<NonNull<u8>, AllocError> {
     zsl_check(layout, |layout: Layout| {
         null_q(
-            unsafe { alloc(layout.size(), layout.align()) }.cast::<u8>(),
+            unsafe { alloc(layout.size(), layout.align()) } as *mut u8,
             layout,
         )
     })
@@ -72,7 +72,7 @@ impl Alloc for MiMalloc {
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if layout.size() != 0 {
-            ffi::mi_free_size_aligned(ptr.as_ptr().cast(), layout.size(), layout.align());
+            ffi::mi_free_size_aligned(ptr.as_ptr() as *mut c_void, layout.size(), layout.align());
         }
     }
 
@@ -86,7 +86,11 @@ impl Alloc for MiMalloc {
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
             || unsafe {
-                ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align())
+                ffi::mi_realloc_aligned(
+                    ptr.as_ptr() as *mut c_void,
+                    new_layout.size(),
+                    new_layout.align(),
+                )
             },
             ptr,
             old_layout,
@@ -106,7 +110,11 @@ impl Alloc for MiMalloc {
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
             || unsafe {
-                ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align())
+                ffi::mi_realloc_aligned(
+                    ptr.as_ptr() as *mut c_void,
+                    new_layout.size(),
+                    new_layout.align(),
+                )
             },
             ptr,
             old_layout,
@@ -125,7 +133,11 @@ impl Alloc for MiMalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         null_q(
-            ffi::mi_realloc_aligned(ptr.as_ptr().cast(), new_layout.size(), new_layout.align()),
+            ffi::mi_realloc_aligned(
+                ptr.as_ptr() as *mut c_void,
+                new_layout.size(),
+                new_layout.align(),
+            ),
             new_layout,
         )
     }

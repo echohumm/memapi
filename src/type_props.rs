@@ -1,15 +1,14 @@
 #![allow(unused_qualifications)]
 
 use alloc::alloc::Layout;
-use core::{
-    ptr::{
-        NonNull,
-    }
-};
+use core::ptr::NonNull;
 
-/// The maximum value of a `usize`. This exists as `usize::MAX` was stabilized in 1.43.0, which is 
-/// after this crate's MSRV.
+/// The maximum value of a `usize`. This is used because `usize::MAX` was stabilized in 1.43.0,
+/// which is after this crate's MSRV.
 pub const USIZE_MAX: usize = !0;
+
+/// The maximum value of a `usize` with no high bit.
+pub const USIZE_MAX_NO_HIGH_BIT: usize = USIZE_MAX >> 1;
 
 /// A trait containing constants for sized types.
 pub trait SizedProps: Sized {
@@ -26,7 +25,7 @@ pub trait SizedProps: Sized {
     /// The largest safe length for a `[Self]`.
     const MAX_SLICE_LEN: usize = match Self::SZ {
         0 => USIZE_MAX,
-        sz => (USIZE_MAX >> 1) / sz,
+        sz => (USIZE_MAX_NO_HIGH_BIT) / sz,
     };
 }
 
@@ -79,7 +78,7 @@ pub trait PtrProps<T: ?Sized> {
     unsafe fn max_slice_len(&self) -> usize {
         match self.size() {
             0 => USIZE_MAX,
-            sz => (USIZE_MAX >> 1) / sz,
+            sz => (USIZE_MAX_NO_HIGH_BIT) / sz,
         }
     }
 }
@@ -192,5 +191,5 @@ pub const fn varsized_dangling_ptr_mut<T: ?Sized + VarSized>() -> *mut T {
 #[must_use]
 #[inline]
 pub const fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *const T {
-    core::ptr::from_raw_parts(T::ALIGN as *mut (), 0)
+    core::ptr::from_raw_parts(T::ALIGN as *const (), 0)
 }

@@ -629,11 +629,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         let src = slice.as_slice_ptr().as_ptr();
         let len = slice.init;
         // write in the elements
-        src.cast::<T>()
+        (src as *const T)
             .copy_to_nonoverlapping(self.buf.as_ptr().add(idx), len);
         // deallocate the original buffer
         slice.alloc.dealloc(
-            NonNull::new_unchecked(src.cast()),
+            NonNull::new_unchecked(src as *mut u8),
             Layout::from_size_align_unchecked(T::SZ * slice.size, align_of::<T>()),
         );
         // noop but stops the non-consumed warning.
@@ -1371,7 +1371,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     pub fn into_buf(self) -> Buf<'static, T> {
         let (buf, init, size, _) = self.into_raw_parts();
         Buf {
-            buf: unsafe { slice::from_raw_parts(buf.as_ptr().cast(), size) },
+            buf: unsafe { slice::from_raw_parts(buf.as_ptr() as *const MaybeUninit<T>, size) },
             init,
         }
     }
@@ -1612,6 +1612,7 @@ impl<T: Copy, A: Alloc + Default, const N: usize> From<&mut [T; N]> for OwnedBuf
 }
 
 #[cfg(feature = "nightly")]
+//noinspection RsUnnecessaryQualifications
 impl<T, A: Alloc + alloc::alloc::Allocator> From<OwnedBuf<T, A>> for alloc::vec::Vec<T, A> {
     fn from(owned: OwnedBuf<T, A>) -> alloc::vec::Vec<T, A> {
         let (buf, init, size, a) = owned.into_raw_parts();
@@ -1619,6 +1620,7 @@ impl<T, A: Alloc + alloc::alloc::Allocator> From<OwnedBuf<T, A>> for alloc::vec:
     }
 }
 #[cfg(not(feature = "nightly"))]
+//noinspection RsUnnecessaryQualifications
 impl<T> From<OwnedBuf<T>> for alloc::vec::Vec<T> {
     fn from(owned: OwnedBuf<T>) -> alloc::vec::Vec<T> {
         let (buf, init, size, _) = owned.into_raw_parts();
@@ -1627,6 +1629,7 @@ impl<T> From<OwnedBuf<T>> for alloc::vec::Vec<T> {
 }
 
 #[cfg(feature = "nightly")]
+//noinspection RsUnnecessaryQualifications
 impl<T, A: Alloc + alloc::alloc::Allocator> From<alloc::vec::Vec<T, A>> for OwnedBuf<T, A> {
     fn from(vec: alloc::vec::Vec<T, A>) -> OwnedBuf<T, A> {
         let (buf, init, size, a) = vec.into_parts_with_alloc();
@@ -2057,9 +2060,9 @@ impl<T> Buf<'_, T> {
     ) -> Result<OwnedBuf<T, A>, AllocError> {
         let (buf, _, size, alloc) = OwnedBuf::new_in(self.buf.len(), alloc)?.into_raw_parts();
         // why was this a loop before??
-        self.buf
+        (self.buf
             .as_ptr()
-            .cast::<T>()
+            as *const T)
             .copy_to_nonoverlapping(buf.as_ptr(), self.init);
         Ok(OwnedBuf {
             buf,
@@ -2096,7 +2099,10 @@ impl<T> Buf<'_, T> {
                 #[allow(clippy::incompatible_msrv)]
                 NonNull::new_unchecked(self.buf.as_ptr().add(self.init) as *mut MaybeUninit<T>)
             },
-            self.buf.len() - self.init,
+            #[allow(clippy::incompatible_msrv)]
+            {
+                self.buf.len() - self.init
+            }
         )
     }
 }
@@ -2144,6 +2150,7 @@ impl<T> Buf<'static, T> {
         OwnedBuf {
             buf: NonNull::new_unchecked((&raw const *self.buf) as *mut T),
             init,
+            #[allow(clippy::incompatible_msrv)]
             size: elems.len(),
             alloc,
             _marker: PhantomData,

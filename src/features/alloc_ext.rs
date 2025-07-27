@@ -91,7 +91,7 @@ pub trait AllocExt: Alloc {
                     NonNull::<T>::from_raw_parts(ptr, core::ptr::metadata(data)),
                     self,
                 );
-                data.clone_to_uninit(guard.as_ptr().cast());
+                data.clone_to_uninit(guard.as_ptr() as *mut u8);
                 guard.release()
             }),
             Err(e) => Err(e),
@@ -105,17 +105,24 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
+    /// 
+    /// # Safety
+    /// 
+    // we can't drop the value on panic because we don't have the metadata feature to construct the 
+    // fat pointer which the guard would use to drop it.
+    /// The caller must ensure the cloning operation will never panic or that it is safe to skip 
+    /// dropping the cloned value.
     #[track_caller]
     #[inline]
-    fn alloc_clone_to<T: core::clone::CloneToUninit>(
+    unsafe fn alloc_clone_to<T: core::clone::CloneToUninit + ?Sized>(
         &self,
         data: &T,
-    ) -> Result<NonNull<T>, AllocError> {
+    ) -> Result<NonNull<u8>, AllocError> {
         match self.alloc(unsafe { data.layout() }) {
             Ok(ptr) => Ok(unsafe {
                 let guard = AllocGuard::new(ptr, self);
                 data.clone_to_uninit(guard.as_ptr());
-                guard.release().cast()
+                guard.release()
             }),
             Err(e) => Err(e),
         }
@@ -215,7 +222,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr.as_ptr().cast::<u8>().write_bytes(0, ptr.size());
+        (ptr.as_ptr() as *mut u8).write_bytes(0, ptr.size());
         self.dealloc_typed(ptr);
     }
 
@@ -288,9 +295,7 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                (&raw const *data)
-                    .cast::<u8>()
-                    .copy_to_nonoverlapping(ptr.as_ptr(), data.size());
+                ((&raw const *data) as *mut u8).copy_to_nonoverlapping(ptr.as_ptr(), data.size());
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(&raw const *data))
             }),
             Err(e) => Err(e),

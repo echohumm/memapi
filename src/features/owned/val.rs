@@ -15,6 +15,7 @@ use core::{
     mem::ManuallyDrop
 };
 
+//noinspection RsUnnecessaryQualifications
 /// A single value of type `T`, allocated using `A`.
 ///
 /// This functions similarly to a [`Box`](alloc::boxed::Box).
@@ -254,7 +255,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     unsafe fn reset_zero(&self) {
         self.ptr.as_ptr().drop_in_place();
         let layout = self.ptr.layout();
-        self.ptr.as_ptr().cast::<u8>().write_bytes(0, layout.size());
+        (self.ptr.as_ptr() as *mut u8).write_bytes(0, layout.size());
         self.alloc.dealloc(self.ptr.cast(), layout);
     }
 
