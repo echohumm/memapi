@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use crate::{
     error::AllocError,
     grow,
@@ -925,8 +927,8 @@ pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
-    /// Reallocates a slice to a new length given the pointer to its first element, current length, and
-    /// requested length, filling any newly allocated bytes with `n`.
+    /// Reallocates a slice to a new length given the pointer to its first element, current length,
+    /// and requested length, filling any newly allocated bytes with `n`.
     ///
     /// On grow, preserves all existing elements and truncates to `new_len` elements on shrink.
     ///

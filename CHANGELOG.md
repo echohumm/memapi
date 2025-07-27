@@ -28,7 +28,11 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   data
 - Added `USIZE_MAX_NO_HIGH_BIT` to `type_props` to avoid repetition
 
-### Commit 2 [Predicted]
+### Commit 2 (2025-7-26)
+
+- Add missing `#![allow(missing_docs)]` to `alloc_slice` module to allow compilation before docs are added
+
+### Commit 3 [Predicted]
 
 - Add missing docs for `AllocSlice` methods
 - Small fixes (if any issues are found)
