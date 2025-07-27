@@ -19,7 +19,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - Fix MSRV as best as I can
 
-## Version 0.14.0 
+## Version 0.14.0 [Not published to crates.io, skipping to 0.14.1 for users]
 
 ### Commit 1 (2025-7-26)
 
