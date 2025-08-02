@@ -9,7 +9,7 @@ pub mod alloc_slice;
 pub mod in_place;
 
 #[cfg(feature = "owned")]
-/// An owned buffer type.
+/// Owned data types.
 pub mod owned;
 #[cfg(feature = "stats")]
 /// Allocation statistic gathering and reporting.

@@ -83,7 +83,6 @@ pub mod ffi {
         /// Converts a size and alignment to flags in the form of a `c_int`.
         #[inline]
         #[must_use]
-        #[allow(clippy::incompatible_msrv)]
         pub fn layout_to_flags(size: usize, align: usize) -> cty::c_int {
             if align <= ALIGNOF_MAX_ALIGN_T && align <= size {
                 0

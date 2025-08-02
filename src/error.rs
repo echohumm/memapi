@@ -4,9 +4,6 @@ use core::{
     ptr::NonNull,
 };
 
-#[cfg(feature = "std")]
-use std::error::Error;
-
 /// Errors for allocation operations.
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -83,7 +80,7 @@ impl Display for AllocError {
 }
 
 #[cfg(feature = "std")]
-impl Error for AllocError {}
+impl std::error::Error for AllocError {}
 
 /// An arithmetic operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

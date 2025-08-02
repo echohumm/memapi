@@ -6,12 +6,8 @@ use core::{
     ptr::NonNull,
 };
 
-/// The maximum value of a `usize`. This is used because `usize::MAX` was stabilized in 1.43.0,
-/// which is after this crate's MSRV.
-pub const USIZE_MAX: usize = !0;
-
 /// The maximum value of a `usize` with no high bit.
-pub const USIZE_MAX_NO_HIGH_BIT: usize = USIZE_MAX >> 1;
+pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
 
 /// A trait containing constants for sized types.
 pub trait SizedProps: Sized {
@@ -27,8 +23,8 @@ pub trait SizedProps: Sized {
 
     /// The largest safe length for a `[Self]`.
     const MAX_SLICE_LEN: usize = match Self::SZ {
-        0 => USIZE_MAX,
-        sz => (USIZE_MAX_NO_HIGH_BIT) / sz,
+        0 => usize::MAX,
+        sz => USIZE_MAX_NO_HIGH_BIT / sz,
     };
 }
 
@@ -80,8 +76,8 @@ pub trait PtrProps<T: ?Sized> {
     // this has almost no real use case as far as i can tell
     unsafe fn max_slice_len(&self) -> usize {
         match self.size() {
-            0 => USIZE_MAX,
-            sz => (USIZE_MAX_NO_HIGH_BIT) / sz,
+            0 => usize::MAX,
+            sz => USIZE_MAX_NO_HIGH_BIT / sz,
         }
     }
 }
@@ -132,6 +128,19 @@ impl_ptr_props!(
     alloc::sync::Arc<T>
 );
 
+#[cfg(not(feature = "metadata"))]
+/// Trait for unsized types whose metadata is `usize` (e.g., slices, `str`).
+///
+/// # Safety
+///
+/// The implementor guarantees that the `ALIGN` constant accurately represents the
+/// alignment requirement of the type in any safe context.
+pub unsafe trait VarSized {
+    /// The alignment of the type.
+    const ALIGN: usize;
+}
+
+
 #[cfg(feature = "metadata")]
 /// Trait for unsized types whose metadata is `usize` (e.g., slices, `str`).
 ///
@@ -144,27 +153,25 @@ pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
     const ALIGN: usize;
 }
 
-#[cfg(feature = "metadata")]
 unsafe impl VarSized for str {
     const ALIGN: usize = u8::ALIGN;
 }
 
-#[cfg(feature = "metadata")]
+#[cfg(feature = "c_str")]
 unsafe impl VarSized for core::ffi::CStr {
     const ALIGN: usize = u8::ALIGN;
 }
-#[cfg(all(feature = "std", feature = "metadata"))]
+#[cfg(feature = "std")]
 // `OsStr == [u8]` and `[u8]: UnsizedCopy`
 unsafe impl VarSized for std::ffi::OsStr {
     const ALIGN: usize = u8::ALIGN;
 }
 
-#[cfg(all(feature = "std", feature = "metadata"))]
+#[cfg(feature = "std")]
 unsafe impl VarSized for std::path::Path {
     const ALIGN: usize = u8::ALIGN;
 }
 
-#[cfg(feature = "metadata")]
 unsafe impl<T> VarSized for [T] {
     const ALIGN: usize = T::ALIGN;
 }

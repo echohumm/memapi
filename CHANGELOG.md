@@ -2,6 +2,19 @@
 
 _no versions before 0.13.2 have a changelog as I started the changelog in that version and have not yet backtracked._
 
+## Table of Contents
+
+- [0.15.0 Predicted](#0150-predicted)
+- [Version 0.14.1](#version-0141)
+  - [Commit 3 Predicted](#commit-3-predicted)
+  - [Commit 2 Predicted](#commit-2-predicted)
+  - [Commit 1 (2025-8-01)](#commit-1-2025-8-01)
+- [Version 0.14.0](#version-0140-not-published-to-cratesio-skipping-to-0141-for-users)
+  - [Commit 3 (2025-7-27)](#commit-3-2025-7-27)
+  - [Commit 2 (2025-7-26)](#commit-2-2025-7-26)
+  - [Commit 1 (2025-7-26)](#commit-1-2025-7-26)
+- [Version 0.13.2](#version-0132-2025-7-25)
+
 ## 0.15.0 [Predicted]
 
 - Proper tests for many untested methods
@@ -15,11 +28,40 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Lower const MSRV (if possible)
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
-## Version 0.14.1 [Predicted]
+## Version 0.14.1
 
-- Fix MSRV as best as I can
+## Commit 3 [Predicted]
+
+- Finally make `owned` stuff use the right MSRV and the `extra_const` feature
+
+## Commit 2 [Predicted]
+
+- Debloat the primary surfaces
+- Implement some small TODOs (just search for them pls i'm too tired to list them here)
+- Remove stuff which supports older versions than the MSRV but adds bloat
+
+## Commit 1 (2025-8-01)
+
+- Fix MSRV as best as I can (1.63.0 → 1.61.0), some stuff may unnecessarily support older versions
+- Add remaining docs to AllocSlice
+- Add `extra_const` feature which makes some more methods `const` at the cost of raising the MSRV (1.61.0 -→ 1.83.0)
+- Remove `v1_61` feature
+- Generally improve feature configuration
 
 ## Version 0.14.0 [Not published to crates.io, skipping to 0.14.1 for users]
+
+### Commit 3 (2025-7-27)
+
+- Add missing docs for most `AllocSlice` methods (two left)
+- Fix README mistake
+- Fix MSRV a bit (1.36 → 1.63?)
+    - requires the v1_63 feature to be enabled, which makes a few helpers non-const
+    - it's not my fault, okay? cargo is inconsistent. clippy says the msrv is fine, but then you go to compile with the
+      actual msrv and it fails
+
+### Commit 2 (2025-7-26)
+
+- Add missing `#![allow(missing_docs)]` to `alloc_slice` module to allow compilation before docs are added
 
 ### Commit 1 (2025-7-26)
 
@@ -31,19 +73,6 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Added `set_init` to `helpers::AllocSliceGuard` to set the initialized element count for use with partially initialized
   data
 - Added `USIZE_MAX_NO_HIGH_BIT` to `type_props` to avoid repetition
-
-### Commit 2 (2025-7-26)
-
-- Add missing `#![allow(missing_docs)]` to `alloc_slice` module to allow compilation before docs are added
-
-### Commit 3 (2025-7-27)
-
-- Add missing docs for most `AllocSlice` methods (two left)
-- Fix README mistake
-- Fix MSRV a bit (1.36 → 1.63?)
-  - requires the v1_63_support feature to be enabled, which makes a few helpers non-const
-  - it's not my fault, okay? cargo is inconsistent. clippy says the msrv is fine, but then you go to compile with the 
-    actual msrv and it fails
 
 ## Version 0.13.2 (2025-7-25)
 

@@ -1,18 +1,15 @@
 #![allow(clippy::missing_errors_doc, missing_docs)]
 
-use crate::{
-    error::AllocError, helpers::alloc_write, type_props::varsized_dangling_nonnull,
-    type_props::PtrProps, Alloc, DefaultAlloc,
-};
+use crate::{error::AllocError, helpers::alloc_write, type_props::PtrProps, Alloc, DefaultAlloc};
 use core::{
     borrow::{Borrow, BorrowMut},
     cmp::Ordering,
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     hash::{Hash, Hasher},
     marker::PhantomData,
+    mem::ManuallyDrop,
     ops::{Deref, DerefMut},
-    ptr::NonNull,
-    mem::ManuallyDrop
+    ptr::{self, NonNull},
 };
 
 //noinspection RsUnnecessaryQualifications
@@ -42,6 +39,7 @@ impl<T> HeapVal<T> {
 }
 
 impl<T: ?Sized> HeapVal<T> {
+    #[cfg(feature = "metadata")]
     /// Constructs a new [`HeapVal`] by copying from a reference.
     ///
     /// # Errors
@@ -56,6 +54,7 @@ impl<T: ?Sized> HeapVal<T> {
         HeapVal::copy_from_ref_in(val, DefaultAlloc)
     }
 
+    #[cfg(feature = "metadata")]
     /// Constructs a new [`HeapVal`] by copying from a raw pointer.
     ///
     /// # Errors
@@ -102,7 +101,6 @@ impl<T, A: Alloc> HeapVal<T, A> {
     }
 
     pub const fn unwrap(self) -> T {
-        #[allow(clippy::incompatible_msrv)]
         let val = unsafe { self.ptr.as_ptr().read() };
         let _ = ManuallyDrop::new(self);
         val
@@ -135,6 +133,7 @@ impl<T, A: Alloc + Default> From<T> for HeapVal<T, A> {
 }
 
 impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
+    #[cfg(feature = "metadata")]
     /// Constructs a [`HeapVal`] by allocating using the given allocator and copying from a
     /// reference.
     ///
@@ -150,6 +149,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
         unsafe { HeapVal::copy_from_ref_in_unchecked(val, alloc) }
     }
 
+    #[cfg(feature = "metadata")]
     /// Constructs a [`HeapVal`] by allocating using the given allocator and copying from a
     /// reference. This method has no `T: `[`crate::marker::UnsizedCopy`] bound.
     ///
@@ -169,6 +169,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
         HeapVal::copy_from_ptr_in_unchecked(val, alloc)
     }
 
+    #[cfg(feature = "metadata")]
     /// Constructs a [`HeapVal`] by allocating using the given allocator and copying from a
     /// raw pointer.
     ///
@@ -187,6 +188,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
         HeapVal::copy_from_ptr_in_unchecked(val, alloc)
     }
 
+    #[cfg(feature = "metadata")]
     /// Constructs a [`HeapVal`] by allocating using the given allocator and copying from a
     /// reference. This method has no `T: `[`crate::marker::UnsizedCopy`] bound.
     ///
@@ -294,8 +296,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[inline]
     pub const fn leak_with_alloc<'a>(self) -> (&'a mut T, A) {
         let ptr = self.ptr;
-        #[allow(clippy::incompatible_msrv)]
-        let alloc = unsafe { (&raw const self.alloc).read() };
+        let alloc = unsafe { ptr::addr_of!(self.alloc).read() };
         let _ = ManuallyDrop::new(self);
         (unsafe { &mut *ptr.as_ptr() }, alloc)
     }
@@ -307,9 +308,15 @@ impl<T, A: Alloc + Default> Default for HeapVal<[T], A> {
     }
 }
 
+#[cfg(feature = "metadata")]
 impl<A: Alloc + Default> Default for HeapVal<str, A> {
     fn default() -> HeapVal<str, A> {
-        unsafe { HeapVal::from_raw_in(varsized_dangling_nonnull::<str>(), A::default()) }
+        unsafe {
+            HeapVal::from_raw_in(
+                crate::type_props::varsized_dangling_nonnull::<str>(),
+                A::default(),
+            )
+        }
     }
 }
 

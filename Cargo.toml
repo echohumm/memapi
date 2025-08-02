@@ -1,10 +1,10 @@
 [package]
 name = "memapi"
 # major will probably always be 0
-version = "0.14.0"
-edition = "2018"
+version = "0.14.1"
+edition = "2021"
 readme = "README.md"
-rust-version = "1.63.0"
+rust-version = "1.61.0"
 description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/afemboylol/memapi"
@@ -15,16 +15,22 @@ exclude = ["/tests", "/bin", "testall.py", "src/expanded"]
 [package.metadata.docs.rs]
 features = ["full"]
 
+[badges]
+maintenance = { status = "actively-developed" }
+docsrs = { status = "passing" }
+
+# TODO: docs for features
+
 [features]
 nightly = []
 std = []
-
-v1_63_support = []
 
 metadata = ["nightly"]
 sized_hierarchy = ["nightly"]
 clone_to_uninit = ["nightly"]
 specialization = ["nightly"]
+
+extra_const = []
 
 c_str = []
 
@@ -35,24 +41,32 @@ alloc_slice = ["alloc_ext"]
 resize_in_place = []
 
 stats = []
-owned = ["metadata"]
+owned = []
 
 drop_for_owned = ["owned"]
 zero_drop_for_owned = ["owned"]
 
 external_alloc = ["cty"]
-#
-#jemalloc = ["tikv-jemalloc-sys", "external_alloc"]
-#jemalloc_in_place = ["jemalloc", "resize_in_place"]
+
+jemalloc = ["tikv-jemalloc-sys", "external_alloc"]
+jemalloc_in_place = ["jemalloc", "resize_in_place"]
 
 mimalloc = ["libmimalloc-sys", "external_alloc"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
 
-full_no_std_no_nightly = [
+full_no_extern_no_nightly_no_std = [
     "alloc_slice",
     "stats",
-#    "jemalloc_in_place",
+    "owned",
+    "extra_const",
+    "c_str",
+]
+
+full_no_std_no_nightly = [
+    "jemalloc_in_place",
     "mimalloc_in_place",
+
+    "full_no_extern_no_nightly_no_std",
 ]
 
 full_no_nightly = [
@@ -72,7 +86,7 @@ full = [
     "full_no_std"
 ]
 
-default = ["full_no_nightly"]
+default = ["c_str", "extra_const"]
 
 [[test]]
 name = "test"
@@ -86,4 +100,3 @@ path = "tests/potential_ub.rs"
 tikv-jemalloc-sys = { version = "0.6.0", optional = true }
 cty = { version = "0.2.2", optional = true }
 libmimalloc-sys = { version = "0.1.43", optional = true, features = ["extended", "cty"] }
-const_if_macro = { path = "const_if_macro" }

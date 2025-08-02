@@ -253,7 +253,6 @@ impl<W: std::io::Write> IOLog<W> {
     #[inline]
     pub const fn new(buf: W) -> IOLog<W> {
         IOLog {
-            #[allow(clippy::incompatible_msrv)]
             buf: std::sync::Mutex::new(buf),
             total: AtomicUsize::new(0),
         }
@@ -266,7 +265,6 @@ impl<W: fmt::Write> FmtLog<W> {
     #[inline]
     pub const fn new(buf: W) -> FmtLog<W> {
         FmtLog {
-            #[allow(clippy::incompatible_msrv)]
             buf: std::sync::Mutex::new(buf),
             total: AtomicUsize::new(0),
         }
@@ -292,7 +290,6 @@ impl StatCollectingLog {
     #[inline]
     pub const fn new() -> StatCollectingLog {
         StatCollectingLog {
-            #[allow(clippy::incompatible_msrv)]
             results: std::sync::Mutex::new(Vec::new()),
             total: AtomicUsize::new(0),
         }

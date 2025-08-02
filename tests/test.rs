@@ -1,11 +1,8 @@
 use core::alloc::Layout;
 use memapi::{
-    unstable_util::{
-        pad_layout_for, pad_layout_to_align, repeat_layout, repeat_layout_packed,
-    },
     error::AllocError,
-    Alloc,
-    DefaultAlloc
+    unstable_util::{pad_layout_for, pad_layout_to_align, repeat_layout, repeat_layout_packed},
+    Alloc, DefaultAlloc,
 };
 
 #[test]
@@ -274,19 +271,19 @@ mod alloc_slice_tests {
         let allocator = DefaultAlloc;
         let len = 3;
         // alloc_init_slice
-        let sptr = allocator
-            .alloc_slice_init::<u32, _>(
-                |p| {
+        let sptr = unsafe {
+            allocator.alloc_slice_init::<u32, _>(
+                |p, init| {
                     let p = p.cast::<u32>();
                     for i in 0..len {
-                        unsafe {
-                            p.add(i).write(5);
-                        }
+                        p.as_ptr().add(i).write(5);
+                        *init += 1;
                     }
                 },
                 len,
             )
-            .unwrap();
+        }
+        .unwrap();
         let slice_ref: &[u32] = unsafe { sptr.as_ref() };
         assert_eq!(slice_ref, &[5; 3]);
         unsafe {

@@ -650,7 +650,6 @@ pub mod helpers {
         type_props::{PtrProps, SizedProps, USIZE_MAX_NO_HIGH_BIT},
         Alloc,
     };
-    use const_if_macro::const_if;
     use core::{
         alloc::Layout,
         mem::{align_of, transmute, ManuallyDrop},
@@ -683,50 +682,53 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
-        unsafe {
-            #[allow(clippy::incompatible_msrv)]
-            transmute::<(*mut T, usize), *mut [T]>((p, len))
-        }
+        unsafe { transmute::<(*mut T, usize), *mut [T]>((p, len)) }
     }
 
+    #[cfg(feature = "extra_const")]
     /// Returns the length of a [`NonNull`] slice pointer.
     ///
     /// This is a helper used in place of [`NonNull::len`], which was stabilized after this crate's
     /// MSRV.
-    #[const_if(not(feature = "v1_63_support"))]
+    #[must_use]
+    #[inline]
+    pub const fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
+        unsafe { (&*ptr.as_ptr()).len() }
+    }
+
+    #[cfg(not(feature = "extra_const"))]
+    /// Returns the length of a [`NonNull`] slice pointer.
+    ///
+    /// This is a helper used in place of [`NonNull::len`], which was stabilized after this crate's
+    /// MSRV.
     #[must_use]
     #[inline]
     pub fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
-        #[allow(clippy::incompatible_msrv)]
-        unsafe {
-            (&*ptr.as_ptr()).len()
-        }
+        unsafe { (&*ptr.as_ptr()).len() }
     }
+
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
     #[inline]
     pub(crate) fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        #[allow(clippy::blocks_in_conditions)]
-        if {
-            #[allow(clippy::incompatible_msrv)]
-            ptr.is_null()
-        } {
+        if ptr.is_null() {
             Err(AllocError::AllocFailed(layout))
         } else {
             Ok(unsafe { NonNull::new_unchecked(ptr as *mut u8) })
         }
     }
 
-    /// Checks layout for being zero-sized, returning an error if it is.
+    /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
+    /// result of `f(layout)`.
     #[inline]
     pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
         layout: Layout,
-        ret: F,
+        f: F,
     ) -> Result<Ret, AllocError> {
         if layout.size() == 0 {
             Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
         } else {
-            ret(layout)
+            f(layout)
         }
     }
 
@@ -821,10 +823,7 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
-        #[allow(clippy::incompatible_msrv)]
-        unsafe {
-            dangling_nonnull(layout.align())
-        }
+        unsafe { dangling_nonnull(layout.align()) }
     }
 
     /// Returns a [`NonNull`] which has the given alignment as its address.
@@ -835,7 +834,6 @@ pub mod helpers {
     #[must_use]
     #[inline]
     pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
-        #[allow(clippy::incompatible_msrv)]
         transmute::<NonZeroUsize, NonNull<u8>>(NonZeroUsize::new_unchecked(align))
     }
 
@@ -897,8 +895,21 @@ pub mod helpers {
             AllocGuard { ptr, alloc }
         }
 
+        #[cfg(feature = "extra_const")]
         /// Initializes the value by writing to the contained pointer.
-        #[const_if(not(feature = "v1_63_support"))]
+        #[cfg_attr(miri, track_caller)]
+        #[inline]
+        pub const fn init(&self, elem: T)
+        where
+            T: Sized,
+        {
+            unsafe {
+                self.ptr.as_ptr().write(elem);
+            }
+        }
+
+        #[cfg(not(feature = "extra_const"))]
+        /// Initializes the value by writing to the contained pointer.
         #[cfg_attr(miri, track_caller)]
         #[inline]
         pub fn init(&self, elem: T)
@@ -906,7 +917,6 @@ pub mod helpers {
             T: Sized,
         {
             unsafe {
-                #[allow(clippy::incompatible_msrv)]
                 self.ptr.as_ptr().write(elem);
             }
         }
@@ -974,7 +984,7 @@ pub mod helpers {
     pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
         ptr: NonNull<T>,
         alloc: &'a A,
-        init: usize,
+        pub(crate) init: usize,
         full: usize,
     }
 
@@ -1021,31 +1031,63 @@ pub mod helpers {
         #[inline]
         pub const fn get_uninit_part(&self) -> NonNull<[T]> {
             nonnull_slice_from_raw_parts(
-                #[allow(clippy::incompatible_msrv)]
-                unsafe {
-                    NonNull::new_unchecked(self.ptr.as_ptr().add(self.init))
-                },
+                unsafe { NonNull::new_unchecked(self.ptr.as_ptr().add(self.init)) },
                 self.full - self.init,
             )
         }
 
+        /// Gets a `NonNull<[T]>` pointer to the full slice.
+        #[must_use]
+        #[inline]
+        pub const fn get_full(&self) -> NonNull<[T]> {
+            nonnull_slice_from_raw_parts(self.ptr, self.full)
+        }
+
+        #[cfg(feature = "extra_const")]
         /// Sets the initialized element count.
         ///
         /// # Safety
         ///
         /// The caller must ensure the new count is correct.
-        #[const_if(not(feature = "v1_63_support"))]
+        #[inline]
+        pub const unsafe fn set_init(&mut self, init: usize) {
+            self.init = init;
+        }
+
+        #[cfg(not(feature = "extra_const"))]
+        /// Sets the initialized element count.
+        ///
+        /// # Safety
+        ///
+        /// The caller must ensure the new count is correct.
         #[inline]
         pub unsafe fn set_init(&mut self, init: usize) {
             self.init = init;
         }
 
+        #[cfg(feature = "extra_const")]
         /// Initializes the next element of the slice with `elem`.
         ///
         /// # Errors
         ///
         /// Returns `Err(elem)` if the slice is at capacity.
-        #[const_if(not(feature = "v1_63_support"))]
+        #[inline]
+        pub const fn init(&mut self, elem: T) -> Result<(), T> {
+            if self.init == self.full {
+                return Err(elem);
+            }
+            unsafe {
+                self.init_unchecked(elem);
+            }
+            Ok(())
+        }
+
+        #[cfg(not(feature = "extra_const"))]
+        /// Initializes the next element of the slice with `elem`.
+        ///
+        /// # Errors
+        ///
+        /// Returns `Err(elem)` if the slice is at capacity.
         #[inline]
         pub fn init(&mut self, elem: T) -> Result<(), T> {
             if self.init == self.full {
@@ -1057,15 +1099,26 @@ pub mod helpers {
             Ok(())
         }
 
+        #[cfg(feature = "extra_const")]
         /// Initializes the next element of the slice with `elem`.
         ///
         /// # Safety
         ///
         /// The caller must ensure that the slice is not at capacity. (`initialized() < full()`)
-        #[const_if(not(feature = "v1_63_support"))]
+        #[inline]
+        pub const unsafe fn init_unchecked(&mut self, elem: T) {
+            self.ptr.as_ptr().add(self.init).write(elem);
+            self.init += 1;
+        }
+
+        #[cfg(not(feature = "extra_const"))]
+        /// Initializes the next element of the slice with `elem`.
+        ///
+        /// # Safety
+        ///
+        /// The caller must ensure that the slice is not at capacity. (`initialized() < full()`)
         #[inline]
         pub unsafe fn init_unchecked(&mut self, elem: T) {
-            #[allow(clippy::incompatible_msrv)]
             self.ptr.as_ptr().add(self.init).write(elem);
             self.init += 1;
         }
@@ -1117,6 +1170,39 @@ pub mod helpers {
             self.init == self.full
         }
 
+        #[cfg(feature = "extra_const")]
+        /// Copies as many elements from `slice` as will fit.
+        ///
+        /// On success, all elements are copied and `Ok(())` is returned. If
+        /// `slice.len() > remaining_capacity`, it copies as many elements as will fit, advances
+        /// the initialized count to full, and returns `Err(excess)`.
+        ///
+        /// # Errors
+        ///
+        /// Returns `Err(excess)` if `slice.len() > remaining_capacity`.
+        pub const fn copy_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
+        where
+            T: Copy,
+        {
+            let lim = self.full - self.init;
+            let to_copy = if slice.len() < lim { slice.len() } else { lim };
+
+            unsafe {
+                slice
+                    .as_ptr()
+                    .copy_to_nonoverlapping(self.ptr.as_ptr().add(self.init), to_copy);
+            }
+
+            self.init += to_copy;
+            let uncopied = slice.len() - to_copy;
+            if uncopied == 0 {
+                Ok(())
+            } else {
+                Err(uncopied)
+            }
+        }
+
+        #[cfg(not(feature = "extra_const"))]
         /// Copies as many elements from `slice` as will fit.
         ///
         /// On success, all elements are copied and `Ok(())` is returned. If
@@ -1130,7 +1216,8 @@ pub mod helpers {
         where
             T: Copy,
         {
-            let to_copy = slice.len().min(self.full - self.init);
+            let lim = self.full - self.init;
+            let to_copy = if slice.len() < lim { slice.len() } else { lim };
 
             unsafe {
                 slice

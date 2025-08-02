@@ -14,7 +14,7 @@ fn slice_ptr_from_parts_works() {
     assert_eq!(unsafe { &*slice_ptr }, slice);
     // check that they have the same pointer and length
     assert_eq!(slice.as_ptr(), slice_ptr.cast::<usize>());
-    assert_eq!(slice_ptr.len(), len);
+    assert_eq!(unsafe { slice_ptr.as_ref() }.unwrap().len(), len);
 
     for (i, elem) in slice.iter().enumerate() {
         // check that the values are all the same

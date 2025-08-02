@@ -1,4 +1,3 @@
-#![allow(missing_docs)]
 use crate::{
     error::AllocError,
     grow,
@@ -12,6 +11,7 @@ use crate::{
 };
 use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 // TODO: slice growth and realloc with copying and cloning.
+// TODO: reduce duplication
 
 /// Small helper to fill new elements of a grown slice using a predicate.
 fn fill_new_elems_with<T, A: Alloc, F: Fn(usize) -> T>(
@@ -28,8 +28,7 @@ fn fill_new_elems_with<T, A: Alloc, F: Fn(usize) -> T>(
     for i in len..new_len {
         unsafe { guard.init_unchecked(f(i)) }
     }
-    let _ = guard.release();
-    p
+    guard.release_first()
 }
 
 /// Slice-specific extension methods for [`Alloc`], providing convenient functions for slice
@@ -71,8 +70,6 @@ pub trait AllocSlice: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_clone_slice_to<T: Clone>(&self, data: &[T]) -> Result<NonNull<[T]>, AllocError> {
-        // TODO: helper to do this match statement which is done similarly in many places here and
-        //  in alloc_ext
         match self.alloc(unsafe { data.layout() }) {
             Ok(ptr) => Ok(unsafe {
                 let mut guard = SliceAllocGuard::new(ptr.cast(), self, data.len());
@@ -157,22 +154,29 @@ pub trait AllocSlice: Alloc {
 
     /// Allocates uninitialized memory for a `[T]` of length `len` and initializes it using `init`.
     ///
+    /// `init` receives a pointer to the entire slice and a mutable reference to an initialized
+    /// element counter.
+    ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure the initialized element counter will be the same as the slice's
+    /// length after `init` finishes, and that at any time `init` may panic, the counter will be
+    /// accurate.
     #[track_caller]
     #[inline]
-    fn alloc_slice_init<T, I: Fn(NonNull<[T]>)>(
+    unsafe fn alloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         init: I,
         len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        // TODO: full() method or something on SAG to get a NonNull<[T]> or smth and simplify this
-        let ptr = self.alloc_slice(len)?;
-        let guard = SliceAllocGuard::new(ptr.cast::<T>(), self, len);
-        init(ptr);
+        let mut guard = SliceAllocGuard::new(self.alloc_slice::<T>(len)?.cast::<T>(), self, len);
+        init(guard.get_full(), &mut guard.init);
         Ok(guard.release())
     }
 
@@ -265,7 +269,6 @@ pub trait AllocSlice: Alloc {
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
-    // TODO: fix some docs. this had slice.len() instead of len, which is wrong
     /// Grows a slice to a new length given the pointer to its first element, current length, and
     /// requested length.
     ///
@@ -366,8 +369,6 @@ pub trait AllocSlice: Alloc {
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
-    // TODO: nothing, this is just a marker to let me easily find these docs i'll need to copy
-
     /// Grows a slice to a new length given the pointer to its first element, current length, and
     /// requested length, then fills each new element with the result of `f(elem_idx)` under a guard
     /// to drop and deallocate on panic.
@@ -400,6 +401,9 @@ pub trait AllocSlice: Alloc {
 
     /// Grows a `[T]` to a new length and initializes the new elements using `init`.
     ///
+    /// `init` receives a pointer to the entire slice and a mutable reference to an initialized
+    /// element counter.
+    ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
@@ -410,9 +414,12 @@ pub trait AllocSlice: Alloc {
     /// # Safety
     ///
     /// - `slice` must point to a slice allocated using this allocator.
+    /// - the initialized element counter must be the same as the slice's length after `init`
+    ///   finishes
+    /// - at any time `init` may panic, the counter must be accurate.
     #[track_caller]
     #[inline]
-    unsafe fn grow_slice_init<T, I: Fn(NonNull<[T]>)>(
+    unsafe fn grow_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
@@ -425,6 +432,9 @@ pub trait AllocSlice: Alloc {
     /// Grows a `[T]` to a new length given the pointer to its first element, current length, and
     /// requested length, then initializes the new elements using `init`.
     ///
+    /// `init` receives a pointer to the entire slice and a mutable reference to an initialized
+    /// element counter.
+    ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
@@ -432,12 +442,17 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
+    ///
     /// # Safety
     ///
-    /// - `slice` must point to a slice allocated using this allocator.
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
+    /// - the initialized element counter must be the same as the slice's length after `init`
+    ///   finishes
+    /// - at any time `init` may panic, the counter must be accurate.
     #[track_caller]
     #[inline]
-    unsafe fn grow_raw_slice_init<T, I: Fn(NonNull<[T]>)>(
+    unsafe fn grow_raw_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         ptr: NonNull<T>,
         len: usize,
@@ -446,11 +461,10 @@ pub trait AllocSlice: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.grow_raw_slice(ptr, len, new_len) {
             Ok(p) => {
-                init(nonnull_slice_from_raw_parts(
-                    NonNull::new_unchecked(p.as_ptr().add(len)),
-                    new_len - len,
-                ));
-                Ok(p)
+                let mut guard = SliceAllocGuard::new(p, self, new_len);
+                guard.set_init(len);
+                init(guard.get_uninit_part(), &mut guard.init);
+                Ok(guard.release_first())
             }
             Err(e) => Err(e),
         }
@@ -491,7 +505,8 @@ pub trait AllocSlice: Alloc {
     ///
     /// # Safety
     ///
-    /// - `slice` must point to a slice allocated using this allocator.
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
     #[inline]
     unsafe fn grow_raw_slice_default<T: Default>(
@@ -788,6 +803,9 @@ pub trait AllocSlice: Alloc {
     /// On grow, preserves existing elements and calls `init` on the newly allocated sub-slice.
     /// On shrink, truncates to `new_len` without dropping removed elements.
     ///
+    /// `init` receives a pointer to the new elements of the slice and a mutable reference to an
+    /// initialized element counter.
+    ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
@@ -797,9 +815,12 @@ pub trait AllocSlice: Alloc {
     /// # Safety
     ///
     /// - `slice` must point to a slice allocated using this allocator.
+    /// - the initialized element counter must be the same as the slice's length after `init`
+    ///   finishes
+    /// - at any time `init` may panic, the counter must be accurate.
     #[track_caller]
     #[inline]
-    unsafe fn realloc_slice_init<T, I: Fn(NonNull<[T]>)>(
+    unsafe fn realloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
@@ -815,6 +836,9 @@ pub trait AllocSlice: Alloc {
     /// On grow, preserves existing elements and invokes `init` on the sub-slice of newly allocated
     /// elements. On shrink, truncates to `new_len` without dropping removed elements.
     ///
+    /// `init` receives a pointer to the new elements of the slice and a mutable reference to an
+    /// initialized element counter.
+    ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
@@ -825,9 +849,12 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
+    /// - the initialized element counter must be the same as the slice's length after `init`
+    ///   finishes
+    /// - at any time `init` may panic, the counter must be accurate.
     #[track_caller]
     #[inline]
-    unsafe fn realloc_raw_slice_init<T, I: Fn(NonNull<[T]>)>(
+    unsafe fn realloc_raw_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         ptr: NonNull<T>,
         len: usize,
@@ -838,13 +865,27 @@ pub trait AllocSlice: Alloc {
             Ok(p) => {
                 let mut guard = SliceAllocGuard::new(p, self, new_len);
                 guard.set_init(len);
-                init(guard.get_uninit_part());
+                init(guard.get_uninit_part(), &mut guard.init);
                 Ok(guard.release_first())
             }
             Err(e) => Err(e),
         }
     }
 
+    /// Reallocates a slice to a new length and fills each new element with `T`'s default value.
+    ///
+    /// On grow, preserves all existing elements and fills new ones by calling `T::default()`.
+    /// On shrink, truncates to `new_len` elements without dropping removed elements.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
+    ///
+    /// # Safety
+    ///
+    /// - `slice` must point to a slice allocated using this allocator.
     #[track_caller]
     #[inline]
     unsafe fn realloc_slice_default<T: Default>(
@@ -856,6 +897,19 @@ pub trait AllocSlice: Alloc {
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
+    /// Reallocates a slice to a new length given the pointer to its first element, current length,
+    /// and requested length, then fills each new element with `T`'s default value.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
     #[inline]
     unsafe fn realloc_raw_slice_default<T: Default>(

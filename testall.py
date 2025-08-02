@@ -7,6 +7,8 @@ import os
 FEATURES = [
     "nightly",
     "std",
+    "extra_const",
+    "c_str",
     "metadata",
     "clone_to_uninit",
     "specialization",

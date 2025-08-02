@@ -2,19 +2,17 @@
 
 ![crates.io](https://img.shields.io/crates/v/memapi.svg) ![docs.rs](https://docs.rs/memapi/badge.svg)
 
-A minimal, `no_std`-friendly memory allocation interface for managing raw buffers, suitable for use in collections.
+A `no_std`-friendly memory allocation interface for managing raw buffers, suitable for use in collections.
 
-[//]: # (MSRV: 1.63.0)
+MSRV: 1.61.0
 
-[//]: # ()
-[//]: # (Jemalloc MSRV: 1.71.0)
+Mimalloc MSRV: 1.63.0
 
-[//]: # ()
-[//]: # (Const[^1] MSRV: 1.84)
+Jemalloc MSRV: 1.71.0
 
-[//]: # ([^1]: certain functions are only able to be used in const contexts in higher versions of Rust.)
+MSRV with `extra_const` feature: 1.83
 
-# note: this readme is ***VERY*** outdated
+# note: the entire readme below this point is ***VERY*** outdated
 
 ---
 
