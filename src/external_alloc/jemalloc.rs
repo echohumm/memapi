@@ -1,12 +1,9 @@
 use crate::{
-    helpers::{
-        null_q_zsl_check,
-        null_q
-    },
     error::AllocError,
     external_alloc::REALLOC_DIFF_ALIGN,
     external_alloc::{ffi::jem as ffi, resize},
-    Alloc
+    helpers::{null_q, null_q_zsl_check},
+    Alloc,
 };
 use core::{
     alloc::{GlobalAlloc, Layout},

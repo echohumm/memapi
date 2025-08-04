@@ -86,7 +86,6 @@ impl<T: ?Sized> HeapVal<T> {
     }
 }
 
-
 impl<T, A: Alloc> HeapVal<T, A> {
     /// Constructs a new [`HeapVal`] with the given value in the given allocator.
     #[inline]
@@ -287,7 +286,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
             self.ptr
         }
     }
-    
+
     const_if! {
         "extra_extra_const",
         "PLACEHOLDER",
@@ -299,7 +298,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
             unsafe { &mut *ptr.as_ptr() }
         }
     }
-    
+
     const_if! {
         "extra_extra_const",
         "PLACEHOLDER",

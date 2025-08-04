@@ -1,7 +1,4 @@
-use core::{
-    alloc::Layout,
-    ptr
-};
+use core::{alloc::Layout, ptr};
 use memapi::{
     error::AllocError,
     unstable_util::{pad_layout_for, pad_layout_to_align, repeat_layout, repeat_layout_packed},

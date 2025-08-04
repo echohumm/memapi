@@ -1,7 +1,4 @@
-use core::{
-    alloc::Layout,
-    ptr
-};
+use core::{alloc::Layout, ptr};
 use memapi::{type_props::SizedProps, Alloc, AllocExt, DefaultAlloc};
 
 #[test]

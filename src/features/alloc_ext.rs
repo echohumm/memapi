@@ -6,7 +6,10 @@ use crate::{
     type_props::{PtrProps, SizedProps},
     Alloc, AllocPattern,
 };
-use core::{alloc::Layout, ptr::{self, NonNull}};
+use core::{
+    alloc::Layout,
+    ptr::{self, NonNull},
+};
 
 /// Extension methods for the core [`Alloc`] trait, providing convenient routines to allocate,
 /// initialize, clone, copy, and deallocate sized and unsized types.
@@ -87,10 +90,8 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(unsafe { data.layout() }) {
             Ok(ptr) => Ok(unsafe {
-                let guard = AllocGuard::new(
-                    NonNull::<T>::from_raw_parts(ptr, ptr::metadata(data)),
-                    self,
-                );
+                let guard =
+                    AllocGuard::new(NonNull::<T>::from_raw_parts(ptr, ptr::metadata(data)), self);
                 data.clone_to_uninit(guard.as_ptr() as *mut u8);
                 guard.release()
             }),
@@ -295,11 +296,7 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                ptr::copy_nonoverlapping(
-                    data as *const T as *const u8,
-                    ptr.as_ptr(),
-                    data.size(),
-                );
+                ptr::copy_nonoverlapping(data as *const T as *const u8, ptr.as_ptr(), data.size());
                 NonNull::from_raw_parts(ptr, ptr::metadata(data as *const T))
             }),
             Err(e) => Err(e),

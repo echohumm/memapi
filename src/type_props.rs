@@ -140,7 +140,6 @@ pub unsafe trait VarSized {
     const ALIGN: usize;
 }
 
-
 #[cfg(feature = "metadata")]
 /// Trait for unsized types whose metadata is `usize` (e.g., slices, `str`).
 ///

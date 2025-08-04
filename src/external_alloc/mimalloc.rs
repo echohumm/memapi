@@ -1,8 +1,5 @@
 use crate::{
-    external_alloc::resize,
-    ffi::mim as ffi,
-    helpers::{null_q_zsl_check},
-    Alloc, AllocError,
+    external_alloc::resize, ffi::mim as ffi, helpers::null_q_zsl_check, Alloc, AllocError,
 };
 use core::{
     alloc::{GlobalAlloc, Layout},
@@ -46,8 +43,8 @@ fn zsl_check_alloc(
     layout: Layout,
     alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
 ) -> Result<NonNull<u8>, AllocError> {
-    null_q_zsl_check(layout, |layout| {
-        unsafe { alloc(layout.size(), layout.align()) as *mut u8 }
+    null_q_zsl_check(layout, |layout| unsafe {
+        alloc(layout.size(), layout.align()) as *mut u8
     })
 }
 

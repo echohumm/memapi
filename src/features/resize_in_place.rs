@@ -1,10 +1,7 @@
 use crate::{error::AllocError, helpers::SliceAllocGuard, Alloc};
 use core::{
     alloc::Layout,
-    ptr::{
-        NonNull,
-        self
-    }
+    ptr::{self, NonNull},
 };
 
 /// Extension trait for [`Alloc`](Alloc) which provides interfaces to reallocate in-place.

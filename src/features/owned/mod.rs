@@ -1,6 +1,6 @@
 mod buf;
-mod val;
 pub(crate) mod into_iter;
+mod val;
 // use into_iter::OwnedIter;
 
 pub use buf::*;

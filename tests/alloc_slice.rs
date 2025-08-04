@@ -1,8 +1,5 @@
-use core::{
-    alloc::Layout,
-    ptr
-};
-use memapi::{AllocSlice, Alloc, DefaultAlloc};
+use core::{alloc::Layout, ptr};
+use memapi::{Alloc, AllocSlice, DefaultAlloc};
 
 #[test]
 fn test_alloc_init_and_default_slice() {
