@@ -1,7 +1,7 @@
 [package]
 name = "memapi"
 # major will probably always be 0
-version = "0.14.1"
+version = "0.14.2"
 edition = "2018"
 authors = ["echohumm"]
 readme = "README.md"
