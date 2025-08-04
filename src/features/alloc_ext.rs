@@ -105,12 +105,12 @@ pub trait AllocExt: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
-    /// 
+    ///
     /// # Safety
-    /// 
-    // we can't drop the value on panic because we don't have the metadata feature to construct the 
+    ///
+    // we can't drop the value on panic because we don't have the metadata feature to construct the
     // fat pointer which the guard would use to drop it.
-    /// The caller must ensure the cloning operation will never panic or that it is safe to skip 
+    /// The caller must ensure the cloning operation will never panic or that it is safe to skip
     /// dropping the cloned value.
     #[track_caller]
     #[inline]
@@ -295,7 +295,11 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                (data as *const T as *const u8).copy_to_nonoverlapping(ptr.as_ptr(), data.size());
+                core::ptr::copy_nonoverlapping(
+                    data as *const T as *const u8,
+                    ptr.as_ptr(),
+                    data.size(),
+                );
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(data as *const T))
             }),
             Err(e) => Err(e),

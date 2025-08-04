@@ -9,7 +9,11 @@ use crate::{
     type_props::{PtrProps, SizedProps},
     Alloc, AllocPattern,
 };
-use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
+use core::{
+    alloc::Layout,
+    mem::MaybeUninit,
+    ptr::{self, NonNull},
+};
 // TODO: slice growth and realloc with copying and cloning.
 // TODO: reduce duplication
 
@@ -115,7 +119,7 @@ pub trait AllocSlice: Alloc {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
                 let p = ptr.cast::<T>();
-                (data as *const [T] as *const T).copy_to_nonoverlapping(p.as_ptr(), data.len());
+                ptr::copy_nonoverlapping(data as *const [T] as *const T, p.as_ptr(), data.len());
 
                 nonnull_slice_from_raw_parts(p, data.len())
             }),

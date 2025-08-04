@@ -1,6 +1,6 @@
 use alloc::alloc::Layout;
 use core::{
-    fmt::{Display, Debug, Formatter, Result as FmtResult},
+    fmt::{Debug, Display, Formatter, Result as FmtResult},
     ptr::NonNull,
 };
 
@@ -56,25 +56,26 @@ impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             AllocError::LayoutError(sz, align) => {
-                write!(f, "computed invalid layout: size: {sz}, align: {align}")
+                write!(f, "computed invalid layout: size: {}, align: {}", sz, align)
             }
             AllocError::ZeroSizedLayout(_) => {
                 write!(f, "zero-sized layout was given")
             }
-            AllocError::AllocFailed(l) => write!(f, "allocation failed for layout: {l:?}"),
+            AllocError::AllocFailed(l) => write!(f, "allocation failed for layout: {:?}", l),
             AllocError::GrowSmallerNewLayout(old, new) => write!(
                 f,
-                "attempted to grow from a size of {old} to a smaller size of {new}"
+                "attempted to grow from a size of {} to a smaller size of {}",
+                old, new
             ),
             AllocError::ShrinkBiggerNewLayout(old, new) => write!(
                 f,
-                "attempted to shrink from a size of {old} to a larger size of {new}"
+                "attempted to shrink from a size of {} to a larger size of {}",
+                old, new
             ),
-            AllocError::ArithmeticOverflow(lhs, op, rhs) => write!(
-                f,
-                "arithmetic operation overflowed: {lhs} {op} {rhs}"
-            ),
-            AllocError::Other(other) => write!(f, "{other}"),
+            AllocError::ArithmeticOverflow(lhs, op, rhs) => {
+                write!(f, "arithmetic operation overflowed: {} {} {}", lhs, op, rhs)
+            }
+            AllocError::Other(other) => write!(f, "{}", other),
         }
     }
 }

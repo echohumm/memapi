@@ -49,6 +49,9 @@
 #![allow(unknown_lints, unsafe_op_in_unsafe_fn, internal_features)]
 #![deny(missing_docs)]
 
+// TODO: ptr's .write, .write_bytes, .drop_in_place, etc. need to be replaced with ptr::*
+// TODO: less inlining
+
 // it is used, the compiler is just stupid
 #[allow(unused_macros)]
 macro_rules! realloc {
@@ -68,13 +71,68 @@ macro_rules! realloc {
     }
 }
 
+// TODO: use everywhere for const/non-constness with msrv features
+macro_rules! const_if {
+    (
+        $feature:literal,
+        $docs:literal,
+        $(#[$attr:meta])*
+        // always start with `pub const` and allow an optional `unsafe`
+        pub const fn $name:ident( $($args:tt)* ) $(-> $ret:ty)?
+        $body:block
+    ) => {
+        // when the feature is enabled, emit a `const fn`
+        #[cfg(feature = $feature)]
+        #[doc = $docs]
+        $(#[$attr])*
+        pub const fn $name($($args)*) $(-> $ret)? $body
+
+        // when the feature is disabled, drop the `const`
+        #[cfg(not(feature = $feature))]
+        #[doc = $docs]
+        $(#[$attr])*
+        pub fn $name($($args)*) $(-> $ret)? $body
+    };
+    // branch for unsafe functions
+    (
+        $feature:literal,
+        $docs:literal,
+        $(#[$attr:meta])*
+        //                                kinda poorly done, but it makes a type param work, which
+        //                                is all i need.
+        pub const unsafe fn $name:ident $(<$generic_ty:ident : $req:ident>)? ( $($args:tt)* )
+        $(-> $ret:ty)?
+        $body:block
+    ) => {
+        #[cfg(feature = $feature)]
+        #[doc = $docs]
+        $(#[$attr])*
+        pub const unsafe fn $name$(<$generic_ty: $req>)?($($args)*) $(-> $ret)? $body
+
+        #[cfg(not(feature = $feature))]
+        #[doc = $docs]
+        $(#[$attr])*
+        pub unsafe fn $name$(<$generic_ty: $req>)?($($args)*) $(-> $ret)? $body
+    };
+}
+
 extern crate alloc;
 extern crate core;
+
+mod features;
+#[cfg(feature = "external_alloc")]
+pub(crate) mod external_alloc;
+
+#[allow(unused_imports)]
+pub use features::*;
 
 #[cfg(feature = "alloc_ext")]
 pub use alloc_ext::*;
 #[cfg(feature = "resize_in_place")]
 pub use in_place::*;
+
+#[cfg(feature = "external_alloc")]
+pub use external_alloc::*;
 
 /// Marker traits.
 pub mod marker;
@@ -87,17 +145,6 @@ pub mod unstable_util;
 /// Errors which can occur during allocation.
 pub mod error;
 
-mod features;
-
-#[allow(unused_imports)]
-pub use features::*;
-
-#[cfg(feature = "external_alloc")]
-pub(crate) mod external_alloc;
-
-#[cfg(feature = "external_alloc")]
-pub use external_alloc::*;
-
 use crate::{
     error::AllocError,
     helpers::{null_q, zsl_check},
@@ -107,7 +154,7 @@ use alloc::alloc::{
 };
 use core::{
     cmp::Ordering,
-    ptr::{null_mut, NonNull},
+    ptr::{self, null_mut, NonNull},
 };
 
 /// Default allocator, delegating to the global allocator.
@@ -572,8 +619,7 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
         }
     };
 
-    ptr.as_ptr()
-        .copy_to_nonoverlapping(new_ptr.as_ptr(), old_layout.size());
+    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_layout.size());
     a.dealloc(ptr, old_layout);
 
     Ok(new_ptr)
@@ -596,8 +642,7 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
 ) -> Result<NonNull<u8>, AllocError> {
     let new_ptr = a.alloc(new_layout)?.cast::<u8>();
 
-    ptr.as_ptr()
-        .copy_to_nonoverlapping(new_ptr.as_ptr(), new_layout.size());
+    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
     a.dealloc(ptr, old_layout);
 
     Ok(new_ptr)
@@ -655,7 +700,7 @@ pub mod helpers {
         mem::{align_of, transmute, ManuallyDrop},
         num::NonZeroUsize,
         ops::Deref,
-        ptr::{eq as peq, NonNull},
+        ptr::{self, eq as peq, NonNull},
     };
 
     // yet again.
@@ -685,7 +730,7 @@ pub mod helpers {
         unsafe { transmute::<(*mut T, usize), *mut [T]>((p, len)) }
     }
 
-    #[cfg(feature = "extra_const")]
+    #[cfg(feature = "extra_extra_const")]
     /// Returns the length of a [`NonNull`] slice pointer.
     ///
     /// This is a helper used in place of [`NonNull::len`], which was stabilized after this crate's
@@ -696,7 +741,7 @@ pub mod helpers {
         unsafe { (&*ptr.as_ptr()).len() }
     }
 
-    #[cfg(not(feature = "extra_const"))]
+    #[cfg(not(feature = "extra_extra_const"))]
     /// Returns the length of a [`NonNull`] slice pointer.
     ///
     /// This is a helper used in place of [`NonNull::len`], which was stabilized after this crate's
@@ -706,7 +751,6 @@ pub mod helpers {
     pub fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
         unsafe { (&*ptr.as_ptr()).len() }
     }
-
 
     /// Converts a possibly null pointer into a [`NonNull`] result.
     #[inline]
@@ -769,7 +813,7 @@ pub mod helpers {
     ) -> Result<NonNull<T>, AllocError> {
         match a.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                (data as *const u8).copy_to_nonoverlapping(ptr.as_ptr(), data.size());
+                ptr::copy_nonoverlapping(data as *const u8, ptr.as_ptr(), data.size());
                 NonNull::from_raw_parts(ptr, core::ptr::metadata(data))
             }),
             Err(e) => Err(e),
@@ -889,13 +933,16 @@ pub mod helpers {
     }
 
     impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
-        /// Creates a new guard from a pointer and a reference to an allocator.
-        #[inline]
-        pub const fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A> {
-            AllocGuard { ptr, alloc }
+        const_if! {
+            "extra_const",
+            "Creates a new guard from a pointer and a reference to an allocator.",
+            #[inline]
+            pub const fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A> {
+                AllocGuard { ptr, alloc }
+            }
         }
 
-        #[cfg(feature = "extra_const")]
+        #[cfg(feature = "extra_extra_const")]
         /// Initializes the value by writing to the contained pointer.
         #[cfg_attr(miri, track_caller)]
         #[inline]
@@ -908,7 +955,7 @@ pub mod helpers {
             }
         }
 
-        #[cfg(not(feature = "extra_const"))]
+        #[cfg(not(feature = "extra_extra_const"))]
         /// Initializes the value by writing to the contained pointer.
         #[cfg_attr(miri, track_caller)]
         #[inline]
@@ -921,14 +968,17 @@ pub mod helpers {
             }
         }
 
-        /// Releases ownership of the allocation, preventing deallocation, and return the raw
-        /// pointer.
-        #[inline]
-        #[must_use]
-        pub const fn release(self) -> NonNull<T> {
-            let ptr = self.ptr;
-            let _ = ManuallyDrop::new(self);
-            ptr
+        const_if! {
+            "extra_const",
+            "Releases ownership of the allocation, preventing deallocation, and returns the raw \
+            pointer.",
+            #[inline]
+            #[must_use]
+            pub const fn release(self) -> NonNull<T> {
+                let ptr = self.ptr;
+                let _ = ManuallyDrop::new(self);
+                ptr
+            }
         }
     }
 
@@ -989,6 +1039,7 @@ pub mod helpers {
     }
 
     impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
+        #[cfg(feature = "extra_const")]
         /// Creates a new slice guard for `full` elements at `ptr` in the given allocator.
         #[inline]
         pub const fn new(ptr: NonNull<T>, alloc: &'a A, full: usize) -> SliceAllocGuard<'a, T, A> {
@@ -1000,6 +1051,19 @@ pub mod helpers {
             }
         }
 
+        #[cfg(not(feature = "extra_const"))]
+        /// Creates a new slice guard for `full` elements at `ptr` in the given allocator.
+        #[inline]
+        pub fn new(ptr: NonNull<T>, alloc: &'a A, full: usize) -> SliceAllocGuard<'a, T, A> {
+            SliceAllocGuard {
+                ptr,
+                alloc,
+                init: 0,
+                full,
+            }
+        }
+
+        #[cfg(feature = "extra_const")]
         /// Release ownership of the slice without deallocating memory.
         #[must_use]
         #[inline]
@@ -1009,6 +1073,15 @@ pub mod helpers {
             ret
         }
 
+        #[cfg(not(feature = "extra_const"))]
+        /// Release ownership of the slice without deallocating memory.
+        #[must_use]
+        #[inline]
+        pub fn release(self) -> NonNull<[T]> {
+            ManuallyDrop::new(self).get_init_part()
+        }
+
+        #[cfg(feature = "extra_const")]
         /// Release ownership of the slice without deallocating memory, returning a `NonNull<T>`
         /// pointer to the slice's first element.
         #[must_use]
@@ -1019,13 +1092,34 @@ pub mod helpers {
             ret
         }
 
+        #[cfg(not(feature = "extra_const"))]
+        /// Release ownership of the slice without deallocating memory, returning a `NonNull<T>`
+        /// pointer to the slice's first element.
+        #[must_use]
+        #[inline]
+        pub fn release_first(self) -> NonNull<T> {
+            ManuallyDrop::new(self).ptr
+        }
+
+        #[cfg(feature = "extra_const")]
         /// Gets a `NonNull<[T]>` pointer to the initialized elements of the slice.
+        #[cfg_attr(miri, track_caller)]
         #[must_use]
         #[inline]
         pub const fn get_init_part(&self) -> NonNull<[T]> {
             nonnull_slice_from_raw_parts(self.ptr, self.init)
         }
 
+        #[cfg(not(feature = "extra_const"))]
+        /// Gets a `NonNull<[T]>` pointer to the initialized elements of the slice.
+        #[cfg_attr(miri, track_caller)]
+        #[must_use]
+        #[inline]
+        pub fn get_init_part(&self) -> NonNull<[T]> {
+            nonnull_slice_from_raw_parts(self.ptr, self.init)
+        }
+
+        #[cfg(feature = "extra_const")]
         /// Gets a `NonNull<[T]>` pointer to the uninitialized elements of the slice.
         #[must_use]
         #[inline]
@@ -1036,14 +1130,36 @@ pub mod helpers {
             )
         }
 
+        #[cfg(not(feature = "extra_const"))]
+        /// Gets a `NonNull<[T]>` pointer to the uninitialized elements of the slice.
+        #[must_use]
+        #[inline]
+        pub fn get_uninit_part(&self) -> NonNull<[T]> {
+            nonnull_slice_from_raw_parts(
+                unsafe { NonNull::new_unchecked(self.ptr.as_ptr().add(self.init)) },
+                self.full - self.init,
+            )
+        }
+
+        #[cfg(feature = "extra_const")]
         /// Gets a `NonNull<[T]>` pointer to the full slice.
+        #[cfg_attr(miri, track_caller)]
         #[must_use]
         #[inline]
         pub const fn get_full(&self) -> NonNull<[T]> {
             nonnull_slice_from_raw_parts(self.ptr, self.full)
         }
 
-        #[cfg(feature = "extra_const")]
+        #[cfg(not(feature = "extra_const"))]
+        /// Gets a `NonNull<[T]>` pointer to the full slice.
+        #[cfg_attr(miri, track_caller)]
+        #[must_use]
+        #[inline]
+        pub fn get_full(&self) -> NonNull<[T]> {
+            nonnull_slice_from_raw_parts(self.ptr, self.full)
+        }
+
+        #[cfg(feature = "extra_extra_const")]
         /// Sets the initialized element count.
         ///
         /// # Safety
@@ -1054,7 +1170,7 @@ pub mod helpers {
             self.init = init;
         }
 
-        #[cfg(not(feature = "extra_const"))]
+        #[cfg(not(feature = "extra_extra_const"))]
         /// Sets the initialized element count.
         ///
         /// # Safety
@@ -1065,7 +1181,7 @@ pub mod helpers {
             self.init = init;
         }
 
-        #[cfg(feature = "extra_const")]
+        #[cfg(feature = "extra_extra_const")]
         /// Initializes the next element of the slice with `elem`.
         ///
         /// # Errors
@@ -1082,7 +1198,7 @@ pub mod helpers {
             Ok(())
         }
 
-        #[cfg(not(feature = "extra_const"))]
+        #[cfg(not(feature = "extra_extra_const"))]
         /// Initializes the next element of the slice with `elem`.
         ///
         /// # Errors
@@ -1099,7 +1215,7 @@ pub mod helpers {
             Ok(())
         }
 
-        #[cfg(feature = "extra_const")]
+        #[cfg(feature = "extra_extra_const")]
         /// Initializes the next element of the slice with `elem`.
         ///
         /// # Safety
@@ -1111,7 +1227,7 @@ pub mod helpers {
             self.init += 1;
         }
 
-        #[cfg(not(feature = "extra_const"))]
+        #[cfg(not(feature = "extra_extra_const"))]
         /// Initializes the next element of the slice with `elem`.
         ///
         /// # Safety
@@ -1149,28 +1265,55 @@ pub mod helpers {
             }
         }
 
+        #[cfg(feature = "extra_const")]
         /// Returns how many elements have been initialized.
+        #[must_use]
         #[inline]
-        #[allow(clippy::must_use_candidate)]
         pub const fn initialized(&self) -> usize {
             self.init
         }
 
-        /// Returns the total number of elements in the slice.
+        #[cfg(not(feature = "extra_const"))]
+        /// Returns how many elements have been initialized.
+        #[must_use]
         #[inline]
-        #[allow(clippy::must_use_candidate)]
+        pub fn initialized(&self) -> usize {
+            self.init
+        }
+
+        #[cfg(feature = "extra_const")]
+        /// Returns the total number of elements in the slice.
+        #[must_use]
+        #[inline]
         pub const fn full(&self) -> usize {
             self.full
         }
 
-        /// Returns `true` if every element in the slice has been initialized.
+        #[cfg(not(feature = "extra_const"))]
+        /// Returns the total number of elements in the slice.
+        #[must_use]
         #[inline]
-        #[allow(clippy::must_use_candidate)]
+        pub fn full(&self) -> usize {
+            self.full
+        }
+
+        #[cfg(feature = "extra_const")]
+        /// Returns `true` if every element in the slice has been initialized.
+        #[must_use]
+        #[inline]
         pub const fn is_full(&self) -> bool {
             self.init == self.full
         }
 
-        #[cfg(feature = "extra_const")]
+        #[cfg(not(feature = "extra_const"))]
+        /// Returns `true` if every element in the slice has been initialized.
+        #[must_use]
+        #[inline]
+        pub fn is_full(&self) -> bool {
+            self.init == self.full
+        }
+
+        #[cfg(feature = "extra_extra_const")]
         /// Copies as many elements from `slice` as will fit.
         ///
         /// On success, all elements are copied and `Ok(())` is returned. If
@@ -1188,9 +1331,7 @@ pub mod helpers {
             let to_copy = if slice.len() < lim { slice.len() } else { lim };
 
             unsafe {
-                slice
-                    .as_ptr()
-                    .copy_to_nonoverlapping(self.ptr.as_ptr().add(self.init), to_copy);
+                ptr::copy_nonoverlapping(slice.as_ptr(), self.ptr.as_ptr().add(self.init), to_copy);
             }
 
             self.init += to_copy;
@@ -1202,7 +1343,7 @@ pub mod helpers {
             }
         }
 
-        #[cfg(not(feature = "extra_const"))]
+        #[cfg(not(feature = "extra_extra_const"))]
         /// Copies as many elements from `slice` as will fit.
         ///
         /// On success, all elements are copied and `Ok(())` is returned. If
@@ -1220,9 +1361,7 @@ pub mod helpers {
             let to_copy = if slice.len() < lim { slice.len() } else { lim };
 
             unsafe {
-                slice
-                    .as_ptr()
-                    .copy_to_nonoverlapping(self.ptr.as_ptr().add(self.init), to_copy);
+                ptr::copy_nonoverlapping(slice.as_ptr(), self.ptr.as_ptr().add(self.init), to_copy);
             }
 
             self.init += to_copy;

@@ -14,11 +14,15 @@ use core::{
     },
 };
 
+// JUST DONE: cfg(feature = "extra_const") on all non-const in lower version fns, BUT need the not() vers.
+// WHERE: stats.rs, owned/buf.rs, owned/val.rs
+
 /// A wrapper that delegates all `Alloc` calls to `A` and logs
 /// each result via `L`.
 pub struct Stats<A, L: StatsLogger>(pub A, pub L);
 
 impl<L: StatsLogger> Stats<DefaultAlloc, L> {
+    #[cfg(feature = "extra_const")]
     /// Create a new stats‐collecting allocator wrapper.
     pub const fn new(logger: L) -> Stats<DefaultAlloc, L> {
         Stats(DefaultAlloc, logger)
@@ -26,6 +30,7 @@ impl<L: StatsLogger> Stats<DefaultAlloc, L> {
 }
 
 impl<A, L: StatsLogger> Stats<A, L> {
+    #[cfg(feature = "extra_const")]
     /// Create a new stats‐collecting allocator wrapper.
     pub const fn new_in(inner: A, logger: L) -> Stats<A, L> {
         Stats(inner, logger)
@@ -82,7 +87,7 @@ impl StatsLogger for std::sync::Mutex<std::fs::File> {
     fn log(&self, stat: AllocRes) {
         <std::fs::File as std::io::Write>::write_all(
             &mut self.lock().expect("`Mutex<File>` was poisoned"),
-            format!("{stat}").as_bytes(),
+            format!("{}", stat).as_bytes(),
         )
         .expect("failed to write to `File`");
     }
@@ -158,7 +163,7 @@ impl<W: std::io::Write> StatsLogger for IOLog<W> {
         self.buf
             .lock()
             .expect("inner `Mutex<W>` for `WrittenLog` was poisoned")
-            .write_all(format!("{stat}\n").as_bytes())
+            .write_all(format!("{}\n", stat).as_bytes())
             .expect("failed to write to inner `W` of `WrittenLog`");
     }
 
@@ -172,7 +177,7 @@ impl<W: fmt::Write> StatsLogger for FmtLog<W> {
         self.buf
             .lock()
             .expect("inner `Mutex<W>` for `FmtLog` was poisoned")
-            .write_fmt(format_args!("{stat}\n"))
+            .write_fmt(format_args!("{}\n", stat))
             .expect("failed to write to inner `W` of `FmtLog`");
     }
 
@@ -378,24 +383,25 @@ impl Display for AllocRes {
                     write!(
                         f,
                         "Successful initial allocation of {} bytes with alignment {} at {:p}, and \
-                        newly allocated bytes being {}. ({total} total bytes allocated)",
+                        newly allocated bytes being {}. ({} total bytes allocated)",
                         region.size,
                         region.align,
                         region.ptr,
                         match kind {
                             AllocKind::Uninitialized => "uninitialized".to_string(),
                             AllocKind::Zeroed => "zeroed".to_string(),
-                            AllocKind::Filled(n) => format!("filled with the byte {n}"),
+                            AllocKind::Filled(n) => format!("filled with the byte {}", n),
                             AllocKind::Patterned => "filled with a pattern".to_string(),
                             AllocKind::Shrink => unsafe { core::hint::unreachable_unchecked() },
-                        }
+                        },
+                        total
                     )
                 }
                 AllocStat::Realloc { info, kind, total } => {
                     write!(
                         f,
                         "Successful reallocation from {}->{} bytes with alignment {}->{}. \
-                        Allocation moved {:p}->{:p} and {}. ({total} total bytes allocated)",
+                        Allocation moved {:p}->{:p} and {}. ({} total bytes allocated)",
                         info.old.size,
                         info.new.size,
                         info.old.align,
@@ -407,19 +413,20 @@ impl Display for AllocRes {
                                 "newly allocated bytes were uninitialized".to_string(),
                             AllocKind::Zeroed => "newly allocated bytes were zeroed".to_string(),
                             AllocKind::Filled(n) =>
-                                format!("newly allocated bytes were filled with the byte {n}"),
+                                format!("newly allocated bytes were filled with the byte {}", n),
                             AllocKind::Patterned =>
                                 "newly allocated bytes were filled with a pattern".to_string(),
                             AllocKind::Shrink => "there were no newly allocated bytes".to_string(),
-                        }
+                        },
+                        total
                     )
                 }
                 AllocStat::Free { region, total } => {
                     write!(
                         f,
-                        "Deallocation of {} bytes with alignment {} at {:p}. ({total} total bytes \
+                        "Deallocation of {} bytes with alignment {} at {:p}. ({} total bytes \
                         allocated)",
-                        region.size, region.align, region.ptr
+                        region.size, region.align, region.ptr, total
                     )
                 }
             },
