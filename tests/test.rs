@@ -520,19 +520,19 @@ mod owned_tests {
     fn test_debug_and_display_errors() {
         // Debug impl for OwnedBuf
         let buf = OwnedBuf::<u8, DefaultAlloc>::new_unallocated_in(DefaultAlloc);
-        let s = format!("{buf:?}");
+        let s = format!("{:?}", buf);
         assert!(s.contains("OwnedBuf"));
 
         // VariableError debug and display
         let soft: VariableError<&str, &str> = VariableError::Soft("oops");
         let hard: VariableError<&str, &str> = VariableError::Hard("boom");
-        let ds = format!("{soft:?}");
-        let dh = format!("{hard:?}");
+        let ds = format!("{:?}", soft);
+        let dh = format!("{:?}", hard);
         assert!(ds.contains("Soft"));
         assert!(dh.contains("Hard"));
 
-        let ls = format!("{soft}");
-        let lh = format!("{hard}");
+        let ls = format!("{}", soft);
+        let lh = format!("{}", hard);
         assert!(ls.contains("oops"));
         assert!(lh.contains("boom"));
 
@@ -552,7 +552,11 @@ mod owned_tests {
 
 #[cfg(all(feature = "jemalloc", not(miri)))]
 mod jemalloc_tests {
-    use core::{alloc::Layout, slice};
+    use core::{
+        alloc::Layout,
+        ptr::{self, NonNull},
+        slice,
+    };
     use memapi::{ffi::jem::usable_size, jemalloc::Jemalloc, type_props::SizedProps, Alloc};
 
     #[test]
@@ -622,14 +626,14 @@ mod jemalloc_tests {
             // grow to twice as many elements
             let new_size = old_count * 2 * u32::SZ;
             let new_layout = Layout::from_size_align_unchecked(new_size, u32::ALIGN);
-            let new_ptr = alloc
+            let new_ptr: NonNull<u32> = alloc
                 .realloc(ptr.cast(), old_layout, new_layout)
                 .unwrap()
                 .cast();
 
             // original data should be intact
             for i in 0..old_count {
-                let v: u32 = new_ptr.add(i).read();
+                let v: u32 = ptr::read(new_ptr.as_ptr().add(i));
                 assert_eq!(v, i as u32 + 1);
             }
 

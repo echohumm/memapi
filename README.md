@@ -4,13 +4,17 @@
 
 A `no_std`-friendly memory allocation interface for managing raw buffers, suitable for use in collections.
 
-MSRV: 1.61.0
+MSRV: 1.56
 
-Mimalloc MSRV: 1.63.0
+MSRV with `extra_const` feature: 1.61
 
-Jemalloc MSRV: 1.71.0
+Mimalloc MSRV: 1.63
 
-MSRV with `extra_const` feature: 1.83
+Jemalloc MSRV: 1.71
+
+MSRV with `c_str` feature: 1.64
+
+MSRV with `extra_extra_const` feature: 1.83
 
 # note: the entire readme below this point is ***VERY*** outdated
 

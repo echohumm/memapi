@@ -30,15 +30,13 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.14.1
 
-## Commit 3 [Predicted]
-
-- Finally make `owned` stuff use the right MSRV and the `extra_const` feature
-
 ## Commit 2 [Predicted]
 
 - Debloat the primary surfaces
 - Implement some small TODOs (just search for them pls i'm too tired to list them here)
-- Remove stuff which supports older versions than the MSRV but adds bloat
+- Rename `extra_const` to `extra_extra_const`
+- Further lower the MSRV (many methods' constness are now behind the new `extra_const`)
+- Finally make `owned` stuff use the right MSRV and the `extra_const`/`extra_extra_const` features
 
 ## Commit 1 (2025-8-01)
 

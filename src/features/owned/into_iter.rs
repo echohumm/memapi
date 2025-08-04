@@ -38,6 +38,6 @@
 //             self.ptr = unsafe { old.add(1) };
 //             old
 //         };
-//         Some(unsafe { ptr.read() })
+//         Some(unsafe { core::ptr::read(ptr) })
 //     }
 // }
