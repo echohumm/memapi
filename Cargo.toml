@@ -2,7 +2,8 @@
 name = "memapi"
 # major will probably always be 0
 version = "0.14.1"
-edition = "2021"
+edition = "2018"
+authors = ["echohumm"]
 readme = "README.md"
 rust-version = "1.56.0"
 description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
@@ -46,18 +47,26 @@ owned = []
 drop_for_owned = ["owned"]
 zero_drop_for_owned = ["owned"]
 
-external_alloc = ["cty"]
+external_alloc = ["libc"]
 
-jemalloc = ["tikv-jemalloc-sys", "external_alloc"]
+jemalloc = ["memapi-jemalloc-sys", "external_alloc"]
 jemalloc_in_place = ["jemalloc", "resize_in_place"]
 
-mimalloc = ["libmimalloc-sys", "external_alloc"]
+mimalloc = ["memapi-mimalloc-sys", "external_alloc"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
+
+external_allocs = ["jemalloc", "mimalloc"]
+external_allocs_in_place = ["jemalloc_in_place", "mimalloc_in_place"]
 
 full_min = [
     "alloc_slice",
     "stats",
     "owned",
+]
+
+full_min_std = [
+    "full_min",
+    "std",
 ]
 
 full_no_std_no_nightly = [
@@ -87,18 +96,63 @@ full = [
 
 default = ["c_str", "extra_extra_const"]
 
+mimalloc_arena = ["memapi-mimalloc-sys/arena"]
+mimalloc_debug = ["memapi-mimalloc-sys/debug"]
+mimalloc_debug_in_debug = ["memapi-mimalloc-sys/debug_in_debug"]
+mimalloc_local_dynamic_tls = ["memapi-mimalloc-sys/local_dynamic_tls"]
+mimalloc_no_thp = ["memapi-mimalloc-sys/no_thp"]
+mimalloc_override = ["memapi-mimalloc-sys/override"]
+mimalloc_secure = ["memapi-mimalloc-sys/secure"]
+
+jemalloc_background_threads_runtime_support = ["memapi-jemalloc-sys/background_threads_runtime_support"]
+jemalloc_background_threads = ["jemalloc_background_threads_runtime_support", "memapi-jemalloc-sys/background_threads"]
+jemalloc_debug = ["memapi-jemalloc-sys/debug"]
+jemalloc_default = ["jemalloc_background_threads_runtime_support", "memapi-jemalloc-sys/default"]
+jemalloc_disable_cache_oblivious = ["memapi-jemalloc-sys/disable_cache_oblivious"]
+jemalloc_disable_initial_exec_tls = ["memapi-jemalloc-sys/disable_initial_exec_tls"]
+jemalloc_profiling = ["memapi-jemalloc-sys/profiling"]
+jemalloc_stats = ["memapi-jemalloc-sys/stats"]
+jemalloc_unprefixed_malloc_on_supported_platforms = ["memapi-jemalloc-sys/unprefixed_malloc_on_supported_platforms"]
+
 [[test]]
-name = "test"
-path = "tests/test.rs"
+name = "base"
+path = "tests/alloc.rs"
+
+[[test]]
+name = "ext"
+path = "tests/alloc_ext.rs"
+required-features = ["alloc_ext"]
+
+[[test]]
+name = "slice"
+path = "tests/alloc_slice.rs"
+required-features = ["alloc_slice"]
+
+[[test]]
+name = "stats"
+path = "tests/stats.rs"
+required-features = ["stats", "std"]
+
+[[test]]
+name = "owned"
+path = "tests/owned.rs"
+required-features = ["owned"]
+
+[[test]]
+name = "jem"
+path = "tests/jemalloc.rs"
+required-features = ["jemalloc"]
+
+[[test]]
+name = "mim"
+path = "tests/mimalloc.rs"
+required-features = ["mimalloc"]
 
 [[test]]
 name = "dangerous"
 path = "tests/potential_ub.rs"
 
-[workspace]
-members = ["mimalloc", "jemalloc"]
-
 [dependencies]
-tikv-jemalloc-sys = { version = "0.6.0", optional = true }
-cty = { version = "0.2.2", optional = true }
-libmimalloc-sys = { path = "./mimalloc", optional = true, features = ["extended", "cty"] }
+libc = { version = "0.2", optional = true }
+memapi-jemalloc-sys = { version = "0.1.1", optional = true }
+memapi-mimalloc-sys = { version = "0.1.1", optional = true, features = ["extended"] }

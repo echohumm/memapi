@@ -6,7 +6,7 @@ use crate::{
     type_props::{PtrProps, SizedProps},
     Alloc, AllocPattern,
 };
-use core::{alloc::Layout, ptr::NonNull};
+use core::{alloc::Layout, ptr::{self, NonNull}};
 
 /// Extension methods for the core [`Alloc`] trait, providing convenient routines to allocate,
 /// initialize, clone, copy, and deallocate sized and unsized types.
@@ -88,7 +88,7 @@ pub trait AllocExt: Alloc {
         match self.alloc(unsafe { data.layout() }) {
             Ok(ptr) => Ok(unsafe {
                 let guard = AllocGuard::new(
-                    NonNull::<T>::from_raw_parts(ptr, core::ptr::metadata(data)),
+                    NonNull::<T>::from_raw_parts(ptr, ptr::metadata(data)),
                     self,
                 );
                 data.clone_to_uninit(guard.as_ptr() as *mut u8);
@@ -141,7 +141,7 @@ pub trait AllocExt: Alloc {
         match self.alloc(layout) {
             Ok(p) => {
                 unsafe {
-                    p.as_ptr().write_bytes(n, layout.size());
+                    ptr::write_bytes(p.as_ptr(), n, layout.size());
                 }
                 Ok(p)
             }
@@ -168,7 +168,7 @@ pub trait AllocExt: Alloc {
                 let guard = AllocGuard::new(p.cast::<u8>(), self);
                 for i in 0..layout.size() {
                     unsafe {
-                        guard.as_ptr().add(i).write(pattern(i));
+                        ptr::write(guard.as_ptr().add(i), pattern(i));
                     }
                 }
                 Ok(guard.release())
@@ -186,7 +186,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr.as_ptr().drop_in_place();
+        ptr::drop_in_place(ptr.as_ptr());
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
@@ -199,7 +199,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        ptr.as_ptr().write_bytes(0, layout.size());
+        ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
         self.dealloc(ptr, layout);
     }
 
@@ -222,7 +222,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
-        (ptr.as_ptr() as *mut u8).write_bytes(0, ptr.size());
+        ptr::write_bytes(ptr.as_ptr() as *mut u8, 0, ptr.size());
         self.dealloc_typed(ptr);
     }
 
@@ -235,7 +235,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_zero_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr.as_ptr().drop_in_place();
+        ptr::drop_in_place(ptr.as_ptr());
         self.zero_and_dealloc_typed(ptr);
     }
 
@@ -295,12 +295,12 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         match self.alloc(data.layout()) {
             Ok(ptr) => Ok({
-                core::ptr::copy_nonoverlapping(
+                ptr::copy_nonoverlapping(
                     data as *const T as *const u8,
                     ptr.as_ptr(),
                     data.size(),
                 );
-                NonNull::from_raw_parts(ptr, core::ptr::metadata(data as *const T))
+                NonNull::from_raw_parts(ptr, ptr::metadata(data as *const T))
             }),
             Err(e) => Err(e),
         }

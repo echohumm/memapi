@@ -1,5 +1,11 @@
 use crate::{error::AllocError, helpers::SliceAllocGuard, Alloc};
-use core::{alloc::Layout, ptr::NonNull};
+use core::{
+    alloc::Layout,
+    ptr::{
+        NonNull,
+        self
+    }
+};
 
 /// Extension trait for [`Alloc`](Alloc) which provides interfaces to reallocate in-place.
 pub trait ResizeInPlace: Alloc {
@@ -109,9 +115,11 @@ pub trait ResizeInPlace: Alloc {
         n: u8,
     ) -> Result<(), AllocError> {
         self.grow_in_place(ptr, old_layout, new_size)?;
-        ptr.as_ptr()
-            .add(old_layout.size())
-            .write_bytes(n, new_size - old_layout.size());
+        ptr::write_bytes(
+            ptr.as_ptr().add(old_layout.size()),
+            n,
+            new_size - old_layout.size(),
+        );
         Ok(())
     }
 
@@ -290,7 +298,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
         } else {
             // it isn't my fault if this is wrong lol
             if crate::external_alloc::ffi::jem::xallocx(
-                ptr.as_ptr() as *mut cty::c_void,
+                ptr.as_ptr() as *mut libc::c_void,
                 new_size,
                 0,
                 crate::external_alloc::ffi::jem::layout_to_flags(new_size, old_layout.align()),
@@ -324,7 +332,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
             let flags =
                 crate::external_alloc::ffi::jem::layout_to_flags(new_size, old_layout.align());
             let usable_size = crate::external_alloc::ffi::jem::xallocx(
-                ptr.as_ptr() as *mut cty::c_void,
+                ptr.as_ptr() as *mut libc::c_void,
                 new_size,
                 0,
                 flags,
@@ -368,7 +376,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         } else {
             // this would be, though
             if crate::external_alloc::ffi::mim::mi_expand(
-                ptr.as_ptr() as *mut cty::c_void,
+                ptr.as_ptr() as *mut libc::c_void,
                 new_size,
             )
             .is_null()

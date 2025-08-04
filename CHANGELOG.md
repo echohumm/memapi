@@ -6,8 +6,8 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [0.15.0 Predicted](#0150-predicted)
 - [Version 0.14.1](#version-0141)
-  - [Commit 3 Predicted](#commit-3-predicted)
-  - [Commit 2 Predicted](#commit-2-predicted)
+  - [Commit 3 (2025-8-03)](#commit-3-2025-8-03)
+  - [Commit 2 (2025-8-03)](#commit-2-2025-8-03)
   - [Commit 1 (2025-8-01)](#commit-1-2025-8-01)
 - [Version 0.14.0](#version-0140-not-published-to-cratesio-skipping-to-0141-for-users)
   - [Commit 3 (2025-7-27)](#commit-3-2025-7-27)
@@ -17,26 +17,34 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## 0.15.0 [Predicted]
 
-- Proper tests for many untested methods
-- Proper benchmarks
+- Debloat the primary surfaces
+- Implement TODOs
+- Proper tests for many untested methods and features (maybe)
+- Proper benchmarks (maybe)
 - Finish filling API holes in `AllocSlice`
-  - with docs this time
 - Performance and binary size improvements
   - make as many sections as possible `const` [perf]
   - reduce inlining [size]
   - use helpers for repetitive code [size]
-- Lower const MSRV (if possible)
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
 ## Version 0.14.1
 
-## Commit 2 [Predicted]
+## Commit 3 (2025-8-03)
 
-- Debloat the primary surfaces
-- Implement some small TODOs (just search for them pls i'm too tired to list them here)
+- Switch to `libc` for c types to reduce dependencies
+- Switch to fork of jemalloc and mimalloc which fixes some issues
+  - now Jemalloc has a lower MSRV
+  - now jemalloc can be in the Cargo.toml without breaking everything on rust versions older than 1.61
+- Finish lowering MSRV to 1.56 using const_if! macro
+- Add features which bind to jemalloc and mimalloc's features
+- Pray I didn't break anything
+
+## Commit 2 (2025-8-03)
+
 - Rename `extra_const` to `extra_extra_const`
-- Further lower the MSRV (many methods' constness are now behind the new `extra_const`)
-- Finally make `owned` stuff use the right MSRV and the `extra_const`/`extra_extra_const` features
+- Start lowering MSRV to 1.56 using const_if! macro
+- Do stuff which was undone in the next commit with jemalloc and mimalloc
 
 ## Commit 1 (2025-8-01)
 

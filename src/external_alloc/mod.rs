@@ -1,7 +1,3 @@
-use crate::{error::AllocError, helpers::null_q};
-use core::{alloc::Layout, ptr::NonNull};
-use cty::c_void;
-
 #[cfg(feature = "jemalloc")]
 /// Module for [jemalloc](https://jemalloc.net/) support.
 pub mod jemalloc;
@@ -10,20 +6,23 @@ pub mod jemalloc;
 /// Module for [mimalloc](https://microsoft.github.io/mimalloc/) support.
 pub mod mimalloc;
 
+#[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
 pub(crate) const REALLOC_DIFF_ALIGN: &str =
     "unsupported operation: attempted to reallocate with a different alignment";
 
-#[allow(dead_code)]
+#[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
 #[cfg_attr(miri, track_caller)]
 #[inline]
-pub(crate) unsafe fn resize<F: Fn() -> *mut c_void>(
+pub(crate) unsafe fn resize<F: Fn() -> *mut libc::c_void>(
     ralloc: F,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout,
+    ptr: core::ptr::NonNull<u8>,
+    old_layout: alloc::alloc::Layout,
+    new_layout: alloc::alloc::Layout,
     need_same_align: bool,
     is_grow: bool,
-) -> Result<NonNull<u8>, AllocError> {
+) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
+    use crate::{error::AllocError, helpers::null_q};
+
     if need_same_align && new_layout.align() != old_layout.align() {
         return Err(AllocError::Other(REALLOC_DIFF_ALIGN));
     }
@@ -52,7 +51,7 @@ pub mod ffi {
         #![allow(unexpected_cfgs)]
 
         use core::alloc::Layout;
-        use cty::c_void;
+        use libc::c_void;
 
         #[cfg(any(
             target_arch = "arm",
@@ -83,7 +82,7 @@ pub mod ffi {
         /// Converts a size and alignment to flags in the form of a `c_int`.
         #[inline]
         #[must_use]
-        pub fn layout_to_flags(size: usize, align: usize) -> cty::c_int {
+        pub fn layout_to_flags(size: usize, align: usize) -> libc::c_int {
             if align <= ALIGNOF_MAX_ALIGN_T && align <= size {
                 0
             } else {
@@ -123,13 +122,13 @@ pub mod ffi {
             }
         }
 
-        pub use tikv_jemalloc_sys::*;
+        pub use memapi_jemalloc_sys::*;
     }
 
     #[cfg(feature = "mimalloc")]
     /// Bindings from `mimalloc-sys`.
     pub mod mim {
-        use cty::c_void;
+        use libc::c_void;
 
         /// Returns the usable size of the allocation pointed to by ptr.
         ///
@@ -142,6 +141,6 @@ pub mod ffi {
             mi_usable_size(ptr as *const c_void)
         }
 
-        pub use libmimalloc_sys::*;
+        pub use memapi_mimalloc_sys::*;
     }
 }

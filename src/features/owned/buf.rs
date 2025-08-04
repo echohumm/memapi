@@ -102,7 +102,8 @@ impl<T> OwnedBuf<T> {
 
     const_if! {
         "extra_const",
-        "Creates a new, unallocated owned buffer of `T`, set to use the default allocator for future allocations.",
+        "Creates a new, unallocated owned buffer of `T`, set to use the default allocator for \
+        future allocations.",
         #[must_use]
         #[inline]
         pub const fn new_unallocated() -> OwnedBuf<T> {
@@ -151,24 +152,18 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Breaks the owned buffer into its raw data.
-    pub const fn into_raw_parts(self) -> (NonNull<T>, usize, usize, A) {
-        let out = (self.buf, self.init, self.size, unsafe {
-            ptr::read(ptr::addr_of!(self.alloc))
-        });
-        let _ = ManuallyDrop::new(self);
-        out
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Breaks the owned buffer into its raw data.
-    pub fn into_raw_parts(self) -> (NonNull<T>, usize, usize, A) {
-        let out = (self.buf, self.init, self.size, unsafe {
-            ptr::read(ptr::addr_of!(self.alloc))
-        });
-        let _ = ManuallyDrop::new(self);
-        out
+    const_if! {
+        "extra_extra_const",
+        "Breaks the owned buffer into its raw data.",
+        pub const fn into_raw_parts(self) -> (NonNull<T>, usize, usize, A) {
+            let out = (self.buf, self.init, self.size, unsafe {
+                // TODO: replace all addr_of!(a) calls with &a as *const a_t
+                #[allow(clippy::borrow_as_ptr)]
+                ptr::read(&self.alloc as *const A)
+            });
+            let _ = ManuallyDrop::new(self);
+            out
+        }
     }
 
     const_if! {
@@ -216,26 +211,14 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Sets the initialized element count.
-    ///
-    /// # Safety
-    ///
-    /// All elements up to `init` elements must be guaranteed to be initialized before use.
-    #[inline]
-    pub const unsafe fn set_initialized(&mut self, init: usize) {
-        self.init = init;
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Sets the initialized element count.
-    ///
-    /// # Safety
-    ///
-    /// All elements up to `init` elements must be guaranteed to be initialized before use.
-    #[inline]
-    pub unsafe fn set_initialized(&mut self, init: usize) {
-        self.init = init;
+    const_if! {
+        "extra_extra_const",
+        "Sets the initialized element count.\n\n# Safety\n\nAll elements up to `init` elements \
+        must be guaranteed to be initialized before use.",
+        #[inline]
+        pub const unsafe fn set_initialized(&mut self, init: usize) {
+            self.init = init;
+        }
     }
 
     const_if! {
@@ -247,18 +230,13 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the contained allocator.
-    #[inline]
-    pub const fn alloc_mut(&mut self) -> &mut A {
-        &mut self.alloc
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the contained allocator.
-    #[inline]
-    pub fn alloc_mut(&mut self) -> &mut A {
-        &mut self.alloc
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the contained allocator.",
+        #[inline]
+        pub const fn alloc_mut(&mut self) -> &mut A {
+            &mut self.alloc
+        }
     }
 
     const_if! {
@@ -286,7 +264,9 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         pub const fn uninit_buf_ptr(&self) -> NonNull<[MaybeUninit<T>]> {
             nonnull_slice_from_raw_parts(
                 unsafe {
-                    NonNull::new_unchecked(self.buf.as_ptr().add(self.init).cast::<MaybeUninit<T>>())
+                    NonNull::new_unchecked(
+                        self.buf.as_ptr().add(self.init).cast::<MaybeUninit<T>>()
+                    )
                 },
                 self.size - self.init,
             )
@@ -320,82 +300,48 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable slice of the entire buffer.
-    #[inline]
-    pub const fn buf_mut(&mut self) -> &mut [MaybeUninit<T>] {
-        unsafe { &mut *self.buf_ptr().as_ptr() }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable slice of the entire buffer.
-    #[inline]
-    pub fn buf_mut(&mut self) -> &mut [MaybeUninit<T>] {
-        unsafe { &mut *self.buf_ptr().as_ptr() }
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable slice of the initialized portion of the buffer.
-    #[inline]
-    pub const fn init_buf_mut(&mut self) -> &mut [T] {
-        unsafe { &mut *self.init_buf_ptr().as_ptr() }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable slice of the initialized portion of the buffer.
-    #[inline]
-    pub fn init_buf_mut(&mut self) -> &mut [T] {
-        unsafe { &mut *self.init_buf_ptr().as_ptr() }
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable slice of the uninitialized portion of the buffer.
-    #[inline]
-    pub const fn uninit_buf_mut(&mut self) -> &mut [MaybeUninit<T>] {
-        unsafe { &mut *self.uninit_buf_ptr().as_ptr() }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable slice of the uninitialized portion of the buffer.
-    #[inline]
-    pub fn uninit_buf_mut(&mut self) -> &mut [MaybeUninit<T>] {
-        unsafe { &mut *self.uninit_buf_ptr().as_ptr() }
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Attempts to initialize the next element.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(val)` if at capacity.
-    #[inline]
-    pub const fn try_init_next(&mut self, val: T) -> Result<(), T> {
-        if self.init == self.size {
-            return Err(val);
+    const_if! {
+        "extra_extra_const",
+         "Gets a mutable slice of the entire buffer.",
+        #[inline]
+        pub const fn buf_mut(&mut self) -> &mut [MaybeUninit<T>] {
+            unsafe { &mut *self.buf_ptr().as_ptr() }
         }
-
-        unsafe {
-            self.init_next_unchecked(val);
-        }
-        Ok(())
     }
 
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Attempts to initialize the next element.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(val)` if at capacity.
-    #[inline]
-    pub fn try_init_next(&mut self, val: T) -> Result<(), T> {
-        if self.init == self.size {
-            return Err(val);
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable slice of the initialized portion of the buffer.",
+        #[inline]
+        pub const fn init_buf_mut(&mut self) -> &mut [T] {
+            unsafe { &mut *self.init_buf_ptr().as_ptr() }
         }
+    }
 
-        unsafe {
-            self.init_next_unchecked(val);
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable slice of the uninitialized portion of the buffer.",
+        #[inline]
+        pub const fn uninit_buf_mut(&mut self) -> &mut [MaybeUninit<T>] {
+            unsafe { &mut *self.uninit_buf_ptr().as_ptr() }
         }
-        Ok(())
+    }
+
+    const_if! {
+        "extra_extra_const",
+        "Attempts to initialize the next element.\n\n# Errors\n\nReturns `Err(val)` if at \
+        capacity.",
+        #[inline]
+        pub const fn try_init_next(&mut self, val: T) -> Result<(), T> {
+            if self.init == self.size {
+                return Err(val);
+            }
+
+            unsafe {
+                self.init_next_unchecked(val);
+            }
+            Ok(())
+        }
     }
 
     /// Initializes the next element, growing the buffer if necessary.
@@ -415,187 +361,95 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         Ok(())
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Initializes the next element without checking for space.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure `self.init < self.size`
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub const unsafe fn init_next_unchecked(&mut self, val: T) {
-        self.buf.as_ptr().add(self.init).write(val);
-        self.init += 1;
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Initializes the next element without checking for space.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure `self.init < self.size`
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub unsafe fn init_next_unchecked(&mut self, val: T) {
-        self.buf.as_ptr().add(self.init).write(val);
-        self.init += 1;
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Removes and returns the last element from the initialized portion of the buffer if it
-    /// exists.
-    #[inline]
-    pub const fn remove_last(&mut self) -> Option<T> {
-        if self.init != 0 {
-            Some(unsafe { self.remove_last_unchecked() })
-        } else {
-            None
+    const_if! {
+        "extra_extra_const",
+        "Initializes the next element without checking for space.\n\n# Safety\n\nThe caller must \
+        ensure `self.init < self.size`",
+        #[cfg_attr(miri, track_caller)]
+        #[inline]
+        pub const unsafe fn init_next_unchecked(&mut self, val: T) {
+            ptr::write(self.buf.as_ptr().add(self.init), val);
+            self.init += 1;
         }
     }
 
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Removes and returns the last element from the initialized portion of the buffer if it
-    /// exists.
-    #[inline]
-    pub fn remove_last(&mut self) -> Option<T> {
-        if self.init != 0 {
-            Some(unsafe { self.remove_last_unchecked() })
-        } else {
-            None
+    const_if! {
+        "extra_extra_const",
+        "Removes and returns the last element from the initialized portion of the buffer if it \
+        exists.",
+        #[inline]
+        pub const fn remove_last(&mut self) -> Option<T> {
+            if self.init != 0 {
+                Some(unsafe { self.remove_last_unchecked() })
+            } else {
+                None
+            }
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Removes and returns the last element from the initialized portion of the buffer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure there is an initialized element to remove.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub const unsafe fn remove_last_unchecked(&mut self) -> T {
-        self.init -= 1;
-        ptr::read(self.buf.as_ptr().add(self.init))
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Removes and returns the last element from the initialized portion of the buffer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure there is an initialized element to remove.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub unsafe fn remove_last_unchecked(&mut self) -> T {
-        self.init -= 1;
-        ptr::read(self.buf.as_ptr().add(self.init))
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Removes and returns the element at the given index from the initialized portion of the
-    /// buffer if it exists.
-    #[inline]
-    pub const fn remove(&mut self, idx: usize) -> Option<T> {
-        if idx < self.init {
-            Some(unsafe { self.remove_unchecked(idx) })
-        } else {
-            None
+    const_if! {
+        "extra_extra_const",
+        "Removes and returns the last element from the initialized portion of the buffer.\n\n# \
+        Safety\n\nThe caller must ensure there is an initialized element to remove.",
+        #[cfg_attr(miri, track_caller)]
+        #[inline]
+        pub const unsafe fn remove_last_unchecked(&mut self) -> T {
+            self.init -= 1;
+            ptr::read(self.buf.as_ptr().add(self.init))
         }
     }
 
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Removes and returns the element at the given index from the initialized portion of the
-    /// buffer if it exists.
-    #[inline]
-    pub fn remove(&mut self, idx: usize) -> Option<T> {
-        if idx < self.init {
-            Some(unsafe { self.remove_unchecked(idx) })
-        } else {
-            None
+    const_if! {
+        "extra_extra_const",
+        "Removes and returns the element at the given index from the initialized portion of the \
+        buffer if it exists.",
+        #[inline]
+        pub const fn remove(&mut self, idx: usize) -> Option<T> {
+            if idx < self.init {
+                Some(unsafe { self.remove_unchecked(idx) })
+            } else {
+                None
+            }
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Removes and returns the element at the given index.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the index is in the bounds of the initialized buffer.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub const unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
-        let src = self.get_ptr_unchecked(idx);
-        let value = ptr::read(src.as_ptr());
-        ptr::copy(src.as_ptr().add(1), src.as_ptr(), self.init - idx - 1);
-        self.init -= 1;
-        value
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Removes and returns the element at the given index.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the index is in the bounds of the initialized buffer.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
-        let src = self.get_ptr_unchecked(idx);
-        let value = ptr::read(src.as_ptr());
-        ptr::copy(src.as_ptr().add(1), src.as_ptr(), self.init - idx - 1);
-        self.init -= 1;
-        value
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Replaces the last element of the initialized portion of the buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(val)` if the buffer is empty. Otherwise, returns `Ok(replaced_val)`.
-    #[inline]
-    pub const fn replace_last(&mut self, val: T) -> Result<T, T> {
-        self.replace(self.init - 1, val)
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Replaces the last element of the initialized portion of the buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(val)` if the buffer is empty. Otherwise, returns `Ok(replaced_val)`.
-    #[inline]
-    pub fn replace_last(&mut self, val: T) -> Result<T, T> {
-        self.replace(self.init - 1, val)
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Replaces the element at the given index from the initialized portion of the buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(val)` if the index is out of bounds. Otherwise, returns `Ok(replaced_val)`.
-    #[inline]
-    pub const fn replace(&mut self, idx: usize, val: T) -> Result<T, T> {
-        if idx <= self.init {
-            Ok(unsafe { replace(self.get_ptr_unchecked(idx).as_ptr(), val) })
-        } else {
-            Err(val)
+    const_if! {
+        "extra_extra_const",
+        "Removes and returns the element at the given index.\n\n# Safety\n\nThe caller must ensure \
+        the index is in the bounds of the initialized buffer.",
+        #[cfg_attr(miri, track_caller)]
+        #[inline]
+        pub const unsafe fn remove_unchecked(&mut self, idx: usize) -> T {
+            let src = self.get_ptr_unchecked(idx);
+            let value = ptr::read(src.as_ptr());
+            ptr::copy(src.as_ptr().add(1), src.as_ptr(), self.init - idx - 1);
+            self.init -= 1;
+            value
         }
     }
 
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Replaces the element at the given index from the initialized portion of the buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(val)` if the index is out of bounds. Otherwise, returns `Ok(replaced_val)`.
-    #[inline]
-    pub fn replace(&mut self, idx: usize, val: T) -> Result<T, T> {
-        if idx <= self.init {
-            Ok(unsafe { replace(self.get_ptr_unchecked(idx).as_ptr(), val) })
-        } else {
-            Err(val)
+    const_if! {
+        "extra_extra_const",
+        "Replaces the last element of the initialized portion of the buffer.\n\n# Errors\n\nReturns
+        `Err(val)` if the buffer is empty. Otherwise, returns `Ok(replaced_val)`.",
+        #[inline]
+        pub const fn replace_last(&mut self, val: T) -> Result<T, T> {
+            self.replace(self.init - 1, val)
+        }
+    }
+
+    const_if! {
+        "extra_extra_const",
+        "Replaces the element at the given index from the initialized portion of the buffer.\n\n# \
+        Errors\n\nReturns `Err(val)` if the index is out of bounds. Otherwise, returns \
+        `Ok(replaced_val)`.",
+        #[inline]
+        pub const fn replace(&mut self, idx: usize, val: T) -> Result<T, T> {
+            if idx <= self.init {
+                Ok(unsafe { replace(self.get_ptr_unchecked(idx).as_ptr(), val) })
+            } else {
+                Err(val)
+            }
         }
     }
 
@@ -629,72 +483,36 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         Ok(())
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Attempts to insert `val` at the given `idx`.
-    ///
-    /// # Errors
-    ///
-    /// - `Err(val)` if the index is out of bounds, or there is no space for the element.
-    pub const fn try_insert(&mut self, idx: usize, val: T) -> Result<(), T> {
-        if idx > self.init || self.init == self.size {
-            return Err(val);
-        }
+    const_if! {
+        "extra_extra_const",
+        "Attempts to insert `val` at the given `idx`.\n\n# Errors\n\n- `Err(val)` if the index is \
+        out of bounds, or there is no space for the element.",
+        pub const fn try_insert(&mut self, idx: usize, val: T) -> Result<(), T> {
+            if idx > self.init || self.init == self.size {
+                return Err(val);
+            }
 
-        unsafe {
-            self.insert_unchecked(idx, val);
-        }
+            unsafe {
+                self.insert_unchecked(idx, val);
+            }
 
-        Ok(())
+            Ok(())
+        }
     }
 
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Attempts to insert `val` at the given `idx`.
-    ///
-    /// # Errors
-    ///
-    /// - `Err(val)` if the index is out of bounds, or there is no space for the element.
-    pub fn try_insert(&mut self, idx: usize, val: T) -> Result<(), T> {
-        if idx > self.init || self.init == self.size {
-            return Err(val);
+    const_if! {
+        "extra_extra_const",
+        "Inserts `val` at the given `idx`.\n\n# Safety\n\nThe caller must ensure `idx` is in \
+        bounds and there is space for a new element.",
+        #[cfg_attr(miri, track_caller)]
+        pub const unsafe fn insert_unchecked(&mut self, idx: usize, val: T) {
+            let dst = self.get_ptr_unchecked(idx);
+            if idx != self.init {
+                ptr::copy_nonoverlapping(dst.as_ptr(), dst.as_ptr().add(1), self.init - idx);
+            }
+            ptr::write(dst.as_ptr(), val);
+            self.init += 1;
         }
-
-        unsafe {
-            self.insert_unchecked(idx, val);
-        }
-
-        Ok(())
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    /// Inserts `val` at the given `idx`.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure `idx` is in bounds and there is space for a new element.
-    #[cfg_attr(miri, track_caller)]
-    pub const unsafe fn insert_unchecked(&mut self, idx: usize, val: T) {
-        let dst = self.get_ptr_unchecked(idx);
-        if idx != self.init {
-            ptr::copy_nonoverlapping(dst.as_ptr(), dst.as_ptr().add(1), self.init - idx);
-        }
-        dst.as_ptr().write(val);
-        self.init += 1;
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Inserts `val` at the given `idx`.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure `idx` is in bounds and there is space for a new element.
-    #[cfg_attr(miri, track_caller)]
-    pub unsafe fn insert_unchecked(&mut self, idx: usize, val: T) {
-        let dst = self.get_ptr_unchecked(idx);
-        if idx != self.init {
-            ptr::copy_nonoverlapping(dst.as_ptr(), dst.as_ptr().add(1), self.init - idx);
-        }
-        dst.as_ptr().write(val);
-        self.init += 1;
     }
 
     // TODO: add extending
@@ -984,25 +802,16 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the element at the given `idx` if it is initialized.
-    #[inline]
-    pub const fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
-        if idx < self.init {
-            Some(unsafe { self.get_mut_unchecked(idx) })
-        } else {
-            None
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the element at the given `idx` if it is initialized.
-    #[inline]
-    pub fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
-        if idx < self.init {
-            Some(unsafe { self.get_mut_unchecked(idx) })
-        } else {
-            None
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the element at the given `idx` if it is initialized.",
+        #[inline]
+        pub const fn get_mut(&mut self, idx: usize) -> Option<&mut T> {
+            if idx < self.init {
+                Some(unsafe { self.get_mut_unchecked(idx) })
+            } else {
+                None
+            }
         }
     }
 
@@ -1034,33 +843,24 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the uninitialized element at the given `idx` if it exists.
-    #[inline]
-    pub const fn get_uninit_mut(&mut self, idx: usize) -> Option<&mut MaybeUninit<T>> {
-        if idx < self.size {
-            Some(unsafe { &mut *self.get_ptr_unchecked(idx).cast().as_ptr() })
-        } else {
-            None
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the uninitialized element at the given `idx` if it exists.
-    #[inline]
-    pub fn get_uninit_mut(&mut self, idx: usize) -> Option<&mut MaybeUninit<T>> {
-        if idx < self.size {
-            Some(unsafe { &mut *self.get_ptr_unchecked(idx).cast().as_ptr() })
-        } else {
-            None
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the uninitialized element at the given `idx` if it exists.",
+        #[inline]
+        pub const fn get_uninit_mut(&mut self, idx: usize) -> Option<&mut MaybeUninit<T>> {
+            if idx < self.size {
+                Some(unsafe { &mut *self.get_ptr_unchecked(idx).cast().as_ptr() })
+            } else {
+                None
+            }
         }
     }
 
     const_if! {
         "extra_const",
         "Gets a pointer to the element at the given `idx` if it is initialized, or a pointer to \
-        the initialized element if it exists.\n\n# Errors\n\n - `Err(None)` if the index is \
-        entirely out of bounds.\n - `Err(Some(uninit_ptr))` if the index is out of the initialized \
+        the initialized element if it exists.\n\n# Errors\n\n- `Err(None)` if the index is \
+        entirely out of bounds.\n- `Err(Some(uninit_ptr))` if the index is out of the initialized \
         buffer, but still in the buffer.",
         #[inline]
         pub const fn try_get_ptr(
@@ -1078,8 +878,8 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     const_if! {
         "extra_const",
         "Gets a reference to the element at the given `idx` if it is initialized, or a reference \
-        to the initialized element if it exists.\n\n# Errors\n\n - `Err(None)` if the index is \
-        entirely out of bounds.\n - `Err(Some(uninit_ref))` if the index is out of the initialized \
+        to the initialized element if it exists.\n\n# Errors\n\n- `Err(None)` if the index is \
+        entirely out of bounds.\n- `Err(Some(uninit_ref))` if the index is out of the initialized \
         buffer, but still in the buffer.",
         #[inline]
         pub const fn try_get(&self, idx: usize) -> Result<&T, Option<&MaybeUninit<T>>> {
@@ -1091,39 +891,20 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the element at the given `idx` if it is initialized, or a
-    /// mutable reference to the uninitialized element if it exists.
-    ///
-    /// # Errors
-    ///
-    /// - `Err(None)` if the index is entirely out of bounds.
-    /// - `Err(Some(uninit_ptr))` if the index is out of the initialized buffer, but still in the
-    ///   buffer.
-    #[inline]
-    pub const fn try_get_mut(&mut self, idx: usize) -> Result<&mut T, Option<&mut MaybeUninit<T>>> {
-        if idx < self.init {
-            Ok(unsafe { self.get_mut_unchecked(idx) })
-        } else {
-            Err(self.get_uninit_mut(idx))
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the element at the given `idx` if it is initialized, or a
-    /// mutable reference to the uninitialized element if it exists.
-    ///
-    /// # Errors
-    ///
-    /// - `Err(None)` if the index is entirely out of bounds.
-    /// - `Err(Some(uninit_ptr))` if the index is out of the initialized buffer, but still in the
-    ///   buffer.
-    #[inline]
-    pub fn try_get_mut(&mut self, idx: usize) -> Result<&mut T, Option<&mut MaybeUninit<T>>> {
-        if idx < self.init {
-            Ok(unsafe { self.get_mut_unchecked(idx) })
-        } else {
-            Err(self.get_uninit_mut(idx))
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the element at the given `idx` if it is initialized, or a \
+        mutable reference to the uninitialized element if it exists.\n\n# Errors\n\n- `Err(None)` \
+        if the index is entirely out of bounds.\n- `Err(Some(uninit_ptr))` if the index is out of \
+        the initialized buffer, but still in the buffer.",
+        #[inline]
+        pub const fn try_get_mut(&mut self, idx: usize)
+        -> Result<&mut T, Option<&mut MaybeUninit<T>>> {
+            if idx < self.init {
+                Ok(unsafe { self.get_mut_unchecked(idx) })
+            } else {
+                Err(self.get_uninit_mut(idx))
+            }
         }
     }
 
@@ -1149,28 +930,15 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the element at the given `idx`.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the index is in bounds.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub const unsafe fn get_mut_unchecked(&mut self, idx: usize) -> &mut T {
-        &mut *self.get_ptr_unchecked(idx).as_ptr()
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the element at the given `idx`.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the index is in bounds.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub unsafe fn get_mut_unchecked(&mut self, idx: usize) -> &mut T {
-        &mut *self.get_ptr_unchecked(idx).as_ptr()
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the element at the given `idx`.\n\n# Safety\n\nThe caller \
+        must ensure the index is in bounds.",
+        #[cfg_attr(miri, track_caller)]
+        #[inline]
+        pub const unsafe fn get_mut_unchecked(&mut self, idx: usize) -> &mut T {
+            &mut *self.get_ptr_unchecked(idx).as_ptr()
+        }
     }
 
     const_if! {
@@ -1199,28 +967,18 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to a portion of the initialized buffer if the parameters are in
-    /// bounds.
-    #[inline]
-    pub const fn get_slice_mut(&mut self, start: usize, len: usize) -> Option<&mut [T]> {
-        if start + len < self.init {
-            Some(unsafe { self.get_slice_mut_unchecked(start, len) })
-        } else {
-            None
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to a portion of the initialized buffer if the parameters are in
-    /// bounds.
-    #[inline]
-    pub fn get_slice_mut(&mut self, start: usize, len: usize) -> Option<&mut [T]> {
-        if start + len < self.init {
-            Some(unsafe { self.get_slice_mut_unchecked(start, len) })
-        } else {
-            None
-        }
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to a portion of the initialized buffer if the parameters are in \
+        bounds.",
+         #[inline]
+         pub const fn get_slice_mut(&mut self, start: usize, len: usize) -> Option<&mut [T]> {
+             if start + len < self.init {
+                 Some(unsafe { self.get_slice_mut_unchecked(start, len) })
+             } else {
+                 None
+             }
+         }
     }
 
     const_if! {
@@ -1248,7 +1006,8 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         "extra_const",
         "Gets a reference to a portion of the buffer if the parameters are in bounds.",
         #[inline]
-        pub const fn get_uninit_slice(&self, start: usize, len: usize) -> Option<&[MaybeUninit<T>]> {
+        pub const fn get_uninit_slice(&self, start: usize, len: usize) -> Option<&[MaybeUninit<T>]>
+        {
             if start + len < self.size {
                 Some(unsafe {
                     &*(self.get_slice_ptr_unchecked(start, len).as_ptr() as *const [MaybeUninit<T>])
@@ -1259,46 +1018,34 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to a portion of the buffer if the parameters are in bounds.
-    #[inline]
-    pub const fn get_uninit_slice_mut(
-        &mut self,
-        start: usize,
-        len: usize,
-    ) -> Option<&mut [MaybeUninit<T>]> {
-        if start + len < self.size {
-            Some(unsafe {
-                &mut *(self.get_slice_ptr_unchecked(start, len).as_ptr() as *mut [MaybeUninit<T>])
-            })
-        } else {
-            None
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to a portion of the buffer if the parameters are in bounds.
-    #[inline]
-    pub fn get_uninit_slice_mut(
-        &mut self,
-        start: usize,
-        len: usize,
-    ) -> Option<&mut [MaybeUninit<T>]> {
-        if start + len < self.size {
-            Some(unsafe {
-                &mut *(self.get_slice_ptr_unchecked(start, len).as_ptr() as *mut [MaybeUninit<T>])
-            })
-        } else {
-            None
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to a portion of the buffer if the parameters are in bounds.",
+        #[inline]
+        pub const fn get_uninit_slice_mut(
+            &mut self,
+            start: usize,
+            len: usize,
+        ) -> Option<&mut [MaybeUninit<T>]> {
+            if start + len < self.size {
+                Some(unsafe {
+                    &mut *(
+                        self.get_slice_ptr_unchecked(start, len)
+                            .as_ptr() as *mut [MaybeUninit<T>]
+                    )
+                })
+            } else {
+                None
+            }
         }
     }
 
     const_if! {
         "extra_const",
         "Gets a pointer to a portion of the initialized buffer if in bounds, or a pointer to a \
-        portion of the buffer if not.\n\n# Errors\n\n - `Err(None)` if the index is entirely out of \
-        bounds.\n - `Err(Some(uninit_ptr))` if the index is out of the initialized buffer, but still \
-        in the buffer.",
+        portion of the buffer if not.\n\n# Errors\n\n- `Err(None)` if the index is entirely out of \
+        bounds.\n- `Err(Some(uninit_ptr))` if the index is out of the initialized buffer, but \
+        still in the buffer.",
         #[allow(clippy::type_complexity)]
         #[inline]
         pub const fn try_get_slice_ptr(
@@ -1317,7 +1064,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     const_if! {
         "extra_const",
         "Gets a reference to a portion of the buffer if in bounds, or a reference to a portion of \
-        the buffer if not.\n\n# Errors\n\n - `Err(None)` if the index is entirely out of bounds.\n - \
+        the buffer if not.\n\n# Errors\n\n- `Err(None)` if the index is entirely out of bounds.\n- \
         `Err(Some(uninit_ref))` if the index is out of the initialized buffer, but still in the \
         buffer.",
         #[inline]
@@ -1334,59 +1081,36 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to a portion of the initialized buffer if in bounds, or a mutable
-    /// reference to a portion of the buffer if not.
-    ///
-    /// # Errors
-    ///
-    /// - `Err(None)` if the index is entirely out of bounds.
-    /// - `Err(Some(uninit_mut))` if the index is out of the initialized buffer, but still in the
-    ///   buffer.
-    #[inline]
-    pub const fn try_get_slice_mut(
-        &mut self,
-        start: usize,
-        len: usize,
-    ) -> Result<&mut [T], Option<&mut [MaybeUninit<T>]>> {
-        if start + len < self.init {
-            Ok(unsafe { self.get_slice_mut_unchecked(start, len) })
-        } else {
-            Err(self.get_uninit_slice_mut(start, len))
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to a portion of the initialized buffer if in bounds, or a mutable
-    /// reference to a portion of the buffer if not.
-    ///
-    /// # Errors
-    ///
-    /// - `Err(None)` if the index is entirely out of bounds.
-    /// - `Err(Some(uninit_mut))` if the index is out of the initialized buffer, but still in the
-    ///   buffer.
-    #[inline]
-    pub fn try_get_slice_mut(
-        &mut self,
-        start: usize,
-        len: usize,
-    ) -> Result<&mut [T], Option<&mut [MaybeUninit<T>]>> {
-        if start + len < self.init {
-            Ok(unsafe { self.get_slice_mut_unchecked(start, len) })
-        } else {
-            Err(self.get_uninit_slice_mut(start, len))
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to a portion of the initialized buffer if in bounds, or a \
+        mutable reference to a portion of the buffer if not.\n\n# Errors\n\n- `Err(None)` if the \
+        index is entirely out of bounds.\n- `Err(Some(uninit_mut))` if the index is out of the \
+        initialized buffer, but still in the buffer.",
+        #[inline]
+        pub const fn try_get_slice_mut(
+            &mut self,
+            start: usize,
+            len: usize,
+        ) -> Result<&mut [T], Option<&mut [MaybeUninit<T>]>> {
+            if start + len < self.init {
+                Ok(unsafe { self.get_slice_mut_unchecked(start, len) })
+            } else {
+                Err(self.get_uninit_slice_mut(start, len))
+            }
         }
     }
 
     const_if! {
         "extra_const",
         "Gets a pointer to a portion of the buffer.\n\n# Safety\n\nThe caller must ensure the \
-        parameters are in bounds, meaning:\n - If using the slice as initialized data, \
-        `start + len < self.init`\n - If using the slice as uninitialized data, `start + len < \
+        parameters are in bounds, meaning:\n- If using the slice as initialized data, \
+        `start + len < self.init`\n- If using the slice as uninitialized data, `start + len < \
         self.size`",
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        pub const unsafe fn get_slice_ptr_unchecked(&self, start: usize, len: usize) -> NonNull<[T]> {
+        pub const unsafe fn get_slice_ptr_unchecked(&self, start: usize, len: usize) -> NonNull<[T]>
+        {
             nonnull_slice_from_raw_parts(self.get_ptr_unchecked(start), len)
         }
     }
@@ -1394,8 +1118,8 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     const_if! {
         "extra_const",
         "Gets a reference to a portion of the buffer.\n\n# Safety\n\nThe caller must ensure the \
-        parameters are in bounds, meaning:\n - If using the slice as initialized data, \
-        `start + len < self.init`\n - If using the slice as uninitialized data, `start + len < \
+        parameters are in bounds, meaning:\n- If using the slice as initialized data, \
+        `start + len < self.init`\n- If using the slice as uninitialized data, `start + len < \
         self.size`",
         #[cfg_attr(miri, track_caller)]
         #[inline]
@@ -1404,32 +1128,18 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to a portion of the buffer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the parameters are in bounds, meaning:
-    /// - If using the slice as initialized data, `start + len < self.init`.
-    /// - If using the slice as uninitialized data, `start + len < self.size`.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub const unsafe fn get_slice_mut_unchecked(&mut self, start: usize, len: usize) -> &mut [T] {
-        &mut *self.get_slice_ptr_unchecked(start, len).as_ptr()
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to a portion of the buffer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the parameters are in bounds, meaning:
-    /// - If using the slice as initialized data, `start + len < self.init`.
-    /// - If using the slice as uninitialized data, `start + len < self.size`.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    pub unsafe fn get_slice_mut_unchecked(&mut self, start: usize, len: usize) -> &mut [T] {
-        &mut *self.get_slice_ptr_unchecked(start, len).as_ptr()
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to a portion of the buffer.\n\n# Safety\n\nThe caller must \
+        ensure the parameters are in bounds, meaning:\n- If using the slice as initialized data, \
+        `start + len < self.init`.\n- If using the slice as uninitialized data, `start + len < \
+        self.size`.",
+        #[cfg_attr(miri, track_caller)]
+        #[inline]
+        pub const unsafe fn get_slice_mut_unchecked(&mut self, start: usize, len: usize) -> &mut [T]
+        {
+            &mut *self.get_slice_ptr_unchecked(start, len).as_ptr()
+        }
     }
 
     /// Reserves space for `additional` elements.
@@ -1457,8 +1167,10 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         match len.cmp(&self.init) {
             Ordering::Greater => return Err(AllocError::Other(TRUNC_LGR)),
             Ordering::Equal => unsafe {
-                slice_ptr_from_raw_parts(self.as_mut_ptr().add(len), self.init - len)
-                    .drop_in_place();
+                ptr::drop_in_place(slice_ptr_from_raw_parts(
+                    self.as_mut_ptr().add(len),
+                    self.init - len,
+                ));
                 self.init = len;
             },
             Ordering::Less => {}
@@ -1541,16 +1253,18 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     }
 
     /// Drops all initialized values and resets the count.
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn clear(&mut self) {
         self.init = 0;
         self.clear_inner();
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     fn clear_inner(&self) {
         unsafe {
-            slice_ptr_from_raw_parts(self.buf.as_ptr(), self.init).drop_in_place();
+            ptr::drop_in_place(slice_ptr_from_raw_parts(self.buf.as_ptr(), self.init));
         }
     }
 
@@ -1558,7 +1272,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn drop_and_dealloc(self) {
-        if self.buf != NonNull::dangling() {
+        if self.size != 0 {
             unsafe {
                 self.clear_inner();
                 dealloc_n(self.alloc(), self.buf, self.size);
@@ -1571,11 +1285,9 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn drop_zero_and_dealloc(self) {
-        if self.buf != NonNull::dangling() {
+        if self.size != 0 {
             unsafe {
-                self.clear_inner();
-                self.buf.as_ptr().write_bytes(0, self.size);
-                dealloc_n(self.alloc(), self.buf, self.size);
+                self.drop_zero_nc();
             }
         }
     }
@@ -1584,13 +1296,11 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn reset(&mut self) {
-        if self.buf != NonNull::dangling() {
+        if self.size != 0 {
             unsafe {
-                slice_ptr_from_raw_parts(self.buf.as_ptr(), self.init).drop_in_place();
+                self.clear_inner();
                 dealloc_n(self.alloc(), self.buf, self.size);
-                self.init = 0;
-                self.size = 0;
-                self.buf = NonNull::dangling();
+                self.initial_values();
             }
         }
     }
@@ -1599,16 +1309,27 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn reset_zero(&mut self) {
-        if self.buf != NonNull::dangling() {
+        if self.size != 0 {
             unsafe {
-                self.clear_inner();
-                self.buf.as_ptr().write_bytes(0, self.size);
-                dealloc_n(self.alloc(), self.buf, self.size);
-                self.init = 0;
-                self.size = 0;
-                self.buf = NonNull::dangling();
+                self.drop_zero_nc();
+                self.initial_values();
             }
         }
+    }
+
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    unsafe fn drop_zero_nc(&self) {
+        self.clear_inner();
+        ptr::write_bytes(self.buf.as_ptr(), 0, self.size);
+        dealloc_n(self.alloc(), self.buf, self.size);
+    }
+
+    #[inline]
+    unsafe fn initial_values(&mut self) {
+        self.init = 0;
+        self.size = 0;
+        self.buf = NonNull::dangling();
     }
 
     const_if! {
@@ -1629,18 +1350,13 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the initialized portion of the buffer.
-    #[inline]
-    pub const fn as_slice_mut(&mut self) -> &mut [T] {
-        unsafe { &mut *nonnull_slice_from_raw_parts(self.buf, self.init).as_ptr() }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the initialized portion of the buffer.
-    #[inline]
-    pub fn as_slice_mut(&mut self) -> &mut [T] {
-        unsafe { &mut *nonnull_slice_from_raw_parts(self.buf, self.init).as_ptr() }
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the initialized portion of the buffer.",
+        #[inline]
+        pub const fn as_slice_mut(&mut self) -> &mut [T] {
+            unsafe { &mut *nonnull_slice_from_raw_parts(self.buf, self.init).as_ptr() }
+        }
     }
 
     const_if! {
@@ -1658,29 +1374,23 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         #[inline]
         pub const fn as_uninit_slice(&self) -> &[MaybeUninit<T>] {
             unsafe {
-                &*(nonnull_slice_from_raw_parts(self.buf.cast::<MaybeUninit<T>>(), self.size).as_ptr()
-                    as *const [MaybeUninit<T>])
+                &*(
+                    nonnull_slice_from_raw_parts(self.buf.cast::<MaybeUninit<T>>(), self.size)
+                        .as_ptr() as *const [MaybeUninit<T>]
+                )
             }
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the entire buffer.
-    #[inline]
-    pub const fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<T>] {
-        unsafe {
-            &mut *nonnull_slice_from_raw_parts(self.buf.cast::<MaybeUninit<T>>(), self.size)
-                .as_ptr()
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the entire buffer.
-    #[inline]
-    pub fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<T>] {
-        unsafe {
-            &mut *nonnull_slice_from_raw_parts(self.buf.cast::<MaybeUninit<T>>(), self.size)
-                .as_ptr()
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the entire buffer.",
+        #[inline]
+        pub const fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<T>] {
+            unsafe {
+                &mut *nonnull_slice_from_raw_parts(self.buf.cast::<MaybeUninit<T>>(), self.size)
+                    .as_ptr()
+            }
         }
     }
 
@@ -1721,39 +1431,21 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a mutable reference to the initialized portion of the buffer if it exists. Otherwise,
-    /// gets an uninitialized mutable reference to the entire buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(uninit_ptr)` if there are no initialized elements in the buffer.
-    #[inline]
-    pub const fn try_as_slice_mut(&mut self) -> Result<&mut [T], Option<&mut [MaybeUninit<T>]>> {
-        if self.init != 0 {
-            Ok(self.as_slice_mut())
-        } else if self.size != 0 {
-            Err(Some(self.as_uninit_slice_mut()))
-        } else {
-            Err(None)
-        }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a mutable reference to the initialized portion of the buffer if it exists. Otherwise,
-    /// gets an uninitialized mutable reference to the entire buffer.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(uninit_ptr)` if there are no initialized elements in the buffer.
-    #[inline]
-    pub fn try_as_slice_mut(&mut self) -> Result<&mut [T], Option<&mut [MaybeUninit<T>]>> {
-        if self.init != 0 {
-            Ok(self.as_slice_mut())
-        } else if self.size != 0 {
-            Err(Some(self.as_uninit_slice_mut()))
-        } else {
-            Err(None)
+    const_if! {
+        "extra_extra_const",
+        "Gets a mutable reference to the initialized portion of the buffer if it exists. \
+        Otherwise, gets an uninitialized mutable reference to the entire buffer.\n\n# \
+        Errors\n\nReturns `Err(uninit_ptr)` if there are no initialized elements in the buffer.",
+        #[inline]
+        pub const fn try_as_slice_mut(&mut self) -> Result<&mut [T], Option<&mut [MaybeUninit<T>]>>
+        {
+            if self.init != 0 {
+                Ok(self.as_slice_mut())
+            } else if self.size != 0 {
+                Err(Some(self.as_uninit_slice_mut()))
+            } else {
+                Err(None)
+            }
         }
     }
 
@@ -1778,42 +1470,24 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    /// Gets a reference to the buffer as a [`Buf`], and its allocator.
-    ///
-    /// The data will be considered unowned after this operation.
-    pub const fn into_buf_with_alloc(self) -> (Buf<'static, T>, A) {
-        let out = (
-            Buf {
-                buf: unsafe {
-                    &*(nonnull_slice_from_raw_parts(self.buf, self.init).as_ptr()
-                        as *const [MaybeUninit<T>])
+    const_if! {
+        "extra_extra_const",
+        "Gets a reference to the buffer as a [`Buf`], and its allocator.\n\nThe data will be \
+        considered unowned after this operation.",
+        pub const fn into_buf_with_alloc(self) -> (Buf<'static, T>, A) {
+            let out = (
+                Buf {
+                    buf: unsafe {
+                        &*(nonnull_slice_from_raw_parts(self.buf, self.init).as_ptr()
+                            as *const [MaybeUninit<T>])
+                    },
+                    init: self.init,
                 },
-                init: self.init,
-            },
-            unsafe { ptr::read(&self.alloc) },
-        );
-        let _ = ManuallyDrop::new(self);
-        out
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    /// Gets a reference to the buffer as a [`Buf`], and its allocator.
-    ///
-    /// The data will be considered unowned after this operation.
-    pub fn into_buf_with_alloc(self) -> (Buf<'static, T>, A) {
-        let out = (
-            Buf {
-                buf: unsafe {
-                    &*(nonnull_slice_from_raw_parts(self.buf, self.init).as_ptr()
-                        as *const [MaybeUninit<T>])
-                },
-                init: self.init,
-            },
-            unsafe { ptr::read(&self.alloc) },
-        );
-        let _ = ManuallyDrop::new(self);
-        out
+                unsafe { ptr::read(&self.alloc) },
+            );
+            let _ = ManuallyDrop::new(self);
+            out
+        }
     }
 
     /// Gets a reference to the buffer as a [`Buf`].
@@ -2240,6 +1914,25 @@ impl<'s, T, A: Alloc> IntoIterator for &'s mut OwnedBuf<T, A> {
 // impl<T, A: Alloc> IntoIterator for OwnedBuf<T, A> {
 //     type Item = T;
 //     type IntoIter = OwnedIter<T, A>;
+//
+//     fn into_iter(self) -> OwnedIter<T, A> {
+//         let OwnedBuf {
+//             buf,
+//             init,
+//             size,
+//             alloc,
+//             ..
+//         } = self;
+//         OwnedIter {
+//             buf,
+//             init,
+//             size,
+//             idx: 0,
+//             bidx: init,
+//             alloc: ManuallyDrop::new(alloc),
+//             _marker: PhantomData,
+//         }
+//     }
 // }
 
 #[cfg(all(feature = "drop_for_owned", not(feature = "zero_drop_for_owned")))]
@@ -2563,13 +2256,16 @@ impl<'s, T> Buf<'s, T> {
         self.buf
     }
 
-    /// Gets a slice of the initialized portion of the buffer.
-    #[must_use]
-    #[inline]
-    pub const fn init_buf(&self) -> &'s [T] {
-        unsafe {
-            &*(nonnull_slice_from_raw_parts(self.buf_ptr().cast(), self.init).as_ptr()
-                as *const [T])
+    const_if! {
+        "extra_const",
+        "Gets a slice of the initialized portion of the buffer.",
+        #[must_use]
+        #[inline]
+        pub const fn init_buf(&self) -> &'s [T] {
+            unsafe {
+                &*(nonnull_slice_from_raw_parts(self.buf_ptr().cast(), self.init).as_ptr()
+                    as *const [T])
+            }
         }
     }
 

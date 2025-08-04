@@ -15,10 +15,51 @@ use core::{
     ptr::{self, NonNull},
 };
 // TODO: slice growth and realloc with copying and cloning.
-// TODO: reduce duplication
+// MAYBEDO: reduce duplication
+
+macro_rules! realloc {
+    (
+        $fun:ident,
+        $self:ident,$ptr:ident,
+        $len:expr,
+        $new_len:expr,
+        $ty:ty
+        $(,$pat:ident$(($val:ident))?)?)
+    => {
+		realloc!(
+            fn(usize) -> u8,
+            $fun,
+            $self,
+            $ptr,
+            $len,
+            $new_len,
+            $ty $(,$pat$(($val))?)?
+        )
+	};
+    ($f:ty,
+        $fun:ident,
+        $self:ident,
+        $ptr:ident,
+        $len:expr,
+        $new_len:expr,
+        $ty:ty
+        $(,$pat:ident$(($val:ident))?)?
+    )
+    => {
+        $fun(
+            $self,
+            $ptr.cast(),
+            Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALIGN),
+            layout_or_sz_align::<$ty>($new_len)
+                .map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?,
+            $(AllocPattern::<$f>::$pat$(($val))?)?
+        )
+        .map(NonNull::cast)
+    }
+}
 
 /// Small helper to fill new elements of a grown slice using a predicate.
-fn fill_new_elems_with<T, A: Alloc, F: Fn(usize) -> T>(
+unsafe fn fill_new_elems_with<T, A: Alloc + ?Sized, F: Fn(usize) -> T>(
     a: &A,
     p: NonNull<T>,
     len: usize,
@@ -26,13 +67,35 @@ fn fill_new_elems_with<T, A: Alloc, F: Fn(usize) -> T>(
     f: F,
 ) -> NonNull<T> {
     let mut guard = SliceAllocGuard::new(p, a, new_len);
-    unsafe {
-        guard.set_init(len);
-    }
+    guard.set_init(len);
     for i in len..new_len {
-        unsafe { guard.init_unchecked(f(i)) }
+        guard.init_unchecked(f(i));
     }
     guard.release_first()
+}
+
+unsafe fn resize_init<
+    T,
+    I: Fn(NonNull<[T]>, &mut usize),
+    A: Alloc + ?Sized,
+    F: Fn(&A, NonNull<T>, usize, usize) -> Result<NonNull<T>, AllocError>,
+>(
+    a: &A,
+    ptr: NonNull<T>,
+    len: usize,
+    new_len: usize,
+    f: F,
+    init: I,
+) -> Result<NonNull<T>, AllocError> {
+    match f(a, ptr, len, new_len) {
+        Ok(p) => {
+            let mut guard = SliceAllocGuard::new(p, a, new_len);
+            guard.set_init(len);
+            init(guard.get_uninit_part(), &mut guard.init);
+            Ok(guard.release_first())
+        }
+        Err(e) => Err(e),
+    }
 }
 
 /// Slice-specific extension methods for [`Alloc`], providing convenient functions for slice
@@ -207,7 +270,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
-        slice_ptr_from_raw_parts(ptr.as_ptr() as *mut T, init).drop_in_place();
+        ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr() as *mut T, init));
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
@@ -225,8 +288,8 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[MaybeUninit<T>]>,
         init: usize,
     ) {
-        slice_ptr_from_raw_parts(slice.as_ptr() as *mut T, init).drop_in_place();
-        (slice.as_ptr() as *mut T).write_bytes(0, nonnull_slice_len(slice));
+        ptr::drop_in_place(slice_ptr_from_raw_parts(slice.as_ptr() as *mut T, init));
+        ptr::write_bytes(slice.as_ptr() as *mut T, 0, nonnull_slice_len(slice));
         self.dealloc(slice.cast::<u8>(), slice.layout());
     }
 
@@ -463,15 +526,14 @@ pub trait AllocSlice: Alloc {
         new_len: usize,
         init: I,
     ) -> Result<NonNull<T>, AllocError> {
-        match self.grow_raw_slice(ptr, len, new_len) {
-            Ok(p) => {
-                let mut guard = SliceAllocGuard::new(p, self, new_len);
-                guard.set_init(len);
-                init(guard.get_uninit_part(), &mut guard.init);
-                Ok(guard.release_first())
-            }
-            Err(e) => Err(e),
-        }
+        resize_init(
+            self,
+            ptr,
+            len,
+            new_len,
+            |a, p, len, new| unsafe { a.grow_raw_slice(p, len, new) },
+            init,
+        )
     }
 
     /// Grows a `[T]` to a new length and fills each new element with `T`'s default value.
@@ -625,7 +687,7 @@ pub trait AllocSlice: Alloc {
 
         if new_len < init {
             let to_drop = init - new_len;
-            slice_ptr_from_raw_parts(ptr.as_ptr().add(new_len), to_drop).drop_in_place();
+            ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr().add(new_len), to_drop));
         }
 
         self.shrink_raw_slice(ptr, len, new_len)
@@ -865,15 +927,14 @@ pub trait AllocSlice: Alloc {
         new_len: usize,
         init: I,
     ) -> Result<NonNull<T>, AllocError> {
-        match self.realloc_raw_slice(ptr, len, new_len) {
-            Ok(p) => {
-                let mut guard = SliceAllocGuard::new(p, self, new_len);
-                guard.set_init(len);
-                init(guard.get_uninit_part(), &mut guard.init);
-                Ok(guard.release_first())
-            }
-            Err(e) => Err(e),
-        }
+        resize_init(
+            self,
+            ptr,
+            len,
+            new_len,
+            |a, p, len, new| unsafe { a.realloc_raw_slice(p, len, new) },
+            init,
+        )
     }
 
     /// Reallocates a slice to a new length and fills each new element with `T`'s default value.
@@ -946,7 +1007,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        ptr.as_ptr().write_bytes(0, n);
+        ptr::write_bytes(ptr.as_ptr(), 0, n);
         self.dealloc_n(ptr, n);
     }
 
@@ -960,7 +1021,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        slice_ptr_from_raw_parts(ptr.as_ptr(), n).drop_in_place();
+        ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr(), n));
         self.dealloc_n(ptr, n);
     }
 }
@@ -968,9 +1029,9 @@ pub trait AllocSlice: Alloc {
 impl<A: Alloc + ?Sized> AllocSlice for A {}
 
 #[cfg(feature = "alloc_ext")]
-/// Slice-specific extension methods for [`AllocExt`](crate::alloc_ext::AllocExt), providing
+/// Slice-specific extension methods for [`AllocExt`](crate::AllocExt), providing
 /// extended convenient functions for slice allocator operations.
-pub trait AllocSliceExt: AllocSlice + crate::alloc_ext::AllocExt {
+pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// Attempts to allocate a block of memory for `len` instances of `T`, filled with bytes
     /// initialized to `n`.
     ///

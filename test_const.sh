@@ -3,10 +3,13 @@
 set -e
 
 # test most recent
-cargo test -F owned --no-default-features
+cargo test -F owned --no-default-features -F full_no_nightly
 
-# test extra_extra_const with its msrv of 1.83
-cargo +1.83.0 test --no-default-features --features="full_min,extra_extra_const"
+# test extra_extra_const with its msrv of 1.83, as well as external_allocs_in_place (msrv 1.63)
+cargo +1.83.0 test --no-default-features --features="full_min,extra_extra_const,external_allocs_in_place"
+
+# test external_allocs_in_place with its msrv of 1.63
+cargo +1.63.0 test --no-default-features --features="full_min,external_allocs_in_place"
 
 # test extra_const with its msrv of 1.61
 cargo +1.61.0 test --no-default-features --features="full_min,extra_const"

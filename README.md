@@ -8,9 +8,7 @@ MSRV: 1.56
 
 MSRV with `extra_const` feature: 1.61
 
-Mimalloc MSRV: 1.63
-
-Jemalloc MSRV: 1.71
+Mimalloc/Jemalloc MSRV: 1.63
 
 MSRV with `c_str` feature: 1.64
 
