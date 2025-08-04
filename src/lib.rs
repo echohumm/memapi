@@ -51,7 +51,11 @@
 // TODO: less inlining
 // TODO: get rid of all placeholders (like in docs)
 // TODO: check for consistency between imports
-// TODO: switch from `.cast::<T>()` to `as *<ptr_ty> T`
+// TODO: avoid macros where helpers can be used (reduces bin size) (like spec_ci/from! in owned)
+
+
+// TODO: add ide settings to repo
+
 
 // TODO: collapse this into fewer branches
 macro_rules! const_if {

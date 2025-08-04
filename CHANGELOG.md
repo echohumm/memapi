@@ -4,8 +4,10 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Table of Contents
 
-- [0.15.0 Predicted](#0150-predicted)
-- [Version 0.14.2](#version-0142)
+- [Version 0.15.0 Predicted](#version-0150-predicted)
+- [Version 0.14.3](#version-0143)
+  - [Commit 1](#)
+- [Version 0.14.2](#version-0142-2025-8-03)
   - [Commit 2](#commit-2-2025-8-03)
   - [Commit 1](#commit-1-2025-8-03)
 - [Version 0.14.1](#version-0141-2025-8-01)
@@ -15,7 +17,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - [Commit 1 (2025-7-26)](#commit-1-2025-7-26)
 - [Version 0.13.2](#version-0132-2025-7-25)
 
-## 0.15.0 [Predicted]
+## Version 0.15.0 [Predicted]
 
 - Debloat the primary surfaces
 - Implement TODOs
@@ -28,7 +30,19 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - use helpers for repetitive code [size]
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
-# Version 0.14.2
+## Version 0.14.3
+
+## Commit 1 (2025-8-04)
+Mostly just to transfer work done on one computer to another, minimal work done
+
+- Switched `OwnedBuf` methods which take another owned buffer as a "slice" to take an actual slice (and for some, an 
+  allocator)
+- Start adding `try_init_next_slice[_grow]`/`init_next_slice_unchecked` methods to `OwnedBuf` (parallel to
+  `Vec::extend_from_slice`)
+- Improve `clone_into` underlying specialization implementation
+  - Still janky, using `try_insert_slice_grow` until above methods are implemented
+
+# Version 0.14.2 (2025-8-03)
 
 ## Commit 2 (2025-8-03)
 
@@ -36,14 +50,14 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Switch to fork of jemalloc and mimalloc which fixes some issues
   - now Jemalloc has a lower MSRV
   - now jemalloc can be in the Cargo.toml without breaking everything on rust versions older than 1.61
-- Finish lowering MSRV to 1.56 using const_if! macro
+- Finish lowering MSRV to 1.56 using `const_if!` macro
 - Add features which bind to jemalloc and mimalloc's features
 - Pray I didn't break anything
 
 ## Commit 1 (2025-8-03)
 
 - Rename `extra_const` to `extra_extra_const`
-- Start lowering MSRV to 1.56 using const_if! macro
+- Start lowering MSRV to 1.56 using `const_if!` macro
 - Do stuff which was undone in the next commit with jemalloc and mimalloc
 
 ## Version 0.14.1 (2025-8-01)

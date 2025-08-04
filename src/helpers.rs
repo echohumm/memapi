@@ -5,7 +5,7 @@ use crate::{
 };
 use core::{
     alloc::Layout,
-    mem::{align_of, transmute, ManuallyDrop},
+    mem::{transmute, ManuallyDrop},
     num::NonZeroUsize,
     ops::Deref,
     ptr::{self, eq as peq, NonNull},
@@ -544,7 +544,7 @@ impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
             ptr::drop_in_place(slice_ptr_from_raw_parts(self.ptr.as_ptr(), self.init));
             self.alloc.dealloc(
                 self.ptr.cast(),
-                Layout::from_size_align_unchecked(T::SZ * self.full, align_of::<T>()),
+                Layout::from_size_align_unchecked(T::SZ * self.full, T::ALIGN),
             );
         }
     }

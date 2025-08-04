@@ -15,9 +15,7 @@ use core::{
     fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
     marker::PhantomData,
-    mem::align_of,
-    mem::ManuallyDrop,
-    mem::{transmute, MaybeUninit},
+    mem::{transmute, ManuallyDrop, MaybeUninit},
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr::{self, replace, NonNull},
     slice::{self, SliceIndex},
@@ -157,7 +155,6 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         "Breaks the owned buffer into its raw data.",
         pub const fn into_raw_parts(self) -> (NonNull<T>, usize, usize, A) {
             let out = (self.buf, self.init, self.size, unsafe {
-                // TODO: replace all addr_of!(a) calls with &a as *const a_t
                 #[allow(clippy::borrow_as_ptr)]
                 ptr::read(&self.alloc as *const A)
             });
@@ -519,41 +516,62 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     // TODO: finish docs
 
     /// Placeholder docs
-    #[allow(clippy::missing_errors_doc)]
-    #[allow(clippy::type_complexity)]
-    pub fn replace_last_slice<A2: Alloc>(
-        &mut self,
-        slice: OwnedBuf<T, A2>,
-    ) -> Result<OwnedBuf<T, A2>, VariableError<OwnedBuf<T, A2>, (OwnedBuf<T, A2>, AllocError)>>
-    {
-        let init = slice.initialized();
-        self.replace_slice(
-            match self.init.checked_sub(init) {
-                Some(idx) => idx,
-                None => {
-                    return Err(Hard((
-                        slice,
-                        AllocError::ArithmeticOverflow(self.init, ArithOp::Sub, init),
-                    )))
-                }
-            },
-            slice,
-        )
+    pub fn try_init_next_slice_grow<'s>(&mut self, new_slice: &'s [T]) -> Result<(), VariableError<&'s [T], (&'s [T], AllocError)>> {
+        todo!()
+    }
+
+    /// Placeholder docs
+    pub fn try_init_next_slice<'s>(&mut self, new_slice: &'s [T]) -> Result<(), &'s [T]> {
+        todo!()
+    }
+
+    /// Placeholder docs
+    pub unsafe fn init_next_slice_unchecked<'s>(&mut self, new_slice: &'s [T]) {
+        todo!()
     }
 
     /// Placeholder docs
     #[allow(clippy::missing_errors_doc)]
     #[allow(clippy::type_complexity)]
-    pub fn replace_slice<A2: Alloc>(
+    pub fn replace_last_slice<'s, A2: Alloc>(
+        &mut self,
+        new_slice: &'s [T],
+        out_alloc: A2,
+    ) -> Result<OwnedBuf<T, A2>, VariableError<(&'s [T], A2), ((&'s [T], A2), AllocError)>> {
+        self.replace_slice(
+            match self.init.checked_sub(new_slice.len()) {
+                Some(idx) => idx,
+                None => {
+                    return Err(Hard((
+                        (new_slice, out_alloc),
+                        // TODO: more consistently use checked ops and this error. maybe make a
+                        //  macro or some helpers?
+                        AllocError::ArithmeticOverflow(self.init, ArithOp::Sub, new_slice.len()),
+                    )));
+                }
+            },
+            new_slice,
+            out_alloc,
+        )
+    }
+
+    // TODO: make sure all slice methods are still correct now that they use normal slices
+    // TODO: make sure all const methods don't return stuff with tuples or variable errors, as
+    //  them not being Destruct causes problems.
+
+    /// Placeholder docs
+    #[allow(clippy::missing_errors_doc)]
+    #[allow(clippy::type_complexity)]
+    pub fn replace_slice<'s, A2: Alloc>(
         &mut self,
         idx: usize,
-        slice: OwnedBuf<T, A2>,
-    ) -> Result<OwnedBuf<T, A2>, VariableError<OwnedBuf<T, A2>, (OwnedBuf<T, A2>, AllocError)>>
-    {
-        let cnt = slice.initialized();
+        new_slice: &'s [T],
+        out_alloc: A2,
+    ) -> Result<OwnedBuf<T, A2>, VariableError<(&'s [T], A2), ((&'s [T], A2), AllocError)>> {
+        let cnt = new_slice.len();
         // must replace in the initialized region (or 1 outside it, which is basically extending)
         if idx > self.init {
-            return Err(Soft(slice));
+            return Err(Soft((new_slice, out_alloc)));
         }
         // get the number of elements we’ll be swapping out
         let overlap_cnt = self.init - idx;
@@ -562,19 +580,19 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
 
         // grow if needed
         if let Err(e) = self.expand_to_fit(new_init) {
-            return Err(Hard((slice, e)));
+            return Err(Hard(((new_slice, out_alloc), e)));
         }
 
         // get the region we’re about to overwrite
         let init_elems = match self.get_slice_mut(idx, overlap_cnt) {
             Some(buf) => buf,
-            None => return Err(Soft(slice)),
+            None => return Err(Soft((new_slice, out_alloc))),
         };
 
-        // allocate space for the removed elements, reusing the input buffer's allocator
-        let out_buf = match alloc_slice::<T, A2>(&slice.alloc, overlap_cnt, A2::alloc) {
+        // allocate space for the removed elements
+        let out_buf = match alloc_slice::<T, A2>(&out_alloc, overlap_cnt, A2::alloc) {
             Ok(mem) => mem.cast::<T>(),
-            Err(e) => return Err(Hard((slice, e))),
+            Err(e) => return Err(Hard(((new_slice, out_alloc), e))),
         };
 
         // copy the old elements out
@@ -582,20 +600,18 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             ptr::copy_nonoverlapping(init_elems.as_ptr(), out_buf.as_ptr(), overlap_cnt);
         }
 
-        let (in_buf, _, in_sz, a) = slice.into_raw_parts();
-
         unsafe {
             // overwrite with new elements
-            ptr::copy_nonoverlapping(in_buf.as_ptr(), self.buf.as_ptr().add(idx), cnt);
+            ptr::copy_nonoverlapping(new_slice.as_ptr(), self.buf.as_ptr().add(idx), cnt);
 
             self.init = new_init;
-            dealloc_n(&a, in_buf, in_sz);
+            let _ = ManuallyDrop::new(new_slice);
 
             Ok(OwnedBuf::from_raw_parts(
                 out_buf,
                 overlap_cnt,
                 overlap_cnt,
-                a,
+                out_alloc,
             ))
         }
     }
@@ -612,20 +628,20 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// `alloc_err` may be:
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::LayoutError`] if the computed layout is invalid.
-    pub fn try_insert_slice_grow<A2: Alloc>(
+    pub fn try_insert_slice_grow<'s>(
         &mut self,
         idx: usize,
-        slice: OwnedBuf<T, A2>,
-    ) -> Result<(), VariableError<OwnedBuf<T, A2>, (OwnedBuf<T, A2>, AllocError)>> {
+        new_slice: &'s [T],
+    ) -> Result<(), VariableError<&'s [T], (&'s [T], AllocError)>> {
         if idx > self.init {
-            return Err(Soft(slice));
+            return Err(Soft(new_slice));
         }
-        if let Err(e) = self.expand_to_fit(self.init + slice.len()) {
-            return Err(Hard((slice, e)));
+        if let Err(e) = self.expand_to_fit(self.init + new_slice.len()) {
+            return Err(Hard((new_slice, e)));
         }
 
         unsafe {
-            self.insert_slice_unchecked(idx, slice);
+            self.insert_slice_unchecked(idx, new_slice);
         }
 
         Ok(())
@@ -637,17 +653,13 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     ///
     /// - `Err(slice)` if the index is out of bounds, or there is no space for some elements of the
     ///   slice.
-    pub fn try_insert_slice<A2: Alloc>(
-        &mut self,
-        idx: usize,
-        slice: OwnedBuf<T, A2>,
-    ) -> Result<(), OwnedBuf<T, A2>> {
-        if idx > self.init || self.init + slice.len() > self.size {
-            return Err(slice);
+    pub fn try_insert_slice<'s>(&mut self, idx: usize, new_slice: &'s [T]) -> Result<(), &'s [T]> {
+        if idx > self.init || self.init + new_slice.len() > self.size {
+            return Err(new_slice);
         }
 
         unsafe {
-            self.insert_slice_unchecked(idx, slice);
+            self.insert_slice_unchecked(idx, new_slice);
         }
 
         Ok(())
@@ -661,25 +673,21 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - the index is in bounds
     /// - the index plus the initialized length of the slice will not go outside of the allocated
     ///   buffer.
-    pub unsafe fn insert_slice_unchecked<A2: Alloc>(&mut self, idx: usize, slice: OwnedBuf<T, A2>) {
+    pub unsafe fn insert_slice_unchecked<'s>(&mut self, idx: usize, new_slice: &'s [T]) {
         // destination of the slice
         let dst = self.get_ptr_unchecked(idx);
+        // length of the slice
+        let len = new_slice.len();
         // shift elements over to make space as necessary
         if idx != self.init {
-            ptr::copy_nonoverlapping(dst.as_ptr(), dst.as_ptr().add(slice.init), self.init - idx);
+            ptr::copy_nonoverlapping(dst.as_ptr(), dst.as_ptr().add(len), self.init - idx);
         }
         // pointer to initialized elements
-        let src = slice.as_slice_ptr().as_ptr();
-        let len = slice.init;
+        let src = new_slice.as_ptr();
         // write in the elements
         ptr::copy_nonoverlapping(src as *const T, self.buf.as_ptr().add(idx), len);
-        // deallocate the original buffer
-        slice.alloc.dealloc(
-            NonNull::new_unchecked(src as *mut u8),
-            Layout::from_size_align_unchecked(T::SZ * slice.size, align_of::<T>()),
-        );
-        // noop but stops the non-consumed warning.
-        let _ = ManuallyDrop::new(slice);
+        // prevent the slice's elements from being dropped
+        let _ = ManuallyDrop::new(new_slice);
         // update initialized element count
         self.init += len;
     }
@@ -1806,10 +1814,16 @@ macro_rules! spec_ci_impl {
                  let (init, tail) = self.split_at(target.len());
 
                 target.clone_from_slice(init);
-                // temporary solution until extend_from_slice is implemented.
-                target.try_insert_slice_grow(0, OwnedBuf::<T>::from(tail))
-                    .expect("`OwnedBuf::clone_from`: necessary grow failed");
-                Ok(())
+                // TEMPORARY: this solution works until extend_from_slice is implemented.
+                match target.try_insert_slice_grow(0, tail) {
+                    Ok(()) => Ok(()),
+                    Err(v_err) => match v_err {
+                        // TODO: verify this is unreachable, then replace with
+                        //  unreachable_unchecked()
+                        Soft(_) => unreachable!(),
+                        Hard((_, e)) => Err(e)
+                    }
+                }
             }
         }
     }
