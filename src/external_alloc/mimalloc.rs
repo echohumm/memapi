@@ -1,14 +1,14 @@
 use crate::{
     external_alloc::resize,
     ffi::mim as ffi,
-    helpers::{null_q, zsl_check},
+    helpers::{null_q_zsl_check},
     Alloc, AllocError,
 };
 use core::{
     alloc::{GlobalAlloc, Layout},
     ptr::NonNull,
 };
-use cty::c_void;
+use libc::c_void;
 
 /// Handle to the mimalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`](Alloc).
@@ -42,16 +42,12 @@ unsafe impl GlobalAlloc for MiMalloc {
 }
 
 #[cfg_attr(miri, track_caller)]
-#[inline]
 fn zsl_check_alloc(
     layout: Layout,
     alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
 ) -> Result<NonNull<u8>, AllocError> {
-    zsl_check(layout, |layout: Layout| {
-        null_q(
-            unsafe { alloc(layout.size(), layout.align()) } as *mut u8,
-            layout,
-        )
+    null_q_zsl_check(layout, |layout| {
+        unsafe { alloc(layout.size(), layout.align()) as *mut u8 }
     })
 }
 
@@ -132,13 +128,12 @@ impl Alloc for MiMalloc {
         _: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        null_q(
+        null_q_zsl_check(new_layout, |new_layout| {
             ffi::mi_realloc_aligned(
                 ptr.as_ptr() as *mut c_void,
                 new_layout.size(),
                 new_layout.align(),
-            ),
-            new_layout,
-        )
+            )
+        })
     }
 }

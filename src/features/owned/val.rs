@@ -73,36 +73,22 @@ impl<T: ?Sized> HeapVal<T> {
         HeapVal::copy_from_ptr_in(val, DefaultAlloc)
     }
 
-    #[cfg(feature = "extra_const")]
-    /// Constructs a new [`HeapVal`] using the given pointer and the default allocator.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the given pointer points to a valid `T` allocated using the default
-    /// allocator.
-    #[must_use]
-    #[inline]
-    pub const unsafe fn from_raw(ptr: NonNull<T>) -> HeapVal<T> {
-        HeapVal::from_raw_in(ptr, DefaultAlloc)
-    }
-
-    #[cfg(not(feature = "extra_const"))]
-    /// Constructs a new [`HeapVal`] using the given pointer and the default allocator.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the given pointer points to a valid `T` allocated using the default
-    /// allocator.
-    #[must_use]
-    #[inline]
-    pub unsafe fn from_raw(ptr: NonNull<T>) -> HeapVal<T> {
-        HeapVal::from_raw_in(ptr, DefaultAlloc)
+    const_if! {
+        "extra_const",
+        "Constructs a new [`HeapVal`] using the given pointer and the default allocator.\n\n# \
+        Safety\n\nThe caller must ensure the given pointer points to a valid `T` allocated using \
+        the default allocator.",
+        #[must_use]
+        #[inline]
+        pub const unsafe fn from_raw(ptr: NonNull<T>) -> HeapVal<T> {
+            HeapVal::from_raw_in(ptr, DefaultAlloc)
+        }
     }
 }
 
 
 impl<T, A: Alloc> HeapVal<T, A> {
-    /// Constructs a new [`HeapVal`] with the given value, in the given allocator.
+    /// Constructs a new [`HeapVal`] with the given value in the given allocator.
     #[inline]
     pub fn new_in(val: T, alloc: A) -> Result<HeapVal<T, A>, AllocError> {
         Ok(unsafe { HeapVal::from_raw_in(alloc_write(&alloc, val)?, alloc) })
@@ -115,17 +101,13 @@ impl<T, A: Alloc> HeapVal<T, A> {
         Ok(unsafe { HeapVal::from_raw_in(alloc_write(&alloc, val.clone())?, alloc) })
     }
 
-    #[cfg(feature = "extra_extra_const")]
-    pub const fn unwrap(self) -> T {
-        let val = unsafe { ptr::read(self.ptr.as_ptr()) };
-        let _ = ManuallyDrop::new(self);
-        val
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    pub fn unwrap(self) -> T {
-        unsafe {
-            ptr::read(ManuallyDrop::new(self).ptr.as_ptr())
+    const_if! {
+        "extra_extra_const",
+        "PLACEHOLDER",
+        pub const fn unwrap(self) -> T {
+            let val = unsafe { ptr::read(self.ptr.as_ptr()) };
+            let _ = ManuallyDrop::new(self);
+            val
         }
     }
 }
@@ -234,37 +216,19 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
         ))
     }
 
-    #[cfg(feature = "extra_const")]
-    /// Constructs a new [`HeapVal`] using the given pointer and allocator.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the given pointer points to a valid `T` allocated using the given
-    /// allocator.
-    #[must_use]
-    #[inline]
-    pub const unsafe fn from_raw_in(ptr: NonNull<T>, alloc: A) -> HeapVal<T, A> {
-        HeapVal {
-            ptr,
-            alloc,
-            _marker: PhantomData,
-        }
-    }
-
-    #[cfg(not(feature = "extra_const"))]
-    /// Constructs a new [`HeapVal`] using the given pointer and allocator.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure the given pointer points to a valid `T` allocated using the given
-    /// allocator.
-    #[must_use]
-    #[inline]
-    pub unsafe fn from_raw_in(ptr: NonNull<T>, alloc: A) -> HeapVal<T, A> {
-        HeapVal {
-            ptr,
-            alloc,
-            _marker: PhantomData,
+    const_if! {
+        "extra_const",
+        "Constructs a new [`HeapVal`] using the given pointer and allocator.\n\n# Safety\n\nThe \
+        caller must ensure the given pointer points to a valid `T` allocated using the given \
+        allocator.",
+        #[must_use]
+        #[inline]
+        pub const unsafe fn from_raw_in(ptr: NonNull<T>, alloc: A) -> HeapVal<T, A> {
+            HeapVal {
+                ptr,
+                alloc,
+                _marker: PhantomData,
+            }
         }
     }
 
@@ -280,7 +244,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn reset(&self) {
-        self.ptr.as_ptr().drop_in_place();
+        ptr::drop_in_place(self.ptr.as_ptr());
         self.alloc.dealloc(self.ptr.cast(), self.ptr.layout());
     }
 
@@ -296,104 +260,58 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn reset_zero(&self) {
-        self.ptr.as_ptr().drop_in_place();
+        ptr::drop_in_place(self.ptr.as_ptr());
         let layout = self.ptr.layout();
-        (self.ptr.as_ptr() as *mut u8).write_bytes(0, layout.size());
+        ptr::write_bytes(self.ptr.as_ptr() as *mut u8, 0, layout.size());
         self.alloc.dealloc(self.ptr.cast(), layout);
     }
 
-    #[cfg(feature = "extra_const")]
-    /// Converts this [`HeapVal`] into a [`NonNull`] pointer to its value.
-    #[inline]
-    pub const fn into_ptr(self) -> NonNull<T> {
-        let ptr = self.ptr;
-        let _ = ManuallyDrop::new(self);
-        ptr
-    }
-
-    #[cfg(not(feature = "extra_const"))]
-    /// Converts this [`HeapVal`] into a [`NonNull`] pointer to its value.
-    #[inline]
-    pub fn into_ptr(self) -> NonNull<T> {
-        let ptr = self.ptr;
-        let _ = ManuallyDrop::new(self);
-        ptr
+    const_if! {
+        "extra_const",
+        "Converts this [`HeapVal`] into a [`NonNull`] pointer to its value.",
+        #[inline]
+        pub const fn into_ptr(self) -> NonNull<T> {
+            let ptr = self.ptr;
+            let _ = ManuallyDrop::new(self);
+            ptr
+        }
     }
 
     // TODO: finish this type and its docs
 
-    #[cfg(feature = "extra_const")]
-    #[inline]
-    pub const fn as_ptr(&self) -> NonNull<T> {
-        self.ptr
+    const_if! {
+        "extra_const",
+        "PLACEHOLDER",
+        #[inline]
+        pub const fn as_ptr(&self) -> NonNull<T> {
+            self.ptr
+        }
     }
-
-    #[cfg(not(feature = "extra_const"))]
-    #[inline]
-    pub fn as_ptr(&self) -> NonNull<T> {
-        self.ptr
+    
+    const_if! {
+        "extra_extra_const",
+        "PLACEHOLDER",
+        #[must_use]
+        #[inline]
+        pub const fn leak<'a>(self) -> &'a mut T {
+            let ptr = self.ptr;
+            let _ = ManuallyDrop::new(self);
+            unsafe { &mut *ptr.as_ptr() }
+        }
     }
-
-    #[cfg(feature = "extra_const")]
-    #[inline]
-    pub const fn as_raw_ptr(&self) -> *const T {
-        self.ptr.as_ptr()
-    }
-
-    #[cfg(not(feature = "extra_const"))]
-    #[inline]
-    pub fn as_raw_ptr(&self) -> *const T {
-        self.ptr.as_ptr()
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    #[inline]
-    pub const fn as_mut_raw_ptr(&mut self) -> *mut T {
-        self.ptr.as_ptr()
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    #[inline]
-    pub fn as_mut_raw_ptr(&mut self) -> *mut T {
-        self.ptr.as_ptr()
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    #[must_use]
-    #[inline]
-    pub const fn leak<'a>(self) -> &'a mut T {
-        let ptr = self.ptr;
-        let _ = ManuallyDrop::new(self);
-        unsafe { &mut *ptr.as_ptr() }
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    #[must_use]
-    #[inline]
-    pub fn leak<'a>(self) -> &'a mut T {
-        let ptr = self.ptr;
-        let _ = ManuallyDrop::new(self);
-        unsafe { &mut *ptr.as_ptr() }
-    }
-
-    #[cfg(feature = "extra_extra_const")]
-    #[must_use]
-    #[inline]
-    pub const fn leak_with_alloc<'a>(self) -> (&'a mut T, A) {
-        let ptr = self.ptr;
-        let alloc = unsafe { ptr::read(ptr::addr_of!(self.alloc)) };
-        let _ = ManuallyDrop::new(self);
-        (unsafe { &mut *ptr.as_ptr() }, alloc)
-    }
-
-    #[cfg(not(feature = "extra_extra_const"))]
-    #[must_use]
-    #[inline]
-    pub fn leak_with_alloc<'a>(self) -> (&'a mut T, A) {
-        let ptr = self.ptr;
-        let alloc = unsafe { ptr::read(ptr::addr_of!(self.alloc)) };
-        let _ = ManuallyDrop::new(self);
-        (unsafe { &mut *ptr.as_ptr() }, alloc)
+    
+    const_if! {
+        "extra_extra_const",
+        "PLACEHOLDER",
+        #[must_use]
+        #[inline]
+        pub const fn leak_with_alloc<'a>(self) -> (&'a mut T, A) {
+            let ptr = self.ptr;
+            #[allow(clippy::borrow_as_ptr)]
+            let alloc = unsafe { ptr::read(&self.alloc as *const A) };
+            let _ = ManuallyDrop::new(self);
+            (unsafe { &mut *ptr.as_ptr() }, alloc)
+        }
     }
 }
 

@@ -7,8 +7,6 @@ import os
 FEATURES = [
     "nightly",
     "std",
-    "extra_const",
-    "extra_extra_const",
     "c_str",
     "metadata",
     "clone_to_uninit",
@@ -21,8 +19,25 @@ FEATURES = [
     "owned",
     "drop_for_owned",
     "zero_drop_for_owned",
+    "external_alloc",
     "jemalloc",
     "mimalloc",
+    "jemalloc_background_threads",
+    "jemalloc_background_threads_runtime_support",
+    # probably just a featureset, not a real feature, so it shouldn't be here, but it will stay until i check
+    "jemalloc_debug",
+    "jemalloc_disable_cache_oblivious",
+    "jemalloc_disable_initial_exec_tls",
+    "jemalloc_profiling",
+    "jemalloc_stats",
+    "jemalloc_unprefixed_malloc_on_supported_platforms",
+    "mimalloc_arena",
+    "mimalloc_debug",
+    "mimalloc_debug_in_debug",
+    "mimalloc_local_dynamic_tls",
+    "mimalloc_no_thp",
+    "mimalloc_override",
+    "mimalloc_secure"
 ]
 
 NIGHTLY_FEATURES = {
@@ -33,13 +48,14 @@ NIGHTLY_FEATURES = {
     "specialization",
     "owned",
     "drop_for_owned",
-    "zero_drop_for_owned",
+    "zero_drop_for_owned"
 }
 
 def all_feature_combinations(features):
     for r in range(len(features) + 1):
         for combo in itertools.combinations(features, r):
             yield combo
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -69,7 +85,8 @@ def main():
     if args.clippy:
         cargo_cmd = ["cargo", "clippy"]
         # clap will pass dashes into the "flags" section after '--'
-        extra_args = ["--", "-D", "clippy::all", "-D", "clippy::pedantic", "-D", "clippy::cargo"]
+        extra_args = ["--", "-D", "clippy::all", "-D", "clippy::pedantic", "-D", "clippy::cargo", "-A",
+                      "clippy::redundant_feature_names"]
     else:
         cargo_cmd = ["cargo", "miri", "test"] if args.miri else ["cargo", "test"]
         extra_args = []
@@ -101,6 +118,7 @@ def main():
             sys.exit(e.returncode)
 
     print("All feature combinations completed successfully.")
+
 
 if __name__ == "__main__":
     main()

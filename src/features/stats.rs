@@ -14,26 +14,27 @@ use core::{
     },
 };
 
-// JUST DONE: cfg(feature = "extra_const") on all non-const in lower version fns, BUT need the not() vers.
-// WHERE: stats.rs, owned/buf.rs, owned/val.rs
-
 /// A wrapper that delegates all `Alloc` calls to `A` and logs
 /// each result via `L`.
 pub struct Stats<A, L: StatsLogger>(pub A, pub L);
 
 impl<L: StatsLogger> Stats<DefaultAlloc, L> {
-    #[cfg(feature = "extra_const")]
-    /// Create a new stats‐collecting allocator wrapper.
-    pub const fn new(logger: L) -> Stats<DefaultAlloc, L> {
-        Stats(DefaultAlloc, logger)
+    const_if! {
+        "extra_const",
+        "Create a new stats‐collecting allocator wrapper.",
+        pub const fn new(logger: L) -> Stats<DefaultAlloc, L> {
+            Stats(DefaultAlloc, logger)
+        }
     }
 }
 
 impl<A, L: StatsLogger> Stats<A, L> {
-    #[cfg(feature = "extra_const")]
-    /// Create a new stats‐collecting allocator wrapper.
-    pub const fn new_in(inner: A, logger: L) -> Stats<A, L> {
-        Stats(inner, logger)
+    const_if! {
+        "extra_const",
+        "Create a new stats‐collecting allocator wrapper.",
+        pub const fn new_in(inner: A, logger: L) -> Stats<A, L> {
+            Stats(inner, logger)
+        }
     }
 }
 
@@ -254,24 +255,30 @@ impl<W: fmt::Write> From<W> for FmtLog<W> {
 
 #[cfg(feature = "std")]
 impl<W: std::io::Write> IOLog<W> {
-    /// Creates a new [`IOLog`] from a writer.
-    #[inline]
-    pub const fn new(buf: W) -> IOLog<W> {
-        IOLog {
-            buf: std::sync::Mutex::new(buf),
-            total: AtomicUsize::new(0),
+    const_if! {
+        "extra_const",
+        "Creates a new [`IOLog`] from a writer.",
+        #[inline]
+        pub const fn new(buf: W) -> IOLog<W> {
+            IOLog {
+                buf: std::sync::Mutex::new(buf),
+                total: AtomicUsize::new(0),
+            }
         }
     }
 }
 
 #[cfg(feature = "std")]
 impl<W: fmt::Write> FmtLog<W> {
-    /// Creates a new [`FmtLog`] from a writer.
-    #[inline]
-    pub const fn new(buf: W) -> FmtLog<W> {
-        FmtLog {
-            buf: std::sync::Mutex::new(buf),
-            total: AtomicUsize::new(0),
+    const_if! {
+        "extra_const",
+        "Creates a new [`FmtLog`] from a writer.",
+        #[inline]
+        pub const fn new(buf: W) -> FmtLog<W> {
+            FmtLog {
+                buf: std::sync::Mutex::new(buf),
+                total: AtomicUsize::new(0),
+            }
         }
     }
 
@@ -290,13 +297,16 @@ impl<W: fmt::Write> FmtLog<W> {
 
 #[cfg(feature = "std")]
 impl StatCollectingLog {
-    /// Creates a new [`StatCollectingLog`].
-    #[must_use]
-    #[inline]
-    pub const fn new() -> StatCollectingLog {
-        StatCollectingLog {
-            results: std::sync::Mutex::new(Vec::new()),
-            total: AtomicUsize::new(0),
+    const_if! {
+        "extra_const",
+        "Creates a new [`StatCollectingLog`].",
+        #[must_use]
+        #[inline]
+        pub const fn new() -> StatCollectingLog {
+            StatCollectingLog {
+                results: std::sync::Mutex::new(Vec::new()),
+                total: AtomicUsize::new(0),
+            }
         }
     }
 

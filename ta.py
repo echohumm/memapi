@@ -5,6 +5,7 @@ import os
 
 def run(cmd, **kwargs):
     print(f"> Running: {' '.join(cmd)}")
+    # noinspection PyArgumentList
     subprocess.run(cmd, check=True, **kwargs)
 
 def main():
