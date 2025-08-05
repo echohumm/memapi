@@ -6,6 +6,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Version 0.15.0 Predicted](#version-0150-predicted)
 - [Version 0.14.3](#version-0143)
+  - [Commit 2](#commit-2-2025-8-04)
   - [Commit 1](#commit-1-2025-8-04)
 - [Version 0.14.2](#version-0142-2025-8-03)
   - [Commit 2](#commit-2-2025-8-03)
