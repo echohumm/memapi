@@ -6,7 +6,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Version 0.15.0 Predicted](#version-0150-predicted)
 - [Version 0.14.3](#version-0143)
-  - [Commit 1](#)
+  - [Commit 1](#commit-1-2025-8-04)
 - [Version 0.14.2](#version-0142-2025-8-03)
   - [Commit 2](#commit-2-2025-8-03)
   - [Commit 1](#commit-1-2025-8-03)
@@ -40,7 +40,7 @@ Mostly just to transfer work done on one computer to another, minimal work done
 - Start adding `try_init_next_slice[_grow]`/`init_next_slice_unchecked` methods to `OwnedBuf` (parallel to
   `Vec::extend_from_slice`)
 - Improve `clone_into` underlying specialization implementation
-  - Still janky, using `try_insert_slice_grow` until above methods are implemented
+  - Still janky, using `try_insert_slice_grow` until the above methods are implemented
 
 # Version 0.14.2 (2025-8-03)
 

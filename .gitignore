@@ -1,4 +1,6 @@
-/target
-/.idea
+target
 rustc-ice*
 Cargo.lock
+.idea/workspace.xml
+.idea/misc.xml
+.idea/.gitignore
