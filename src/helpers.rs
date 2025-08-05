@@ -5,7 +5,7 @@ use crate::{
 };
 use core::{
     alloc::Layout,
-    mem::{transmute, ManuallyDrop},
+    mem::{transmute, forget},
     num::NonZeroUsize,
     ops::Deref,
     ptr::{self, eq as peq, NonNull},
@@ -267,7 +267,7 @@ impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
         #[must_use]
         pub const fn release(self) -> NonNull<T> {
             let ptr = self.ptr;
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             ptr
         }
     }
@@ -347,12 +347,13 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
 
     const_if! {
         "extra_const",
-        "Release ownership of the slice without deallocating memory.",
+        "Release ownership of the slice without deallocating memory, returning a `NonNull<T>` \
+        pointer to the slice.",
         #[must_use]
         #[inline]
         pub const fn release(self) -> NonNull<[T]> {
             let ret = self.get_init_part();
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             ret
         }
     }
@@ -365,7 +366,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         #[inline]
         pub const fn release_first(self) -> NonNull<T> {
             let ret = self.ptr;
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             ret
         }
     }

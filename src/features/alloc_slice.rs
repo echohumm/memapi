@@ -15,7 +15,6 @@ use core::{
     ptr::{self, NonNull},
 };
 // TODO: slice growth and realloc with copying and cloning.
-// MAYBEDO: reduce duplication
 
 macro_rules! realloc {
     (

@@ -7,7 +7,7 @@ use core::{
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     hash::{Hash, Hasher},
     marker::PhantomData,
-    mem::ManuallyDrop,
+    mem::forget,
     ops::{Deref, DerefMut},
     ptr::{self, NonNull},
 };
@@ -105,7 +105,7 @@ impl<T, A: Alloc> HeapVal<T, A> {
         "PLACEHOLDER",
         pub const fn unwrap(self) -> T {
             let val = unsafe { ptr::read(self.ptr.as_ptr()) };
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             val
         }
     }
@@ -271,7 +271,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
         #[inline]
         pub const fn into_ptr(self) -> NonNull<T> {
             let ptr = self.ptr;
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             ptr
         }
     }
@@ -294,7 +294,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
         #[inline]
         pub const fn leak<'a>(self) -> &'a mut T {
             let ptr = self.ptr;
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             unsafe { &mut *ptr.as_ptr() }
         }
     }
@@ -308,7 +308,7 @@ impl<T: ?Sized, A: Alloc> HeapVal<T, A> {
             let ptr = self.ptr;
             #[allow(clippy::borrow_as_ptr)]
             let alloc = unsafe { ptr::read(&self.alloc as *const A) };
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             (unsafe { &mut *ptr.as_ptr() }, alloc)
         }
     }

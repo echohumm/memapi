@@ -74,8 +74,8 @@ full_no_std_no_nightly = [
     "c_str",
     "extra_extra_const",
     # extern
-    "jemalloc_in_place",
-    "mimalloc_in_place",
+    "external_allocs_in_place",
+
     "full_min",
 ]
 
@@ -153,6 +153,6 @@ name = "dangerous"
 path = "tests/potential_ub.rs"
 
 [dependencies]
-libc = { version = "0.2", optional = true }
+libc = { version = "^0.2", optional = true }
 memapi-jemalloc-sys = { version = "0.1.1", optional = true }
-memapi-mimalloc-sys = { version = "0.1.1", optional = true, features = ["extended"] }
+memapi-mimalloc-sys = { version = "0.1.2", optional = true, features = ["extended"] }

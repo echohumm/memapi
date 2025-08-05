@@ -15,13 +15,12 @@ use core::{
     fmt::{self, Debug, Display, Formatter},
     hash::{Hash, Hasher},
     marker::PhantomData,
-    mem::{transmute, ManuallyDrop, MaybeUninit},
+    mem::{forget, transmute, MaybeUninit},
     ops::{Deref, DerefMut, Index, IndexMut},
     ptr::{self, replace, NonNull},
     slice::{self, SliceIndex},
 };
 // TODO: more array utilities like into_array, into_flattened() to reverse into_chunks, etc.
-// TODO: use actual slices for things like insert_slice instead of owned buffers
 
 /// Calculates the actual size for a buffer, taking into account `T`'s potentially ZST status.
 #[inline]
@@ -158,7 +157,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 #[allow(clippy::borrow_as_ptr)]
                 ptr::read(&self.alloc as *const A)
             });
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             out
         }
     }
@@ -512,22 +511,45 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         }
     }
 
-    // TODO: add extending
     // TODO: finish docs
 
     /// Placeholder docs
-    pub fn try_init_next_slice_grow<'s>(&mut self, new_slice: &'s [T]) -> Result<(), VariableError<&'s [T], (&'s [T], AllocError)>> {
-        todo!()
+    pub fn try_init_next_slice_grow<'s>(
+        &mut self,
+        slice: &'s [T],
+    ) -> Result<(), VariableError<&'s [T], (&'s [T], AllocError)>>
+    where
+        T: Clone,
+    {
+        self.expand_to_fit(self.init + slice.len())
+            .map_err(|e| Hard((slice, e)))?;
+        unsafe {
+            self.init_next_slice_unchecked(slice);
+        }
+        Ok(())
     }
 
     /// Placeholder docs
-    pub fn try_init_next_slice<'s>(&mut self, new_slice: &'s [T]) -> Result<(), &'s [T]> {
-        todo!()
+    pub fn try_init_next_slice<'s>(&mut self, slice: &'s [T]) -> Result<(), &'s [T]>
+    where
+        T: Clone,
+    {
+        if self.init + slice.len() > self.size {
+            return Err(slice);
+        }
+
+        unsafe {
+            self.init_next_slice_unchecked(slice);
+        }
+        Ok(())
     }
 
     /// Placeholder docs
-    pub unsafe fn init_next_slice_unchecked<'s>(&mut self, new_slice: &'s [T]) {
-        todo!()
+    pub unsafe fn init_next_slice_unchecked(&mut self, slice: &[T])
+    where
+        T: Clone,
+    {
+        <[T] as SpecInitNextSlice<T, A>>::init_next_slice(self, slice);
     }
 
     /// Placeholder docs
@@ -605,7 +627,6 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             ptr::copy_nonoverlapping(new_slice.as_ptr(), self.buf.as_ptr().add(idx), cnt);
 
             self.init = new_init;
-            let _ = ManuallyDrop::new(new_slice);
 
             Ok(OwnedBuf::from_raw_parts(
                 out_buf,
@@ -673,7 +694,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     /// - the index is in bounds
     /// - the index plus the initialized length of the slice will not go outside of the allocated
     ///   buffer.
-    pub unsafe fn insert_slice_unchecked<'s>(&mut self, idx: usize, new_slice: &'s [T]) {
+    pub unsafe fn insert_slice_unchecked(&mut self, idx: usize, new_slice: &[T]) {
         // destination of the slice
         let dst = self.get_ptr_unchecked(idx);
         // length of the slice
@@ -685,9 +706,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         // pointer to initialized elements
         let src = new_slice.as_ptr();
         // write in the elements
-        ptr::copy_nonoverlapping(src as *const T, self.buf.as_ptr().add(idx), len);
-        // prevent the slice's elements from being dropped
-        let _ = ManuallyDrop::new(new_slice);
+        ptr::copy_nonoverlapping(src, self.buf.as_ptr().add(idx), len);
         // update initialized element count
         self.init += len;
     }
@@ -1285,6 +1304,8 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 self.clear_inner();
                 dealloc_n(self.alloc(), self.buf, self.size);
             }
+            #[cfg(any(feature = "drop_for_owned", feature = "zero_drop_for_owned"))]
+            forget(self);
         }
     }
 
@@ -1297,6 +1318,8 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             unsafe {
                 self.drop_zero_nc();
             }
+            #[cfg(any(feature = "drop_for_owned", feature = "zero_drop_for_owned"))]
+            forget(self);
         }
     }
 
@@ -1308,7 +1331,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             unsafe {
                 self.clear_inner();
                 dealloc_n(self.alloc(), self.buf, self.size);
-                self.initial_values();
+                self.uninit_values();
             }
         }
     }
@@ -1320,7 +1343,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
         if self.size != 0 {
             unsafe {
                 self.drop_zero_nc();
-                self.initial_values();
+                self.uninit_values();
             }
         }
     }
@@ -1334,7 +1357,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
     }
 
     #[inline]
-    unsafe fn initial_values(&mut self) {
+    unsafe fn uninit_values(&mut self) {
         self.init = 0;
         self.size = 0;
         self.buf = NonNull::dangling();
@@ -1493,7 +1516,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
                 },
                 unsafe { ptr::read(&self.alloc) },
             );
-            let _ = ManuallyDrop::new(self);
+            forget(self);
             out
         }
     }
@@ -1519,14 +1542,12 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
             return Err(Soft(()));
         }
 
-        let init = self.init;
-        let size = self.size;
 
-        if let Err(e) = self.truncate(init - init % N) {
+        if let Err(e) = self.truncate(self.init - self.init % N) {
             return Err(Hard(e));
         }
 
-        let usable_size = size % N;
+        let usable_size = self.size % N;
         if !T::IS_ZST && usable_size != 0 {
             // SAFETY: after the truncation, self.init will be less than usable_size.
             unsafe {
@@ -1538,7 +1559,7 @@ impl<T, A: Alloc> OwnedBuf<T, A> {
 
         let (buf, _, _, a) = self.into_raw_parts();
 
-        Ok(unsafe { OwnedBuf::from_raw_parts(buf.cast(), init / N, size / N, a) })
+        Ok(unsafe { OwnedBuf::from_raw_parts(buf.cast(), self.init / N, self.size / N, a) })
     }
 }
 
@@ -1785,7 +1806,7 @@ impl<T, A: Alloc + alloc::alloc::Allocator> From<alloc::vec::Vec<T, A>> for Owne
 impl<T: Clone, A: Alloc + Clone> Clone for OwnedBuf<T, A> {
     fn clone(&self) -> OwnedBuf<T, A> {
         Buf::from(self)
-            .clone_into_owned_in(self.alloc.clone())
+            .dupe_into_owned_in(self.alloc.clone())
             .expect("`OwnedBuf::clone` failed")
     }
 
@@ -1815,12 +1836,10 @@ macro_rules! spec_ci_impl {
 
                 target.clone_from_slice(init);
                 // TEMPORARY: this solution works until extend_from_slice is implemented.
-                match target.try_insert_slice_grow(0, tail) {
+                match target.try_init_next_slice_grow(tail) {
                     Ok(()) => Ok(()),
                     Err(v_err) => match v_err {
-                        // TODO: verify this is unreachable, then replace with
-                        //  unreachable_unchecked()
-                        Soft(_) => unreachable!(),
+                        Soft(_) => unsafe { core::hint::unreachable_unchecked() },
                         Hard((_, e)) => Err(e)
                     }
                 }
@@ -1840,17 +1859,62 @@ impl<T: Copy, A: Alloc> SpecCi<T, A> for [T] {
     #[inline]
     fn clone_into_ob(&self, target: &mut OwnedBuf<T, A>) -> Result<(), AllocError> {
         target.clear();
-        match target.try_insert_slice_grow(0, OwnedBuf::<T>::from(self)) {
+        match target.try_init_next_slice_grow(self) {
             Ok(()) => Ok(()),
-            Err(e) => match e {
-                Hard((buf, e)) => {
-                    buf.drop_and_dealloc();
-                    Err(e)
-                }
-                // 0 can't be oob, so this is safe
+            Err(v_err) => match v_err {
                 Soft(_) => unsafe { core::hint::unreachable_unchecked() },
+                Hard((_, e)) => Err(e),
             },
         }
+    }
+}
+
+trait SpecInitNextSlice<T, A: Alloc> {
+    fn init_next_slice(buf: &mut OwnedBuf<T, A>, slice: &Self);
+}
+
+macro_rules! spec_init_next_slice_impl {
+    ($($extra_token:tt)?) => {
+        impl<T: Clone, A: Alloc> SpecInitNextSlice<T, A> for [T] {
+            $($extra_token)? fn init_next_slice(buf: &mut OwnedBuf<T, A>, slice: &[T]) {
+                let ptr = buf.as_nonnull().as_ptr();
+                let mut guard = SliceAllocGuard::new(buf.as_nonnull(), buf.alloc(), buf.size);
+                unsafe {
+                    guard.set_init(buf.init);
+                }
+
+                for (i, elem) in slice.iter().enumerate() {
+                    unsafe {
+                        ptr.add(i).write(elem.clone());
+                    }
+                }
+
+                forget(guard);
+            }
+        }
+    };
+}
+
+#[cfg(not(feature = "specialization"))]
+spec_init_next_slice_impl!();
+
+#[cfg(feature = "specialization")]
+spec_init_next_slice_impl!(default);
+
+#[cfg(feature = "specialization")]
+impl<T: Copy, A: Alloc> SpecInitNextSlice<T, A> for [T] {
+    fn init_next_slice(buf: &mut OwnedBuf<T, A>, slice: &Self) {
+        let ptr = unsafe { buf.as_nonnull().as_ptr().add(buf.init) };
+        let mut guard = SliceAllocGuard::new(buf.as_nonnull(), buf.alloc(), buf.size);
+        unsafe {
+            guard.set_init(buf.init);
+        }
+
+        unsafe {
+            ptr::copy_nonoverlapping(slice.as_ptr(), ptr, slice.len());
+        }
+
+        forget(guard);
     }
 }
 
@@ -2136,7 +2200,7 @@ impl<T> Buf<'_, T> {
         self.copy_into_owned_in(DefaultAlloc)
     }
 
-    /// Creates a new owned buffer with a size equivalent to the contained slice, and clones all
+    /// Creates a new owned buffer with a size equivalent to the contained slice, and copies all
     /// initialized elements into it. This method has no `T: Copy` bound.
     ///
     /// # Errors
@@ -2150,6 +2214,17 @@ impl<T> Buf<'_, T> {
     #[inline]
     pub unsafe fn copy_into_owned_unchecked(&self) -> Result<OwnedBuf<T>, AllocError> {
         self.copy_into_owned_in_unchecked(DefaultAlloc)
+    }
+
+    /// Creates a new owned buffer with a size equivalent to the contained slice and a given
+    /// allocator, then duplicates all initialized elements into it using either `Copy` or `Clone`.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    pub fn dupe_into_owned(&self) -> Result<OwnedBuf<T>, AllocError> {
+        self.dupe_into_owned_in(DefaultAlloc)
     }
 
     /// Creates a new owned buffer with a size equivalent to the contained slice and a given
@@ -2200,7 +2275,7 @@ impl<T> Buf<'_, T> {
     }
 
     /// Creates a new owned buffer with a size equivalent to the contained slice and a given
-    /// allocator, then clones all initialized elements into it. This method has no `T: Copy` bound.
+    /// allocator, then copies all initialized elements into it. This method has no `T: Copy` bound.
     ///
     /// # Errors
     ///
@@ -2220,6 +2295,73 @@ impl<T> Buf<'_, T> {
         ptr::copy_nonoverlapping(self.buf.as_ptr() as *const T, buf.as_ptr(), self.init);
         Ok(OwnedBuf {
             buf,
+            init: self.init,
+            size,
+            alloc,
+            _marker: PhantomData,
+        })
+    }
+
+    /// Creates a new owned buffer with a size equivalent to the contained slice and a given
+    /// allocator, then duplicates all initialized elements into it using either `Copy` or `Clone`.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    #[inline]
+    pub fn dupe_into_owned_in<A: Alloc>(&self, alloc: A) -> Result<OwnedBuf<T, A>, AllocError>
+    where
+        T: Clone,
+    {
+        trait SpecDupeSlice<T> {
+            fn dupe(&self, dst: *mut T);
+        }
+
+        macro_rules! spec_dupe_slice_impl {
+            ($($extra_token:tt)?) => {
+                impl<T: Clone> SpecDupeSlice<T> for [T] {
+                    $($extra_token)? fn dupe(&self, dst: *mut T) {
+                                // TODO: completely switch to CloneIntoUninit (here and with
+                                //  OwnedBuf's other spec stuff) when stable so we don't have to
+                                //  use this terrible loop
+                        for (i, elem) in self.iter().enumerate() {
+                            unsafe {
+                                dst.add(i).write(elem.clone());
+                            }
+                        }
+                    }
+                }
+            };
+        }
+
+        #[cfg(not(feature = "specialization"))]
+        spec_dupe_slice_impl!();
+
+        #[cfg(feature = "specialization")]
+        spec_dupe_slice_impl!(default);
+
+        #[cfg(feature = "specialization")]
+        impl<T: Copy> SpecDupeSlice<T> for [T] {
+            fn dupe(&self, dst: *mut T) {
+                unsafe {
+                    ptr::copy_nonoverlapping(self.as_ptr(), dst, self.len());
+                }
+            }
+        }
+
+        let (buf_ptr, _, size, alloc) = OwnedBuf::new_in(self.buf.len(), alloc)?.into_raw_parts();
+
+        unsafe {
+            <[T] as SpecDupeSlice<T>>::dupe(
+                &*(slice_ptr_from_raw_parts(self.buf.as_ptr().cast::<T>() as *mut T, self.init)
+                    as *const [T]),
+                buf_ptr.as_ptr(),
+            );
+        }
+
+        Ok(OwnedBuf {
+            buf: buf_ptr,
             init: self.init,
             size,
             alloc,

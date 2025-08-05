@@ -50,11 +50,8 @@
 
 // TODO: less inlining
 // TODO: get rid of all placeholders (like in docs)
-// TODO: check for consistency between imports
-// TODO: avoid macros where helpers can be used (reduces bin size) (like spec_ci/from! in owned)
 
-
-// TODO: add ide settings to repo
+// TODO: generally add more helpers and dedup to reduce bin size
 
 
 // TODO: collapse this into fewer branches

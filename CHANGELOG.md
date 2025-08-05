@@ -32,6 +32,14 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.14.3
 
+## Commit 2 (2025-8-04)
+
+- Finish `try_init_next_slice[_grow]`/`init_next_slice_unchecked` methods in `OwnedBuf`
+- Specialize `OwnedBuf`'s `clone`
+- Start adding missing tests
+  - no missing docs added
+  - many tests are still missing
+
 ## Commit 1 (2025-8-04)
 Mostly just to transfer work done on one computer to another, minimal work done
 

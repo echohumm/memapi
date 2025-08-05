@@ -26,7 +26,7 @@ fn test_new_and_basic_properties() {
     // further try_init_next returns Err with the value back
     let v = 0xFF;
     assert_eq!(buf.try_init_next(v).unwrap_err(), v);
-
+    
     #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
     {
         buf.drop_and_dealloc();
@@ -181,9 +181,39 @@ fn test_debug_and_display_errors() {
     }
 }
 
-// #[test]
-// fn test_zst() {
-//     struct Zst;
-//
-//     let mut buf = OwnedBuf::<Zst>::new(8);
-// }
+#[test]
+fn test_zst() {
+    #[derive(Debug, PartialEq, Eq)]
+    struct Zst;
+
+    let mut buf = OwnedBuf::<Zst>::new(8).unwrap();
+    for _ in 0..8 {
+        assert_eq!(buf.try_init_next(Zst), Ok(()));
+    }
+    
+    assert_eq!(buf.try_init_next(Zst), Err(Zst));
+
+    #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+    {
+        buf.drop_and_dealloc();
+    }
+}
+
+#[test]
+fn test_init_next_slice() {
+    let mut buf = OwnedBuf::<usize>::new(8).unwrap();
+    
+    unsafe {
+        buf.init_next_unchecked(9);
+    }
+    
+    let mut buf2 = buf.clone();
+    let mut buf3 = buf.clone();
+    
+    #[cfg(not(any(feature = "drop_for_owned", feature = "zero_drop_for_owned")))]
+    {
+        buf.drop_and_dealloc();
+    }
+}
+
+// TODO: test other slice operations and specialized stuff like clone_into
