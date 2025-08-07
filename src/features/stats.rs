@@ -20,6 +20,7 @@ impl<L: StatsLogger> Stats<DefaultAlloc, L> {
     const_if! {
         "extra_const",
         "Create a new stats‐collecting allocator wrapper.",
+        #[inline]
         pub const fn new(logger: L) -> Stats<DefaultAlloc, L> {
             Stats(DefaultAlloc, logger)
         }
@@ -30,6 +31,7 @@ impl<A, L: StatsLogger> Stats<A, L> {
     const_if! {
         "extra_const",
         "Create a new stats‐collecting allocator wrapper.",
+        #[inline]
         pub const fn new_in(inner: A, logger: L) -> Stats<A, L> {
             Stats(inner, logger)
         }
@@ -37,33 +39,56 @@ impl<A, L: StatsLogger> Stats<A, L> {
 }
 
 // no-op logger
+#[allow(clippy::inline_always)]
 impl StatsLogger for () {
+    // none of these do anything, so we just inline them.
+    #[inline(always)]
     fn log(&self, _: AllocRes) {}
+    #[inline(always)]
     fn inc_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
+    #[inline(always)]
     fn dec_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
+    #[inline(always)]
     fn total(&self) -> usize {
         0
     }
 }
 
+/// Internal helper of [`atomic_total_ops`] for adding to an atomic value.
+#[doc(hidden)]
+pub fn inc_atomic(atomic: &AtomicUsize, bytes: usize) -> usize {
+    let res = atomic.load(Acquire) + bytes;
+    atomic.store(res, Release);
+    res
+}
+
+/// Internal helper of [`atomic_total_ops`] for subtracting from an atomic value.
+#[doc(hidden)]
+pub fn dec_atomic(atomic: &AtomicUsize, bytes: usize) -> usize {
+    let res = atomic.load(Acquire) - bytes;
+    atomic.store(res, Release);
+    res
+}
+
+#[macro_export]
+/// Helper macro to implement the default atomic total operations for a `StatsLogger`.
 macro_rules! atomic_total_ops {
-    ($this:expr $(, $field:ident)?) => {
+    ($($field:ident)?) => {
+            #[inline(always)]
             fn inc_total_bytes_allocated(&self, bytes: usize) -> usize {
-                let res = self$(.$field)?.load(Acquire) + bytes;
-                self$(.$field)?.store(res, Release);
-                res
+                $crate::stats::inc_atomic(&self$(.$field)?, bytes)
             }
 
+            #[inline(always)]
             fn dec_total_bytes_allocated(&self, bytes: usize) -> usize {
-                let res = self$(.$field)?.load(Acquire) - bytes;
-                self$(.$field)?.store(res, Release);
-                res
+                $crate::stats::dec_atomic(&self$(.$field)?, bytes)
             }
 
+            #[inline(always)]
             fn total(&self) -> usize {
                 self$(.$field)?.load(Acquire)
             }
@@ -72,27 +97,33 @@ macro_rules! atomic_total_ops {
 
 // byte counter-only logger (no stat)
 impl StatsLogger for AtomicUsize {
+    #[inline(always)]
     fn log(&self, _: AllocRes) {}
 
-    atomic_total_ops!(self);
+    atomic_total_ops!();
 }
 
 #[cfg(feature = "std")]
+#[allow(clippy::inline_always)]
 // file stat-only logger (no byte-count)
 impl StatsLogger for std::sync::Mutex<std::fs::File> {
     fn log(&self, stat: AllocRes) {
+        // TODO: use File::lock
         <std::fs::File as std::io::Write>::write_all(
             &mut self.lock().expect("`Mutex<File>` was poisoned"),
             format!("{}", stat).as_bytes(),
         )
         .expect("failed to write to `File`");
     }
+    #[inline(always)]
     fn inc_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
+    #[inline(always)]
     fn dec_total_bytes_allocated(&self, _: usize) -> usize {
         0
     }
+    #[inline(always)]
     fn total(&self) -> usize {
         0
     }
@@ -102,15 +133,19 @@ impl StatsLogger for std::sync::Mutex<std::fs::File> {
 macro_rules! delegate_logger {
     ($ty:ty) => {
         impl<L: StatsLogger + ?Sized> StatsLogger for $ty {
+            #[inline(always)]
             fn log(&self, stat: AllocRes) {
                 (**self).log(stat)
             }
+            #[inline(always)]
             fn inc_total_bytes_allocated(&self, bytes: usize) -> usize {
                 (**self).inc_total_bytes_allocated(bytes)
             }
+            #[inline(always)]
             fn dec_total_bytes_allocated(&self, bytes: usize) -> usize {
                 (**self).dec_total_bytes_allocated(bytes)
             }
+            #[inline(always)]
             fn total(&self) -> usize {
                 (**self).total()
             }
@@ -161,7 +196,7 @@ impl<W: std::io::Write> StatsLogger for IOLog<W> {
             .expect("failed to write to inner `W` of `WrittenLog`");
     }
 
-    atomic_total_ops!(self, total);
+    atomic_total_ops!(total);
 }
 
 #[cfg(feature = "std")]
@@ -174,7 +209,7 @@ impl<W: fmt::Write> StatsLogger for FmtLog<W> {
             .expect("failed to write to inner `W` of `FmtLog`");
     }
 
-    atomic_total_ops!(self, total);
+    atomic_total_ops!(total);
 }
 
 #[cfg(feature = "std")]
@@ -186,7 +221,7 @@ impl StatsLogger for StatCollectingLog {
             .push(stat);
     }
 
-    atomic_total_ops!(self, total);
+    atomic_total_ops!(total);
 }
 
 #[cfg(feature = "std")]
@@ -248,6 +283,7 @@ impl<W: std::io::Write> IOLog<W> {
     const_if! {
         "extra_const",
         "Creates a new [`IOLog`] from a writer.",
+        #[inline]
         pub const fn new(buf: W) -> IOLog<W> {
             IOLog {
                 buf: std::sync::Mutex::new(buf),
@@ -262,6 +298,7 @@ impl<W: fmt::Write> FmtLog<W> {
     const_if! {
         "extra_const",
         "Creates a new [`FmtLog`] from a writer.",
+        #[inline]
         pub const fn new(buf: W) -> FmtLog<W> {
             FmtLog {
                 buf: std::sync::Mutex::new(buf),
@@ -288,6 +325,7 @@ impl StatCollectingLog {
         "extra_const",
         "Creates a new [`StatCollectingLog`].",
         #[must_use]
+        #[inline]
         pub const fn new() -> StatCollectingLog {
             StatCollectingLog {
                 results: std::sync::Mutex::new(Vec::new()),
@@ -298,6 +336,7 @@ impl StatCollectingLog {
 
     /// Creates a new [`StatCollectingLog`] with the given capacity.
     #[must_use]
+    #[inline]
     pub fn with_capacity(cap: usize) -> StatCollectingLog {
         StatCollectingLog {
             results: std::sync::Mutex::new(Vec::with_capacity(cap)),
@@ -306,10 +345,12 @@ impl StatCollectingLog {
     }
 }
 
+// TODO: dedicated FileLog using File::lock() instead of a mutex
 #[cfg(feature = "std")]
 /// A logger that writes to a file.
 pub type FileLog = IOLog<std::fs::File>;
 
+// TODO: dedicated StdoutLog
 #[cfg(feature = "std")]
 /// A logger that writes to stdout.
 pub type StdoutLog = IOLog<std::io::Stdout>;
@@ -627,11 +668,13 @@ fn grow<
 
 impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
     #[track_caller]
+    #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         allocate(self, A::alloc, layout, AllocKind::Uninitialized)
     }
 
     #[track_caller]
+    #[inline]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         allocate(self, A::alloc_zeroed, layout, AllocKind::Zeroed)
     }

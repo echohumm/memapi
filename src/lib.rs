@@ -139,7 +139,7 @@ macro_rules! const_if {
     };
 }
 
-// TODO: inlining for stats.rs, and alloc_slice.rs.
+// TODO: inlining for alloc_slice.rs.
 
 extern crate alloc;
 extern crate core;
@@ -499,21 +499,23 @@ pub(crate) mod nightly {
     default_alloc_impl!(Global);
 }
 
+#[allow(clippy::inline_always)]
 impl<A: Alloc + ?Sized> Alloc for &A {
+    // TODO: decide whether to keep these as inline always
     #[cfg_attr(miri, track_caller)]
-    #[inline]
+    #[inline(always)]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         (**self).alloc(layout)
     }
 
     #[cfg_attr(miri, track_caller)]
-    #[inline]
+    #[inline(always)]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
         (**self).alloc_zeroed(layout)
     }
 
     #[cfg_attr(miri, track_caller)]
-    #[inline]
+    #[inline(always)]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         (**self).dealloc(ptr, layout);
     }

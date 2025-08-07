@@ -6,6 +6,9 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Version 0.16.0 Predicted](#version-0160-predicted)
 - [Version 0.15.0](#version-0150)
+  - [Commit 7](#commit-7-2025-8-06)
+  - [Commit 6](#commit-6-2025-8-05)
+  - [Commit 5](#commit-5-2025-8-05)
   - [Commit 4](#commit-4-2025-8-05)
   - [Commit 3](#commit-3-2025-8-05)
   - [Commit 2](#commit-2-2025-8-05)
@@ -37,6 +40,11 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
 ## Version 0.15.0
+
+### Commit 8 (2025-8-07)
+
+- Inline stats.rs
+- Slightly improve inlining in lib.rs and helpers.rs
 
 ### Commit 7 (2025-8-06)
 

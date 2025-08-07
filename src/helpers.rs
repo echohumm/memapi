@@ -104,6 +104,7 @@ pub const fn align_up(n: usize, align: NonZeroUsize) -> usize {
 ///
 /// `align` must be non-zero.
 #[must_use]
+#[inline]
 pub const unsafe fn align_up_unchecked(n: usize, align: usize) -> usize {
     let m1 = align - 1;
     (n + m1) & !m1
