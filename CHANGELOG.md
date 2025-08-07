@@ -38,6 +38,10 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.15.0
 
+### Commit 6 (2025-8-05)
+
+- Inline alloc_ext.rs, resize_in_place.rs, and helpers.rs
+
 ### Commit 5 (2025-8-05)
 
 - Inline jemalloc.rs and mimalloc.rs

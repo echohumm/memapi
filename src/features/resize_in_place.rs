@@ -375,11 +375,16 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         }
     }
 
-    /// Shrinking in-place is not supported by mimalloc. This is a no-op.
+    /// Shrinking in-place is not supported by mimalloc.
+    ///
+    /// This is a no-op and always returns an error.
     ///
     /// # Errors
     ///
     /// - [`AllocError::Other`]`("unsupported operation: attempted to shrink in place")`.
+    // it just returns an error, no reason not to inline it.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
     unsafe fn shrink_in_place(
         &self,
         _: NonNull<u8>,

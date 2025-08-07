@@ -155,6 +155,7 @@ impl Alloc for Jemalloc {
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
+    #[inline]
     unsafe fn realloc(
         &self,
         ptr: NonNull<u8>,

@@ -11,7 +11,6 @@ pub(crate) const REALLOC_DIFF_ALIGN: &str =
     "unsupported operation: attempted to reallocate with a different alignment";
 
 #[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
-#[cfg_attr(miri, track_caller)]
 pub(crate) unsafe fn resize<F: Fn() -> *mut libc::c_void>(
     ralloc: F,
     ptr: core::ptr::NonNull<u8>,
@@ -99,8 +98,6 @@ pub mod ffi {
         // /// # Safety
         // ///
         // /// `ptr` must have been allocated by jemalloc and must not have been freed yet.
-
-        #[cfg_attr(miri, track_caller)]
         pub(crate) unsafe fn raw_ralloc(
             ptr: *mut c_void,
             old_layout: Layout,

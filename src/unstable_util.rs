@@ -1,4 +1,6 @@
-use crate::{error::ArithOp, AllocError};
+use crate::{
+    error::ArithOp, helpers::align_up_unchecked, type_props::USIZE_MAX_NO_HIGH_BIT, AllocError,
+};
 use alloc::alloc::Layout;
 
 #[cfg(feature = "metadata")]
@@ -24,7 +26,7 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
     }
 
     let sz = layout.size();
-    size_rounded_up_to_align(sz, align) - sz
+    unsafe { align_up_unchecked(sz, align) - sz }
 }
 
 /// Creates a layout by rounding the size of this layout up to a multiple of the layout's alignment.
@@ -33,11 +35,12 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
 #[must_use]
 #[inline]
 pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
+    if !align.is_power_of_two() {
+        return unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };
+    }
+
     unsafe {
-        Layout::from_size_align_unchecked(
-            size_rounded_up_to_align(layout.size(), align),
-            layout.align(),
-        )
+        Layout::from_size_align_unchecked(align_up_unchecked(layout.size(), align), layout.align())
     }
 }
 
@@ -89,11 +92,4 @@ pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout
             count,
         ))
     }
-}
-
-// TODO: unchecked ops
-#[inline]
-const fn size_rounded_up_to_align(sz: usize, align: usize) -> usize {
-    let sub1 = align - 1;
-    (sz + sub1) & !sub1
 }
