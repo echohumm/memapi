@@ -3,7 +3,6 @@ use alloc::alloc::Layout;
 
 #[cfg(feature = "metadata")]
 /// Alternative to `*mut T`'s `with_metadata_of`, because it's unstable.
-#[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mut U {
     core::ptr::from_raw_parts_mut(ptr.cast::<()>(), core::ptr::metadata(meta))
@@ -11,14 +10,12 @@ pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mu
 
 #[cfg(feature = "metadata")]
 /// Alternative to `*mut T`'s `with_metadata_of`, because it's unstable.
-#[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U) -> *const U {
     core::ptr::from_raw_parts(ptr.cast::<()>(), core::ptr::metadata(meta))
 }
 
 /// Alternative to [`Layout::padding_needed_for`], because it's unstable.
-#[inline]
 #[must_use]
 pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
     if !align.is_power_of_two() {
@@ -32,7 +29,6 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
 /// Creates a layout by rounding the size of this layout up to a multiple of the layout's alignment.
 ///
 /// This is equivalent to adding the result of [`pad_layout_for`] to the layout's current size.
-#[inline]
 #[must_use]
 pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
     unsafe {
@@ -55,7 +51,6 @@ pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
 /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
 /// - [`AllocError::Other`]`("arithmetic operation overflowed")` if an arithmetic operation
 ///   overflows.
-#[inline]
 pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usize), AllocError> {
     let padded = pad_layout_to_align(layout, layout.align());
     match repeat_layout_packed(padded, count) {
@@ -76,7 +71,6 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
 ///
 /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
 /// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
-#[inline]
 pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
     if let Some(size) = { layout.size().checked_mul(count) } {
         let align = layout.align();

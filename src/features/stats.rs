@@ -52,21 +52,18 @@ impl StatsLogger for () {
 
 macro_rules! atomic_total_ops {
     ($this:expr $(, $field:ident)?) => {
-            #[inline]
             fn inc_total_bytes_allocated(&self, bytes: usize) -> usize {
                 let res = self$(.$field)?.load(Acquire) + bytes;
                 self$(.$field)?.store(res, Release);
                 res
             }
 
-            #[inline]
             fn dec_total_bytes_allocated(&self, bytes: usize) -> usize {
                 let res = self$(.$field)?.load(Acquire) - bytes;
                 self$(.$field)?.store(res, Release);
                 res
             }
 
-            #[inline]
             fn total(&self) -> usize {
                 self$(.$field)?.load(Acquire)
             }
@@ -156,7 +153,6 @@ pub struct StatCollectingLog {
 
 #[cfg(feature = "std")]
 impl<W: std::io::Write> StatsLogger for IOLog<W> {
-    #[inline]
     fn log(&self, stat: AllocRes) {
         self.buf
             .lock()
@@ -170,7 +166,6 @@ impl<W: std::io::Write> StatsLogger for IOLog<W> {
 
 #[cfg(feature = "std")]
 impl<W: fmt::Write> StatsLogger for FmtLog<W> {
-    #[inline]
     fn log(&self, stat: AllocRes) {
         self.buf
             .lock()
@@ -184,7 +179,6 @@ impl<W: fmt::Write> StatsLogger for FmtLog<W> {
 
 #[cfg(feature = "std")]
 impl StatsLogger for StatCollectingLog {
-    #[inline]
     fn log(&self, stat: AllocRes) {
         self.results
             .lock()
@@ -237,7 +231,6 @@ impl Default for StatCollectingLog {
 
 #[cfg(feature = "std")]
 impl<W: std::io::Write> From<W> for IOLog<W> {
-    #[inline]
     fn from(w: W) -> IOLog<W> {
         IOLog::new(w)
     }
@@ -255,7 +248,6 @@ impl<W: std::io::Write> IOLog<W> {
     const_if! {
         "extra_const",
         "Creates a new [`IOLog`] from a writer.",
-        #[inline]
         pub const fn new(buf: W) -> IOLog<W> {
             IOLog {
                 buf: std::sync::Mutex::new(buf),
@@ -270,7 +262,6 @@ impl<W: fmt::Write> FmtLog<W> {
     const_if! {
         "extra_const",
         "Creates a new [`FmtLog`] from a writer.",
-        #[inline]
         pub const fn new(buf: W) -> FmtLog<W> {
             FmtLog {
                 buf: std::sync::Mutex::new(buf),
@@ -284,7 +275,6 @@ impl<W: fmt::Write> FmtLog<W> {
     /// # Panics
     ///
     /// This function will panic if the inner [`Mutex`](std::sync::Mutex) is poisoned.
-    #[inline]
     pub fn get_log(&self) -> std::sync::MutexGuard<'_, W> {
         self.buf
             .lock()
@@ -298,7 +288,6 @@ impl StatCollectingLog {
         "extra_const",
         "Creates a new [`StatCollectingLog`].",
         #[must_use]
-        #[inline]
         pub const fn new() -> StatCollectingLog {
             StatCollectingLog {
                 results: std::sync::Mutex::new(Vec::new()),
@@ -309,7 +298,6 @@ impl StatCollectingLog {
 
     /// Creates a new [`StatCollectingLog`] with the given capacity.
     #[must_use]
-    #[inline]
     pub fn with_capacity(cap: usize) -> StatCollectingLog {
         StatCollectingLog {
             results: std::sync::Mutex::new(Vec::with_capacity(cap)),
@@ -559,7 +547,6 @@ pub enum AllocKind {
 }
 
 #[track_caller]
-#[inline]
 fn allocate<A: Alloc, L: StatsLogger, F: Fn(&A, Layout) -> Result<NonNull<u8>, AllocError>>(
     slf: &Stats<A, L>,
     allocate: F,
@@ -597,7 +584,6 @@ fn allocate<A: Alloc, L: StatsLogger, F: Fn(&A, Layout) -> Result<NonNull<u8>, A
 }
 
 #[track_caller]
-#[inline]
 fn grow<
     A: Alloc,
     L: StatsLogger,

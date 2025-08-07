@@ -24,7 +24,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
     #[track_caller]
-    #[inline]
     fn alloc_init<T, I: Fn(NonNull<T>)>(&self, init: I) -> Result<NonNull<T>, AllocError> {
         let guard = AllocGuard::new(self.alloc(T::LAYOUT)?.cast::<T>(), self);
         init(*guard);
@@ -38,7 +37,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
     #[track_caller]
-    #[inline]
     fn alloc_default<T: Default>(&self) -> Result<NonNull<T>, AllocError> {
         self.alloc_write(T::default())
     }
@@ -50,7 +48,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_write<T>(&self, data: T) -> Result<NonNull<T>, AllocError> {
         alloc_then::<NonNull<T>, Self, T, _>(self, T::LAYOUT, data, |p, data| unsafe {
             let ptr: NonNull<T> = p.cast();
@@ -67,7 +64,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
     #[track_caller]
-    #[inline]
     fn alloc_clone_to<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
         alloc_then::<NonNull<T>, Self, &T, _>(self, T::LAYOUT, data, |p, data| {
             let mut guard = AllocGuard::new(p.cast(), self);
@@ -84,7 +80,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[track_caller]
-    #[inline]
     fn alloc_clone_to<T: core::clone::CloneToUninit + ?Sized>(
         &self,
         data: &T,
@@ -118,7 +113,6 @@ pub trait AllocExt: Alloc {
     /// This is because the `metadata` feature is not enabled, which is required to drop this
     /// unsized value.
     #[track_caller]
-    #[inline]
     unsafe fn alloc_clone_to<T: core::clone::CloneToUninit + ?Sized>(
         &self,
         data: &T,
@@ -138,7 +132,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
         alloc_then::<NonNull<u8>, Self, u8, _>(self, layout, n, |p, n| {
             unsafe {
@@ -156,7 +149,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[track_caller]
-    #[inline]
     fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         layout: Layout,
@@ -180,7 +172,6 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn drop_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
         ptr::drop_in_place(ptr.as_ptr());
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
@@ -193,7 +184,6 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn zero_and_dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
         self.dealloc(ptr, layout);
@@ -205,7 +195,6 @@ pub trait AllocExt: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
@@ -216,7 +205,6 @@ pub trait AllocExt: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn zero_and_dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
         ptr::write_bytes(ptr.as_ptr().cast::<u8>(), 0, ptr.size());
         self.dealloc_typed(ptr);
@@ -229,7 +217,6 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn drop_zero_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
         ptr::drop_in_place(ptr.as_ptr());
         self.zero_and_dealloc_typed(ptr);
@@ -243,7 +230,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_copy_ref_to<T: ?Sized + crate::marker::UnsizedCopy>(
         &self,
         data: &T,
@@ -263,7 +249,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn alloc_copy_ptr_to<T: ?Sized + crate::marker::UnsizedCopy>(
         &self,
         data: *const T,
@@ -284,7 +269,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn alloc_copy_ref_to_unchecked<T: ?Sized>(
         &self,
         data: &T,
@@ -305,7 +289,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn alloc_copy_ptr_to_unchecked<T: ?Sized>(
         &self,
         data: *const T,
@@ -324,7 +307,6 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_guard<T>(&'_ self) -> Result<AllocGuard<'_, T, Self>, AllocError> {
         alloc_then(self, T::LAYOUT, (), |p, ()| {
             AllocGuard::new(p.cast::<T>(), self)
@@ -345,7 +327,6 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
     #[track_caller]
-    #[inline]
     unsafe fn grow_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<u8>,
@@ -370,7 +351,6 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn grow_filled(
         &self,
         ptr: NonNull<u8>,
@@ -400,7 +380,6 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<u8>,
@@ -424,7 +403,6 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn realloc_filled(
         &self,
         ptr: NonNull<u8>,

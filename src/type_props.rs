@@ -180,7 +180,6 @@ unsafe impl<T> VarSized for [T] {
 #[cfg(feature = "metadata")]
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
 #[must_use]
-#[inline]
 pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
     // SAFETY: `ALIGN` is guaranteed to be a valid alignment for `Self`.
     unsafe { NonNull::from_raw_parts(crate::helpers::dangling_nonnull(T::ALIGN), 0) }

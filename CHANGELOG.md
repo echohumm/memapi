@@ -20,7 +20,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - [Commit 1 (2025-7-26)](#commit-1-2025-7-26)
 - [Version 0.13.2](#version-0132-2025-7-25)
 
-# Version 0.16.0 [Predicted]
+## Version 0.16.0 [Predicted]
 
 - Debloat the primary surfaces
 - Implement TODOs
@@ -35,13 +35,19 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.15.0
 
+### Commit 2 (2025-8-05)
+
+- Remove all `#[inline]` statements
+  - i'm starting from scratch with inlining, as 182/298 functions in this project were inlined, far too many
+  - next commits will all be selectively re-adding inline attributes to functions by-file
+
 ### Commit 1 (2025-8-05)
 
 - Remove `owned` module entirely
   - it became impossible to maintain, had many bugs and other flaws, was basically the same as stdlib's Vec, and,
     honestly, it only existed because of scope creep.
 - Fix and improve `AllocSlice`/`AllocExt` methods
-  - Add `extend_slice_from_ref`, `extend_slice` and `extend_raw_slice`
+- Add `extend_slice_from_ref`, `extend_slice` and `extend_raw_slice` to `AllocSlice`
 - Make `libc` only use `std` if `std` feature is enabled
 - Rename `AllocError::LayoutError` to `InvalidLayout`
 - Switch to `<*mut T>::cast` instead of `as` where reasonable

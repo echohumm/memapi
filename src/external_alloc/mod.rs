@@ -12,7 +12,6 @@ pub(crate) const REALLOC_DIFF_ALIGN: &str =
 
 #[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
 #[cfg_attr(miri, track_caller)]
-#[inline]
 pub(crate) unsafe fn resize<F: Fn() -> *mut libc::c_void>(
     ralloc: F,
     ptr: core::ptr::NonNull<u8>,
@@ -80,7 +79,6 @@ pub mod ffi {
 
         #[cfg(feature = "jemalloc")]
         /// Converts a size and alignment to flags in the form of a `c_int`.
-        #[inline]
         #[must_use]
         pub fn layout_to_flags(size: usize, align: usize) -> libc::c_int {
             if align <= ALIGNOF_MAX_ALIGN_T && align <= size {
@@ -101,14 +99,12 @@ pub mod ffi {
         /// # Safety
         ///
         /// `ptr` must have been allocated by jemalloc and must not have been freed yet.
-        #[inline]
         #[must_use]
         pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
             malloc_usable_size(ptr.cast::<c_void>()) as usize
         }
 
         #[cfg_attr(miri, track_caller)]
-        #[inline]
         pub(crate) unsafe fn raw_ralloc(
             ptr: *mut c_void,
             old_layout: Layout,
@@ -135,7 +131,6 @@ pub mod ffi {
         /// # Safety
         ///
         /// `ptr` must have been allocated by mimalloc and must not have been freed yet.
-        #[inline]
         #[must_use]
         pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
             mi_usable_size(ptr.cast::<c_void>())

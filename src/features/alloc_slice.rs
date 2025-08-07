@@ -126,7 +126,6 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_slice<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
         alloc_slice(self, len, Self::alloc)
     }
@@ -139,7 +138,6 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_slice_zeroed<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
         alloc_slice(self, len, Self::alloc_zeroed)
     }
@@ -152,7 +150,6 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if the slice is zero-sized.
     #[track_caller]
-    #[inline]
     fn alloc_clone_slice_to<T: Clone>(&self, data: &[T]) -> Result<NonNull<[T]>, AllocError> {
         alloc_then(self, unsafe { data.layout() }, data, |p, data| unsafe {
             let mut guard = SliceAllocGuard::new(p.cast(), self, data.len());
@@ -171,7 +168,6 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if the slice is zero-sized.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_copy_slice_to<T: Copy>(&self, data: &[T]) -> Result<NonNull<[T]>, AllocError> {
         unsafe { self.alloc_copy_slice_to_unchecked(data) }
     }
@@ -188,7 +184,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// The caller must ensure it is safe to copy the elements in `data`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn alloc_copy_slice_to_unchecked<T>(
         &self,
         data: &[T],
@@ -210,7 +205,6 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
-    #[inline]
     fn alloc_slice_with<T, F: Fn(usize) -> T>(
         &self,
         len: usize,
@@ -242,7 +236,6 @@ pub trait AllocSlice: Alloc {
     /// length after `init` finishes, and that at any time `init` may panic, the counter will be
     /// correct.
     #[track_caller]
-    #[inline]
     unsafe fn alloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         init: I,
@@ -262,7 +255,6 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
-    #[inline]
     fn alloc_slice_default<T: Default>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
         self.alloc_slice_with(len, |_| T::default())
     }
@@ -274,7 +266,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, a valid `[T]` for `init` elements, and a valid `[MaybeUninit<T>]`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
         ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr().cast::<T>(), init));
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
@@ -288,7 +279,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn drop_zero_and_dealloc_uninit_slice<T>(
         &self,
         slice: NonNull<[MaybeUninit<T>]>,
@@ -308,7 +298,6 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_slice_guard<T>(
         &'_ self,
         len: usize,
@@ -434,7 +423,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn grow_slice<T>(
         &self,
         slice: NonNull<[T]>,
@@ -461,7 +449,6 @@ pub trait AllocSlice: Alloc {
     // Safety #2 implies that `len` must be a valid length for the slice (which is required because
     // we use from_size_align_unchecked)
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn grow_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
@@ -484,7 +471,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn grow_slice_zeroed<T>(
         &self,
         slice: NonNull<[T]>,
@@ -509,7 +495,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn grow_raw_slice_zeroed<T>(
         &self,
         ptr: NonNull<T>,
@@ -533,7 +518,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[track_caller]
-    #[inline]
     unsafe fn grow_slice_with<T, F: Fn(usize) -> T>(
         &self,
         slice: NonNull<[T]>,
@@ -560,7 +544,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
-    #[inline]
     unsafe fn grow_raw_slice_with<T, F: Fn(usize) -> T>(
         &self,
         ptr: NonNull<T>,
@@ -593,7 +576,6 @@ pub trait AllocSlice: Alloc {
     ///   finishes
     /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
-    #[inline]
     unsafe fn grow_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         slice: NonNull<[T]>,
@@ -626,7 +608,6 @@ pub trait AllocSlice: Alloc {
     ///   finishes
     /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
-    #[inline]
     unsafe fn grow_raw_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         ptr: NonNull<T>,
@@ -657,7 +638,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[track_caller]
-    #[inline]
     unsafe fn grow_slice_default<T: Default>(
         &self,
         slice: NonNull<[T]>,
@@ -682,7 +662,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
-    #[inline]
     unsafe fn grow_raw_slice_default<T: Default>(
         &self,
         ptr: NonNull<T>,
@@ -705,7 +684,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn shrink_slice<T>(
         &self,
         slice: NonNull<[T]>,
@@ -730,7 +708,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn shrink_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
@@ -754,7 +731,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn truncate_slice<T>(
         &self,
         slice: NonNull<[T]>,
@@ -781,7 +757,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn truncate_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
@@ -817,7 +792,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn realloc_slice<T>(
         &self,
         slice: NonNull<[T]>,
@@ -844,7 +818,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn realloc_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
@@ -870,7 +843,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn realloc_slice_zeroed<T>(
         &self,
         slice: NonNull<[T]>,
@@ -899,7 +871,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn realloc_raw_slice_zeroed<T>(
         &self,
         ptr: NonNull<T>,
@@ -925,7 +896,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_slice_with<T, F: Fn(usize) -> T>(
         &self,
         slice: NonNull<[T]>,
@@ -954,7 +924,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_raw_slice_with<T, F: Fn(usize) -> T>(
         &self,
         ptr: NonNull<T>,
@@ -995,7 +964,6 @@ pub trait AllocSlice: Alloc {
     ///   finishes
     /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         slice: NonNull<[T]>,
@@ -1029,7 +997,6 @@ pub trait AllocSlice: Alloc {
     ///   finishes
     /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_raw_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         ptr: NonNull<T>,
@@ -1062,7 +1029,6 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_slice_default<T: Default>(
         &self,
         slice: NonNull<[T]>,
@@ -1086,7 +1052,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_raw_slice_default<T: Default>(
         &self,
         ptr: NonNull<T>,
@@ -1103,7 +1068,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `n` must be the exact number of `T` held in that block.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
         // Here, we assume the layout is valid as it was presumably used to allocate previously.
         self.dealloc(
@@ -1119,7 +1083,6 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn zero_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
         ptr::write_bytes(ptr.as_ptr(), 0, n);
         self.dealloc_n(ptr, n);
@@ -1133,7 +1096,6 @@ pub trait AllocSlice: Alloc {
     ///   and writes, aligned, and contain `n` valid `T`.
     /// - `n` must be the exact number of `T` held in that block.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn drop_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
         ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr(), n));
         self.dealloc_n(ptr, n);
@@ -1156,7 +1118,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     fn alloc_slice_filled<T>(&self, len: usize, n: u8) -> Result<NonNull<[T]>, AllocError> {
         alloc_slice(self, len, |a, layout| a.alloc_filled(layout, n))
     }
@@ -1170,7 +1131,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
-    #[inline]
     fn alloc_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
         &self,
         len: usize,
@@ -1193,7 +1153,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn grow_slice_filled<T>(
         &self,
         slice: NonNull<[T]>,
@@ -1219,7 +1178,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn grow_raw_slice_filled<T>(
         &self,
         ptr: NonNull<T>,
@@ -1243,7 +1201,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[track_caller]
-    #[inline]
     unsafe fn grow_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
         &self,
         slice: NonNull<[T]>,
@@ -1275,7 +1232,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
-    #[inline]
     unsafe fn grow_raw_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<T>,
@@ -1299,7 +1255,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn realloc_slice_filled<T>(
         &self,
         slice: NonNull<[T]>,
@@ -1325,7 +1280,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn realloc_raw_slice_filled<T>(
         &self,
         ptr: NonNull<T>,
@@ -1350,7 +1304,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
         &self,
         slice: NonNull<[T]>,
@@ -1382,7 +1335,6 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[track_caller]
-    #[inline]
     unsafe fn realloc_raw_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
         &self,
         ptr: NonNull<T>,

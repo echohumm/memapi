@@ -30,7 +30,6 @@ pub(crate) fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret
 /// This is a helper used in place of [`NonNull::slice_from_raw_parts`], which was stabilized
 /// after this crate's MSRV.
 #[must_use]
-#[inline]
 pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
     unsafe { NonNull::new_unchecked(slice_ptr_from_raw_parts(p.as_ptr(), len)) }
 }
@@ -43,7 +42,6 @@ pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNu
 #[doc = "## Small disclaimer: you must guarantee this function will work, as Rust's fat \
     pointers changing layout would result in this function causing UB."]
 #[must_use]
-#[inline]
 pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
     unsafe { transmute::<(*mut T, usize), *mut [T]>((p, len)) }
 }
@@ -53,7 +51,6 @@ const_if! {
     "Returns the length of a [`NonNull`] slice pointer.\n\nThis is a helper used in place of \
     [`NonNull::len`], which was stabilized after this crate's MSRV.",
     #[must_use]
-    #[inline]
     pub const fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
         unsafe { (&*ptr.as_ptr()).len() }
     }
@@ -94,14 +91,12 @@ pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
 
 /// Checks equality between two [`NonNull`] pointers.
 #[must_use]
-#[inline]
 pub fn nonnull_eq<T: ?Sized>(a: NonNull<T>, b: NonNull<T>) -> bool {
     peq(a.as_ptr() as *const T, b.as_ptr() as *const T)
 }
 
 /// Aligns the given value up to a non-zero alignment.
 #[must_use]
-#[inline]
 pub const fn align_up(n: usize, align: NonZeroUsize) -> usize {
     unsafe { align_up_unchecked(n, align.get()) }
 }
@@ -112,7 +107,6 @@ pub const fn align_up(n: usize, align: NonZeroUsize) -> usize {
 ///
 /// `align` must be non-zero.
 #[must_use]
-#[inline]
 pub const unsafe fn align_up_unchecked(n: usize, align: usize) -> usize {
     let m1 = align - 1;
     (n + m1) & !m1
@@ -120,7 +114,6 @@ pub const unsafe fn align_up_unchecked(n: usize, align: usize) -> usize {
 
 /// Returns a valid, dangling [`NonNull`] for the given layout.
 #[must_use]
-#[inline]
 pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
     unsafe { dangling_nonnull(layout.align()) }
 }
@@ -131,7 +124,6 @@ pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
 ///
 /// The caller must ensure the `alignment` is a valid power of two.
 #[must_use]
-#[inline]
 pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
     transmute::<NonZeroUsize, NonNull<u8>>(NonZeroUsize::new_unchecked(align))
 }
@@ -201,7 +193,6 @@ impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
     const_if! {
         "extra_const",
         "Creates a new guard from a pointer and a reference to an allocator.",
-        #[inline]
         pub const fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A> {
             AllocGuard { ptr, alloc }
         }
@@ -211,7 +202,6 @@ impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
         "extra_extra_const",
         "Initializes the value by writing to the contained pointer.",
         #[cfg_attr(miri, track_caller)]
-        #[inline]
         pub const fn init(&mut self, elem: T)
         where
             T: Sized
@@ -226,7 +216,6 @@ impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
         "extra_const",
         "Releases ownership of the allocation, preventing deallocation, and returns the raw \
         pointer.",
-        #[inline]
         #[must_use]
         pub const fn release(self) -> NonNull<T> {
             let ptr = self.ptr;
@@ -303,7 +292,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
     const_if! {
         "extra_const",
         "Creates a new slice guard for `full` elements at `ptr` in the given allocator.",
-        #[inline]
         pub const fn new(ptr: NonNull<T>, alloc: &'a A, full: usize)
         -> SliceAllocGuard<'a, T, A> {
             SliceAllocGuard {
@@ -320,7 +308,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "Release ownership of the slice without deallocating memory, returning a `NonNull<T>` \
         pointer to the slice.",
         #[must_use]
-        #[inline]
         pub const fn release(self) -> NonNull<[T]> {
             let ret = self.get_init_part();
             forget(self);
@@ -333,7 +320,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "Release ownership of the slice without deallocating memory, returning a `NonNull<T>` \
         pointer to the slice's first element.",
         #[must_use]
-        #[inline]
         pub const fn release_first(self) -> NonNull<T> {
             let ret = self.ptr;
             forget(self);
@@ -346,7 +332,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "Gets a `NonNull<[T]>` pointer to the initialized elements of the slice.",
         #[cfg_attr(miri, track_caller)]
         #[must_use]
-        #[inline]
         pub const fn get_init_part(&self) -> NonNull<[T]> {
             nonnull_slice_from_raw_parts(self.ptr, self.init)
         }
@@ -356,7 +341,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_const",
         "Gets a `NonNull<[T]>` pointer to the uninitialized elements of the slice.",
         #[must_use]
-        #[inline]
         pub const fn get_uninit_part(&self) -> NonNull<[T]> {
             nonnull_slice_from_raw_parts(
                 unsafe { NonNull::new_unchecked(self.ptr.as_ptr().add(self.init)) },
@@ -370,7 +354,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "Gets a `NonNull<[T]>` pointer to the full slice.",
         #[cfg_attr(miri, track_caller)]
         #[must_use]
-        #[inline]
         pub const fn get_full(&self) -> NonNull<[T]> {
             nonnull_slice_from_raw_parts(self.ptr, self.full)
         }
@@ -380,7 +363,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_extra_const",
         "Sets the initialized element count.\n\n# Safety\n\nThe caller must ensure the new \
         count is correct.",
-        #[inline]
         pub const unsafe fn set_init(&mut self, init: usize) {
             self.init = init;
         }
@@ -390,7 +372,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_extra_const",
         "Initializes the next element of the slice with `elem`.\n\n# Errors\n\nReturns \
         `Err(elem)` if the slice is at capacity.",
-        #[inline]
         pub const fn init(&mut self, elem: T) -> Result<(), T> {
             if self.init == self.full {
                 return Err(elem);
@@ -406,7 +387,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_extra_const",
         "Initializes the next element of the slice with `elem`.\n\n# Safety\n\nThe caller must \
         ensure that the slice is not at capacity. (`initialized() < full()`)",
-        #[inline]
         pub const unsafe fn init_unchecked(&mut self, elem: T) {
             ptr::write(self.ptr.as_ptr().add(self.init), elem);
             self.init += 1;
@@ -419,7 +399,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// Returns `Err((iter, elem))` if the slice is filled before iteration finishes. The
     /// contained iterator will have been partially consumed.
-    #[inline]
     pub fn extend_init<I: IntoIterator<Item = T>>(&mut self, iter: I) -> Result<(), I::IntoIter> {
         let mut iter = iter.into_iter();
         loop {
@@ -440,7 +419,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_const",
         "Returns how many elements have been initialized.",
         #[must_use]
-        #[inline]
         pub const fn initialized(&self) -> usize {
             self.init
         }
@@ -450,7 +428,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_const",
         "Returns the total number of elements in the slice.",
         #[must_use]
-        #[inline]
         pub const fn full(&self) -> usize {
             self.full
         }
@@ -460,7 +437,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_const",
         "Returns `true` if every element in the slice has been initialized.",
         #[must_use]
-        #[inline]
         pub const fn is_full(&self) -> bool {
             self.init == self.full
         }
@@ -470,7 +446,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "extra_const",
         "Returns `true` if no elements have been initialized.",
         #[must_use]
-        #[inline]
         pub const fn is_empty(&self) -> bool {
             self.init == 0
         }
