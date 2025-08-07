@@ -35,6 +35,10 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.15.0
 
+### Commit 3 (2025-8-05)
+
+- Inline unstable.rs
+
 ### Commit 2 (2025-8-05)
 
 - Remove all `#[inline]` statements

@@ -17,6 +17,7 @@ pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U
 
 /// Alternative to [`Layout::padding_needed_for`], because it's unstable.
 #[must_use]
+#[inline]
 pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
     if !align.is_power_of_two() {
         return usize::MAX;
@@ -30,6 +31,7 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
 ///
 /// This is equivalent to adding the result of [`pad_layout_for`] to the layout's current size.
 #[must_use]
+#[inline]
 pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
     unsafe {
         Layout::from_size_align_unchecked(
@@ -51,6 +53,7 @@ pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
 /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
 /// - [`AllocError::Other`]`("arithmetic operation overflowed")` if an arithmetic operation
 ///   overflows.
+#[inline]
 pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usize), AllocError> {
     let padded = pad_layout_to_align(layout, layout.align());
     match repeat_layout_packed(padded, count) {
@@ -71,6 +74,7 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
 ///
 /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
 /// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
+#[inline]
 pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
     if let Some(size) = { layout.size().checked_mul(count) } {
         let align = layout.align();
@@ -87,6 +91,8 @@ pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout
     }
 }
 
+// TODO: unchecked ops
+#[inline]
 const fn size_rounded_up_to_align(sz: usize, align: usize) -> usize {
     let sub1 = align - 1;
     (sz + sub1) & !sub1
