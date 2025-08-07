@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 use core::{alloc::Layout, ptr};
-use memapi::{ffi::mim::usable_size, mimalloc::MiMalloc, Alloc};
+use memapi::{ffi::mim::mi_usable_size, mimalloc::MiMalloc, Alloc};
 
 #[test]
 fn alloc_and_dealloc_basic() {
@@ -32,7 +32,7 @@ fn usable_size_at_least_requested() {
     let layout = Layout::from_size_align(size, 16).unwrap();
     let ptr = alloc.alloc(layout).unwrap();
     unsafe {
-        let actual = usable_size(ptr.as_ptr());
+        let actual = mi_usable_size(ptr.as_ptr().cast());
         assert!(
             actual >= size,
             "usable_size {} should be >= requested {}",

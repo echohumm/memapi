@@ -1,7 +1,14 @@
 use crate::{
+    type_props::{
+        varsized_nonnull_from_raw_parts,
+        varsized_pointer_from_raw_parts,
+        VarSized,
+        PtrProps,
+        SizedProps,
+        USIZE_MAX_NO_HIGH_BIT
+    },
     error::AllocError,
-    type_props::{PtrProps, SizedProps, USIZE_MAX_NO_HIGH_BIT},
-    Alloc,
+    Alloc
 };
 use core::{
     alloc::Layout,
@@ -31,7 +38,7 @@ pub(crate) fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret
 /// after this crate's MSRV.
 #[must_use]
 pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
-    unsafe { NonNull::new_unchecked(slice_ptr_from_raw_parts(p.as_ptr(), len)) }
+    varsized_nonnull_from_raw_parts(p.cast(), len)
 }
 
 /// Creates a `*mut [T]` from a pointer and a length.
@@ -39,11 +46,11 @@ pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNu
 /// This is a helper used in place of [`ptr::slice_from_raw_parts_mut`], which was
 /// const-stabilized after this crate's MSRV.
 ///
-#[doc = "## Small disclaimer: you must guarantee this function will work, as Rust's fat \
+#[doc = "## Small disclaimer: the caller must guarantee this function will work, as Rust's fat \
     pointers changing layout would result in this function causing UB."]
 #[must_use]
 pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
-    unsafe { transmute::<(*mut T, usize), *mut [T]>((p, len)) }
+    varsized_pointer_from_raw_parts(p.cast(), len)
 }
 
 const_if! {
@@ -130,12 +137,12 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
 
 // here only because it may be used elsewhere later
 #[cfg(feature = "alloc_slice")]
-/// Gets either a valid layout with space for `n` count of `T`, or an 
+/// Gets either a valid layout with space for `n` count of `T`, or an
 /// `AllocError::LayoutError(sz, aln)`.
 pub(crate) const fn layout_or_err<T>(n: usize) -> Result<Layout, AllocError> {
     match layout_or_sz_align::<T>(n) {
         Ok(l) => Ok(l),
-        Err((sz, aln)) => Err(AllocError::InvalidLayout(sz, aln))
+        Err((sz, aln)) => Err(AllocError::InvalidLayout(sz, aln)),
     }
 }
 

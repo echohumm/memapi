@@ -31,6 +31,7 @@ pub enum AllocError {
 
 // manual implementations because of the `OtherErr` variant, which can't be PEq, Eq, or Hash
 impl PartialEq for AllocError {
+    #[inline]
     fn eq(&self, other: &AllocError) -> bool {
         use AllocError::{
             AllocFailed, GrowSmallerNewLayout, InvalidLayout, Other, ShrinkBiggerNewLayout,

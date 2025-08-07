@@ -6,6 +6,9 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Version 0.16.0 Predicted](#version-0160-predicted)
 - [Version 0.15.0](#version-0150)
+  - [Commit 4](#commit-4-2025-8-05)
+  - [Commit 3](#commit-3-2025-8-05)
+  - [Commit 2](#commit-2-2025-8-05)
   - [Commit 1](#commit-1-2025-8-05)
 - [Version 0.14.3](#version-0143-2025-8-05)
   - [Commit 2](#commit-2-2025-8-04)
@@ -34,6 +37,11 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
 ## Version 0.15.0
+
+### Commit 4 (2025-8-05)
+
+- Inline error.rs, external_alloc/mod.rs, and type_props.rs
+- Generally improve type_props
 
 ### Commit 3 (2025-8-05)
 

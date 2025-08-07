@@ -88,21 +88,17 @@ pub mod ffi {
             }
         }
 
-        /// Returns the usable size of the allocation pointed to by ptr.
-        ///
-        /// The return value may be larger than the size requested during allocation. This function
-        /// is not a mechanism for in-place `realloc()`; rather, it is provided solely as a tool for
-        /// introspection purposes. Any discrepancy between the requested allocation size and the
-        /// size reported by this function should not be depended on, since such behavior is
-        /// entirely implementation-dependent.
-        ///
-        /// # Safety
-        ///
-        /// `ptr` must have been allocated by jemalloc and must not have been freed yet.
-        #[must_use]
-        pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
-            malloc_usable_size(ptr.cast::<c_void>()) as usize
-        }
+        // /// Returns the usable size of the allocation pointed to by ptr.
+        // ///
+        // /// The return value may be larger than the size requested during allocation. This function
+        // /// is not a mechanism for in-place `realloc()`; rather, it is provided solely as a tool for
+        // /// introspection purposes. Any discrepancy between the requested allocation size and the
+        // /// size reported by this function should not be depended on, since such behavior is
+        // /// entirely implementation-dependent.
+        // ///
+        // /// # Safety
+        // ///
+        // /// `ptr` must have been allocated by jemalloc and must not have been freed yet.
 
         #[cfg_attr(miri, track_caller)]
         pub(crate) unsafe fn raw_ralloc(
@@ -124,17 +120,11 @@ pub mod ffi {
     #[cfg(feature = "mimalloc")]
     /// Bindings from `mimalloc-sys`.
     pub mod mim {
-        use libc::c_void;
-
-        /// Returns the usable size of the allocation pointed to by ptr.
-        ///
-        /// # Safety
-        ///
-        /// `ptr` must have been allocated by mimalloc and must not have been freed yet.
-        #[must_use]
-        pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
-            mi_usable_size(ptr.cast::<c_void>())
-        }
+        // /// Returns the usable size of the allocation pointed to by ptr.
+        // ///
+        // /// # Safety
+        // ///
+        // /// `ptr` must have been allocated by mimalloc and must not have been freed yet.
 
         pub use memapi_mimalloc_sys::*;
     }

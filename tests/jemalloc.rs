@@ -4,7 +4,7 @@ use core::{
     ptr::{self, NonNull},
     slice,
 };
-use memapi::{ffi::jem::usable_size, jemalloc::Jemalloc, type_props::SizedProps, Alloc};
+use memapi::{ffi::jem::malloc_usable_size, jemalloc::Jemalloc, type_props::SizedProps, Alloc};
 
 #[test]
 fn alloc_and_dealloc_basic() {
@@ -45,7 +45,7 @@ fn usable_size_at_least_requested() {
 
     unsafe {
         let ptr = alloc.alloc(layout).unwrap();
-        let usable = usable_size(ptr.as_ptr());
+        let usable = malloc_usable_size(ptr.as_ptr().cast());
         assert!(
             usable >= size,
             "usable_size {} should be >= requested {}",

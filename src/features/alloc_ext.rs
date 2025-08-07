@@ -90,7 +90,7 @@ pub trait AllocExt: Alloc {
             data,
             |p, data| unsafe {
                 let guard =
-                    AllocGuard::new(NonNull::<T>::from_raw_parts(p, ptr::metadata(data)), self);
+                    AllocGuard::new(NonNull::<T>::from_raw_parts(p, data.metadata()), self);
                 data.clone_to_uninit(guard.as_ptr() as *mut u8);
                 guard.release()
             },
@@ -295,7 +295,7 @@ pub trait AllocExt: Alloc {
     ) -> Result<NonNull<T>, AllocError> {
         alloc_then(self, unsafe { data.layout() }, data, |p, data| {
             ptr::copy_nonoverlapping(data.cast::<u8>(), p.as_ptr(), data.size());
-            NonNull::from_raw_parts(p, core::ptr::metadata(data))
+            NonNull::from_raw_parts(p, data.metadata())
         })
     }
 
