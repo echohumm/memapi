@@ -38,6 +38,12 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.15.0
 
+### Commit 5 (2025-8-05)
+
+- Inline jemalloc.rs and mimalloc.rs
+- Removed their `#[cfg_attr(miri, track_caller)]` statements since miri doesn't support external allocators
+- Fix error.rs small mistake, start working on error context
+
 ### Commit 4 (2025-8-05)
 
 - Inline error.rs, external_alloc/mod.rs, and type_props.rs
