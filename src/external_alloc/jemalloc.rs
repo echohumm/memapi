@@ -1,7 +1,10 @@
 use crate::{
     error::AllocError,
-    external_alloc::REALLOC_DIFF_ALIGN,
-    external_alloc::{ffi::jem as ffi, resize},
+    external_alloc::{
+        REALLOC_DIFF_ALIGN,
+        ffi::jem as ffi,
+        resize
+    },
     helpers::{null_q, null_q_zsl_check},
     Alloc,
 };
@@ -10,6 +13,7 @@ use core::{
     ptr::NonNull,
 };
 use libc::c_void;
+use memapi_jemalloc_sys::{rallocx, realloc};
 
 macro_rules! assume {
     ($e:expr) => {
@@ -51,6 +55,19 @@ unsafe fn dealloc(ptr: *mut u8, layout: Layout) {
     );
 }
 
+unsafe fn raw_ralloc(
+    ptr: NonNull<u8>,
+    old_layout: Layout,
+    new_layout: Layout,
+) -> *mut c_void {
+    let flags = ffi::layout_to_flags(new_layout.size(), old_layout.align());
+    if flags == 0 {
+        realloc(ptr.as_ptr().cast(), new_layout.size())
+    } else {
+        rallocx(ptr.as_ptr().cast(), new_layout.size(), flags)
+    }
+}
+
 unsafe impl GlobalAlloc for Jemalloc {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
@@ -78,9 +95,9 @@ unsafe impl GlobalAlloc for Jemalloc {
         let flags = ffi::layout_to_flags(new_size, layout.align());
         let p = ptr.cast::<c_void>();
         (if flags == 0 {
-            ffi::realloc(p, new_size)
+            realloc(p, new_size)
         } else {
-            ffi::rallocx(p, new_size, flags)
+            rallocx(p, new_size, flags)
         }).cast::<u8>()
     }
 }
@@ -114,7 +131,7 @@ impl Alloc for Jemalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
-            || ffi::raw_ralloc(ptr.as_ptr().cast::<c_void>(), old_layout, new_layout),
+            || raw_ralloc(ptr, old_layout, new_layout),
             ptr,
             old_layout,
             new_layout,
@@ -130,7 +147,7 @@ impl Alloc for Jemalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
-            || ffi::raw_ralloc(ptr.as_ptr().cast::<c_void>(), old_layout, new_layout),
+            || raw_ralloc(ptr, old_layout, new_layout),
             ptr,
             old_layout,
             new_layout,
@@ -166,7 +183,7 @@ impl Alloc for Jemalloc {
             return Err(AllocError::Other(REALLOC_DIFF_ALIGN));
         }
         null_q(
-            ffi::raw_ralloc(ptr.as_ptr().cast::<c_void>(), old_layout, new_layout),
+            raw_ralloc(ptr, old_layout, new_layout),
             new_layout,
         )
     }

@@ -2,7 +2,7 @@ use crate::{
     error::AllocError,
     type_props::{
         varsized_nonnull_from_raw_parts, varsized_pointer_from_raw_parts, PtrProps, SizedProps,
-        VarSized, USIZE_MAX_NO_HIGH_BIT,
+        USIZE_MAX_NO_HIGH_BIT,
     },
     Alloc,
 };
@@ -11,7 +11,7 @@ use core::{
     mem::{forget, transmute},
     num::NonZeroUsize,
     ops::Deref,
-    ptr::{self, eq as peq, NonNull},
+    ptr::{self, NonNull},
 };
 
 #[cfg(any(feature = "alloc_slice", feature = "alloc_ext"))]

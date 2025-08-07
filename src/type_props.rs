@@ -223,17 +223,37 @@ unsafe impl VarSized for std::path::Path {
 
 // not associated to reduce clutter, and so they can be const
 
+// TODO: use const_if! (cant rn because it doesnt support relaxed bounds or multiple bounds
+
+#[cfg(feature = "extra_const")]
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
     varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN) }, 0)
 }
 
+#[cfg(not(feature = "extra_const"))]
+/// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
+#[must_use]
+pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
+    varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN) }, 0)
+}
+
+#[cfg(feature = "extra_const")]
+/// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub const fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
     varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN).as_ptr() }, 0)
 }
 
+#[cfg(not(feature = "extra_const"))]
+/// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
+#[must_use]
+pub fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
+    varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN).as_ptr() }, 0)
+}
+
+#[cfg(feature = "extra_const")]
 /// Creates a `NonNull<T>` from a pointer and a `usize` size metadata.
 #[must_use]
 #[inline]
@@ -244,10 +264,37 @@ pub const fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
     unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
 }
 
+#[cfg(not(feature = "extra_const"))]
+/// Creates a `NonNull<T>` from a pointer and a `usize` size metadata.
+#[must_use]
+#[inline]
+pub fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
+    p: NonNull<u8>,
+    meta: usize,
+) -> NonNull<T> {
+    unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
+}
+
+#[cfg(feature = "extra_const")]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 #[must_use]
 #[inline]
 pub const fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
+    p: *mut u8,
+    meta: usize,
+) -> *mut T {
+    // SAFETY: VarSized trait requires T::Metadata == usize
+    unsafe {
+        // i hate this so much
+        *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
+    }
+}
+
+#[cfg(not(feature = "extra_const"))]
+/// Creates a `*mut T` from a pointer and a `usize` size metadata.
+#[must_use]
+#[inline]
+pub fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
     p: *mut u8,
     meta: usize,
 ) -> *mut T {
