@@ -6,7 +6,7 @@ use alloc::alloc::Layout;
 #[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mut U {
-    core::ptr::from_raw_parts_mut(ptr as *mut (), core::ptr::metadata(meta))
+    core::ptr::from_raw_parts_mut(ptr.cast::<()>(), core::ptr::metadata(meta))
 }
 
 #[cfg(feature = "metadata")]
@@ -14,7 +14,7 @@ pub const fn with_meta<T: ?Sized, U: ?Sized>(ptr: *mut T, meta: *const U) -> *mu
 #[inline]
 #[must_use = "this returns a new pointer"]
 pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U) -> *const U {
-    core::ptr::from_raw_parts(ptr as *const (), core::ptr::metadata(meta))
+    core::ptr::from_raw_parts(ptr.cast::<()>(), core::ptr::metadata(meta))
 }
 
 /// Alternative to [`Layout::padding_needed_for`], because it's unstable.
@@ -52,7 +52,7 @@ pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
 ///
 /// # Errors
 ///
-/// - [`AllocError::LayoutError`] if the computed layout is invalid.
+/// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
 /// - [`AllocError::Other`]`("arithmetic operation overflowed")` if an arithmetic operation
 ///   overflows.
 #[inline]
@@ -67,14 +67,14 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
 /// Creates a layout describing the record for `n` instances of
 /// `self`, with no padding between each instance.
 ///
-/// Note that, unlike [`repeat_layout`], `repeat_packed` does not guarantee that the repeated
+/// Note that, unlike [`repeat_layout`], `repeat_packed` doesn't guarantee that the repeated
 /// instances of `self` will be properly aligned, even if a given instance of `self` is properly
 /// aligned. In other words, if the layout returned by`repeat_packed` is used to allocate an array,
-/// it is not guaranteed that all elements in the array will be properly aligned.
+/// it isn't guaranteed that all elements in the array will be properly aligned.
 ///
 /// # Errors
 ///
-/// - [`AllocError::LayoutError`] if the computed layout is invalid.
+/// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
 /// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
 #[inline]
 pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
@@ -82,7 +82,7 @@ pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout
         let align = layout.align();
         match Layout::from_size_align(size, align) {
             Ok(layout) => Ok(layout),
-            Err(_) => Err(AllocError::LayoutError(layout.size(), layout.align())),
+            Err(_) => Err(AllocError::InvalidLayout(layout.size(), layout.align())),
         }
     } else {
         Err(AllocError::ArithmeticOverflow(

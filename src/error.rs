@@ -7,9 +7,10 @@ use core::{
 /// Errors for allocation operations.
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
+#[allow(clippy::module_name_repetitions)]
 pub enum AllocError {
     /// The layout computed with the given size and alignment is invalid.
-    LayoutError(usize, usize),
+    InvalidLayout(usize, usize),
     /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
     /// the requested alignment.
     ///
@@ -32,12 +33,12 @@ pub enum AllocError {
 impl PartialEq for AllocError {
     fn eq(&self, other: &AllocError) -> bool {
         use AllocError::{
-            AllocFailed, GrowSmallerNewLayout, LayoutError, Other, ShrinkBiggerNewLayout,
+            AllocFailed, GrowSmallerNewLayout, InvalidLayout, Other, ShrinkBiggerNewLayout,
             ZeroSizedLayout,
         };
 
         match (self, other) {
-            (LayoutError(sz1, aln1), LayoutError(sz2, aln2)) => sz1 == sz2 && aln1 == aln2,
+            (InvalidLayout(sz1, aln1), InvalidLayout(sz2, aln2)) => sz1 == sz2 && aln1 == aln2,
             (ZeroSizedLayout(a), ZeroSizedLayout(b)) => a == b,
             (AllocFailed(l1), AllocFailed(l2)) => l1 == l2,
             (GrowSmallerNewLayout(old1, new1), GrowSmallerNewLayout(old2, new2))
@@ -55,7 +56,7 @@ impl Eq for AllocError {}
 impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            AllocError::LayoutError(sz, align) => {
+            AllocError::InvalidLayout(sz, align) => {
                 write!(f, "computed invalid layout: size: {}, align: {}", sz, align)
             }
             AllocError::ZeroSizedLayout(_) => {

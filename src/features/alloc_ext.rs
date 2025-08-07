@@ -1,7 +1,7 @@
 use crate::{
     error::AllocError,
     grow,
-    helpers::{alloc_write, AllocGuard},
+    helpers::{AllocGuard, alloc_then},
     ralloc,
     type_props::{PtrProps, SizedProps},
     Alloc, AllocPattern,
@@ -40,7 +40,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_default<T: Default>(&self) -> Result<NonNull<T>, AllocError> {
-        alloc_write(self, T::default())
+        self.alloc_write(T::default())
     }
 
     /// Allocates uninitialized memory for a single `T` and writes `data` into it.
@@ -52,7 +52,11 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_write<T>(&self, data: T) -> Result<NonNull<T>, AllocError> {
-        alloc_write(self, data)
+        alloc_then::<NonNull<T>, Self, T, _>(self, T::LAYOUT, data, |p, data| unsafe {
+            let ptr: NonNull<T> = p.cast();
+            ptr::write(ptr.as_ptr(), data);
+            ptr
+        })
     }
 
     #[cfg(not(feature = "clone_to_uninit"))]
@@ -65,14 +69,11 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_clone_to<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
-        match self.alloc(T::LAYOUT) {
-            Ok(ptr) => Ok({
-                let guard = AllocGuard::new(ptr.cast(), self);
-                guard.init(data.clone());
-                guard.release()
-            }),
-            Err(e) => Err(e),
-        }
+        alloc_then::<NonNull<T>, Self, &T, _>(self, T::LAYOUT, data, |p, data| {
+            let mut guard = AllocGuard::new(p.cast(), self);
+            guard.init(data.clone());
+            guard.release()
+        })
     }
 
     #[cfg(all(feature = "clone_to_uninit", feature = "metadata"))]
@@ -88,15 +89,17 @@ pub trait AllocExt: Alloc {
         &self,
         data: &T,
     ) -> Result<NonNull<T>, AllocError> {
-        match self.alloc(unsafe { data.layout() }) {
-            Ok(ptr) => Ok(unsafe {
+        alloc_then::<NonNull<T>, Self, &T, _>(
+            self,
+            unsafe { data.layout() },
+            data,
+            |p, data| unsafe {
                 let guard =
-                    AllocGuard::new(NonNull::<T>::from_raw_parts(ptr, ptr::metadata(data)), self);
+                    AllocGuard::new(NonNull::<T>::from_raw_parts(p, ptr::metadata(data)), self);
                 data.clone_to_uninit(guard.as_ptr() as *mut u8);
                 guard.release()
-            }),
-            Err(e) => Err(e),
-        }
+            },
+        )
     }
 
     #[cfg(all(feature = "clone_to_uninit", not(feature = "metadata")))]
@@ -109,24 +112,22 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    // we can't drop the value on panic because we don't have the metadata feature to construct the
-    // fat pointer which the guard would use to drop it.
-    /// The caller must ensure the cloning operation will never panic or that it is safe to skip
-    /// dropping the cloned value.
+    /// The caller must ensure that if the cloning operation panics, it will not be necessary to 
+    /// drop the clone.
+    ///
+    /// This is because the `metadata` feature is not enabled, which is required to drop this
+    /// unsized value.
     #[track_caller]
     #[inline]
     unsafe fn alloc_clone_to<T: core::clone::CloneToUninit + ?Sized>(
         &self,
         data: &T,
     ) -> Result<NonNull<u8>, AllocError> {
-        match self.alloc(unsafe { data.layout() }) {
-            Ok(ptr) => Ok(unsafe {
-                let guard = AllocGuard::new(ptr, self);
-                data.clone_to_uninit(guard.as_ptr());
-                guard.release()
-            }),
-            Err(e) => Err(e),
-        }
+        alloc_then::<NonNull<u8>, Self, &T, _>(self, unsafe { data.layout() }, data, |p, data| {
+            let guard = AllocGuard::new(p, self);
+            data.clone_to_uninit(guard.as_ptr());
+            guard.release()
+        })
     }
 
     /// Attempts to allocate a block of memory fitting the given [`Layout`], filled with bytes
@@ -139,15 +140,12 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-        match self.alloc(layout) {
-            Ok(p) => {
-                unsafe {
-                    ptr::write_bytes(p.as_ptr(), n, layout.size());
-                }
-                Ok(p)
+        alloc_then::<NonNull<u8>, Self, u8, _>(self, layout, n, |p, n| {
+            unsafe {
+                ptr::write_bytes(p.as_ptr(), n, layout.size());
             }
-            Err(e) => Err(e),
-        }
+            p
+        })
     }
 
     /// Attempts to allocate a block of memory fitting the given [`Layout`] and
@@ -162,20 +160,17 @@ pub trait AllocExt: Alloc {
     fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
         &self,
         layout: Layout,
-        pattern: F,
+        pat: F,
     ) -> Result<NonNull<u8>, AllocError> {
-        match self.alloc(layout) {
-            Ok(p) => {
-                let guard = AllocGuard::new(p.cast::<u8>(), self);
-                for i in 0..layout.size() {
-                    unsafe {
-                        ptr::write(guard.as_ptr().add(i), pattern(i));
-                    }
+        alloc_then::<NonNull<u8>, Self, F, _>(self, layout, pat, |p, pat| {
+            let guard = AllocGuard::new(p.cast::<u8>(), self);
+            for i in 0..layout.size() {
+                unsafe {
+                    ptr::write(guard.as_ptr().add(i), pat(i));
                 }
-                Ok(guard.release())
             }
-            Err(e) => Err(e),
-        }
+            guard.release()
+        })
     }
 
     /// Drops the data at a pointer and deallocates its previously allocated block.
@@ -223,7 +218,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr::write_bytes(ptr.as_ptr() as *mut u8, 0, ptr.size());
+        ptr::write_bytes(ptr.as_ptr().cast::<u8>(), 0, ptr.size());
         self.dealloc_typed(ptr);
     }
 
@@ -294,13 +289,7 @@ pub trait AllocExt: Alloc {
         &self,
         data: &T,
     ) -> Result<NonNull<T>, AllocError> {
-        match self.alloc(data.layout()) {
-            Ok(ptr) => Ok({
-                ptr::copy_nonoverlapping(data as *const T as *const u8, ptr.as_ptr(), data.size());
-                NonNull::from_raw_parts(ptr, ptr::metadata(data as *const T))
-            }),
-            Err(e) => Err(e),
-        }
+        self.alloc_copy_ptr_to_unchecked(data)
     }
 
     #[cfg(feature = "metadata")]
@@ -321,7 +310,10 @@ pub trait AllocExt: Alloc {
         &self,
         data: *const T,
     ) -> Result<NonNull<T>, AllocError> {
-        crate::helpers::alloc_copy_ptr_to_unchecked(self, data)
+        alloc_then(self, unsafe { data.layout() }, data, |p, data| {
+            ptr::copy_nonoverlapping(data.cast::<u8>(), p.as_ptr(), data.size());
+            NonNull::from_raw_parts(p, core::ptr::metadata(data))
+        })
     }
 
     /// Allocates memory for an uninitialized `T` and returns an [`AllocGuard`] around it to ensure
@@ -334,10 +326,9 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_guard<T>(&'_ self) -> Result<AllocGuard<'_, T, Self>, AllocError> {
-        match self.alloc(T::LAYOUT) {
-            Ok(ptr) => Ok(AllocGuard::new(ptr.cast(), self)),
-            Err(e) => Err(e),
-        }
+        alloc_then(self, T::LAYOUT, (), |p, ()| {
+            AllocGuard::new(p.cast::<T>(), self)
+        })
     }
 
     /// Grow the given block to a new, larger layout, filling any newly allocated bytes by calling

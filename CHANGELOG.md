@@ -1,11 +1,13 @@
 # memapi changelog
 
-_no versions before 0.13.2 have a changelog as I started the changelog in that version and have not yet backtracked._
+_no versions before 0.13.2 have a changelog as I started the changelog in that version and haven't yet backtracked._
 
 ## Table of Contents
 
-- [Version 0.15.0 Predicted](#version-0150-predicted)
-- [Version 0.14.3](#version-0143)
+- [Version 0.16.0 Predicted](#version-0160-predicted)
+- [Version 0.15.0](#version-0150)
+  - [Commit 1](#commit-1-2025-8-05)
+- [Version 0.14.3](#version-0143-2025-8-05)
   - [Commit 2](#commit-2-2025-8-04)
   - [Commit 1](#commit-1-2025-8-04)
 - [Version 0.14.2](#version-0142-2025-8-03)
@@ -18,7 +20,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - [Commit 1 (2025-7-26)](#commit-1-2025-7-26)
 - [Version 0.13.2](#version-0132-2025-7-25)
 
-## Version 0.15.0 [Predicted]
+# Version 0.16.0 [Predicted]
 
 - Debloat the primary surfaces
 - Implement TODOs
@@ -31,29 +33,45 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - use helpers for repetitive code [size]
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
-## Version 0.14.3
+## Version 0.15.0
 
-## Commit 2 (2025-8-04)
+### Commit 1 (2025-8-05)
+
+- Remove `owned` module entirely
+  - it became impossible to maintain, had many bugs and other flaws, was basically the same as stdlib's Vec, and,
+    honestly, it only existed because of scope creep.
+- Fix and improve `AllocSlice`/`AllocExt` methods
+  - Add `extend_slice_from_ref`, `extend_slice` and `extend_raw_slice`
+- Make `libc` only use `std` if `std` feature is enabled
+- Rename `AllocError::LayoutError` to `InvalidLayout`
+- Switch to `<*mut T>::cast` instead of `as` where reasonable
+- Try to deduplicate code
+- Fix `stats` MSRV to match crate
+- Finish some docs (crate and `SliceAllocGuard`'s)
+
+## Version 0.14.3 (2025-8-05)
+
+### Commit 2 (2025-8-04)
 
 - Finish `try_init_next_slice[_grow]`/`init_next_slice_unchecked` methods in `OwnedBuf`
-- Specialize `OwnedBuf`'s `clone`
+- Specialize `OwnedBuf`'s `clone` and improve `clone_into`
 - Start adding missing tests
   - no missing docs added
   - many tests are still missing
 
-## Commit 1 (2025-8-04)
-Mostly just to transfer work done on one computer to another, minimal work done
+### Commit 1 (2025-8-04)
+Mostly just to transfer work done on one computer to another, minimal work done.
 
-- Switched `OwnedBuf` methods which take another owned buffer as a "slice" to take an actual slice (and for some, an 
+- Switched `OwnedBuf` methods that took another owned buffer as a "slice" to take an actual slice (and for some, an 
   allocator)
 - Start adding `try_init_next_slice[_grow]`/`init_next_slice_unchecked` methods to `OwnedBuf` (parallel to
   `Vec::extend_from_slice`)
 - Improve `clone_into` underlying specialization implementation
-  - Still janky, using `try_insert_slice_grow` until the above methods are implemented
+  - Still janky, using `try_insert_slice_grow` until the methods mentioned above are implemented
 
-# Version 0.14.2 (2025-8-03)
+## Version 0.14.2 (2025-8-03)
 
-## Commit 2 (2025-8-03)
+### Commit 2 (2025-8-03)
 
 - Switch to `libc` for c types to reduce dependencies
 - Switch to fork of jemalloc and mimalloc which fixes some issues
@@ -63,15 +81,16 @@ Mostly just to transfer work done on one computer to another, minimal work done
 - Add features which bind to jemalloc and mimalloc's features
 - Pray I didn't break anything
 
-## Commit 1 (2025-8-03)
+### Commit 1 (2025-8-03)
 
 - Rename `extra_const` to `extra_extra_const`
 - Start lowering MSRV to 1.56 using `const_if!` macro
 - Do stuff which was undone in the next commit with jemalloc and mimalloc
 
-## Version 0.14.1 (2025-8-01)
+### Version 0.14.1 (2025-8-01)
 
-- Fix MSRV as best as I can (1.63.0 → 1.61.0), some stuff may unnecessarily support older versions
+- Fix MSRV as best as I can (1.63.0 → 1.61.0)
+  - some stuff may unnecessarily support older versions
 - Add remaining docs to AllocSlice
 - Add `extra_const` feature which makes some more methods `const` at the cost of raising the MSRV (1.61.0 -→ 1.83.0)
 - Remove `v1_61` feature
@@ -86,7 +105,7 @@ Mostly just to transfer work done on one computer to another, minimal work done
 - Fix MSRV a bit (1.36 → 1.63?)
     - requires the v1_63 feature to be enabled, which makes a few helpers non-const
     - it's not my fault, okay? cargo is inconsistent. clippy says the msrv is fine, but then you go to compile with the
-      actual msrv and it fails
+      actual msrv, and it fails
 
 ### Commit 2 (2025-7-26)
 

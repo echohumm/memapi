@@ -295,7 +295,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
         } else {
             // it isn't my fault if this is wrong lol
             if crate::external_alloc::ffi::jem::xallocx(
-                ptr.as_ptr() as *mut libc::c_void,
+                ptr.as_ptr().cast::<libc::c_void>(),
                 new_size,
                 0,
                 crate::external_alloc::ffi::jem::layout_to_flags(new_size, old_layout.align()),
@@ -329,7 +329,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
             let flags =
                 crate::external_alloc::ffi::jem::layout_to_flags(new_size, old_layout.align());
             let usable_size = crate::external_alloc::ffi::jem::xallocx(
-                ptr.as_ptr() as *mut libc::c_void,
+                ptr.as_ptr().cast::<libc::c_void>(),
                 new_size,
                 0,
                 flags,
@@ -373,7 +373,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         } else {
             // this would be, though
             if crate::external_alloc::ffi::mim::mi_expand(
-                ptr.as_ptr() as *mut libc::c_void,
+                ptr.as_ptr().cast::<libc::c_void>(),
                 new_size,
             )
             .is_null()

@@ -38,7 +38,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-memapi = "0.13.3"
+memapi = "0.14.3"
 ```
 
 Or, the recommended way:
@@ -48,7 +48,7 @@ Or, the recommended way:
 allocator_api = ["memapi/nightly"]
 
 [dependencies]
-memapi = "0.13.3"
+memapi = "0.14.3"
 ```
 
 ---

@@ -104,7 +104,7 @@ pub mod ffi {
         #[inline]
         #[must_use]
         pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
-            malloc_usable_size(ptr as *const c_void) as usize
+            malloc_usable_size(ptr.cast::<c_void>()) as usize
         }
 
         #[cfg_attr(miri, track_caller)]
@@ -138,7 +138,7 @@ pub mod ffi {
         #[inline]
         #[must_use]
         pub unsafe fn usable_size<T>(ptr: *const T) -> usize {
-            mi_usable_size(ptr as *const c_void)
+            mi_usable_size(ptr.cast::<c_void>())
         }
 
         pub use memapi_mimalloc_sys::*;

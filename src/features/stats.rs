@@ -1,5 +1,3 @@
-#![allow(unused_qualifications)]
-
 use crate::{
     stats::AllocRes::{Fail, Succ},
     Alloc, AllocError, DefaultAlloc,
@@ -150,7 +148,6 @@ pub struct FmtLog<W: fmt::Write> {
 #[cfg(feature = "std")]
 /// A logger that pushes all statistics to a vector.
 pub struct StatCollectingLog {
-    // maybe i should use crate::owned::OwnedBuf here
     /// The vector which results are passed to.
     pub results: std::sync::Mutex<Vec<AllocRes>>,
     /// The total number of bytes allocated.
@@ -359,6 +356,7 @@ pub type StrLog<'s> = FmtLog<&'s str>;
 ///     total: AtomicUsize,
 /// }
 /// ```
+#[allow(clippy::module_name_repetitions)]
 pub trait StatsLogger {
     /// Logs a statistic.
     fn log(&self, stat: AllocRes);
@@ -473,23 +471,23 @@ pub enum AllocStat {
         region: MemoryRegion,
         /// The kind of allocation.
         kind: AllocKind,
-        /// The total number of bytes allocated currently.
+        /// The total number of bytes allocated after this call.
         total: usize,
     },
     /// A reallocation (resizing) operation.
     Realloc {
-        /// The old and new memory regions' info.
-        info: ResizeInfo,
+        /// The old and new memory regions' information.
+        info: ResizeMemRegions,
         /// The kind of allocation.       
         kind: AllocKind,
-        /// The total number of bytes allocated currently.
+        /// The total number of bytes allocated after this call.
         total: usize,
     },
     /// A deallocation operation.
     Free {
         /// The memory region that was freed.
         region: MemoryRegion,
-        /// The total number of bytes allocated currently.
+        /// The total number of bytes allocated after this call.
         total: usize,
     },
 }
@@ -504,7 +502,7 @@ impl AllocStat {
         total: usize,
     ) -> AllocStat {
         AllocStat::Realloc {
-            info: ResizeInfo {
+            info: ResizeMemRegions {
                 old: MemoryRegion {
                     ptr: old_ptr.as_ptr(),
                     size: old_layout.size(),
@@ -535,7 +533,7 @@ pub struct MemoryRegion {
 
 /// Old vs. new regions when resizing.
 #[derive(Debug)]
-pub struct ResizeInfo {
+pub struct ResizeMemRegions {
     /// The original memory region.
     pub old: MemoryRegion,
     /// The new memory region.

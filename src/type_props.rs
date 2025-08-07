@@ -1,4 +1,4 @@
-#![allow(unused_qualifications)]
+#![allow(unused_qualifications, missing_docs)]
 
 use alloc::alloc::Layout;
 use core::{
@@ -133,8 +133,8 @@ impl_ptr_props!(
 ///
 /// # Safety
 ///
-/// The implementor guarantees that the `ALIGN` constant accurately represents the
-/// alignment requirement of the type in any safe context.
+/// The implementor guarantees that the `ALIGN` constant accurately represents the alignment
+/// requirement of the type in any safe context and that the type's pointee metadata is `usize`.
 pub unsafe trait VarSized {
     /// The alignment of the type.
     const ALIGN: usize;
@@ -179,26 +179,9 @@ unsafe impl<T> VarSized for [T] {
 
 #[cfg(feature = "metadata")]
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
-///
 #[must_use]
 #[inline]
 pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
     // SAFETY: `ALIGN` is guaranteed to be a valid alignment for `Self`.
     unsafe { NonNull::from_raw_parts(crate::helpers::dangling_nonnull(T::ALIGN), 0) }
-}
-
-#[cfg(feature = "metadata")]
-/// Creates a dangling, zero-length mutable pointer with the proper alignment.
-#[must_use]
-#[inline]
-pub const fn varsized_dangling_ptr_mut<T: ?Sized + VarSized>() -> *mut T {
-    core::ptr::from_raw_parts_mut(T::ALIGN as *mut (), 0)
-}
-
-#[cfg(feature = "metadata")]
-/// Creates a dangling, zero-length immutable pointer with the proper alignment.
-#[must_use]
-#[inline]
-pub const fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *const T {
-    core::ptr::from_raw_parts(T::ALIGN as *const (), 0)
 }

@@ -5,14 +5,25 @@ use crate::{
 };
 use core::{
     alloc::Layout,
-    mem::{transmute, forget},
+    mem::{forget, transmute},
     num::NonZeroUsize,
     ops::Deref,
     ptr::{self, eq as peq, NonNull},
 };
 
-#[cfg(any(feature = "alloc_slice", feature = "owned"))]
-pub(crate) const TRUNC_LGR: &str = "attempted to truncate a slice to a larger size";
+#[cfg(any(feature = "alloc_slice", feature = "alloc_ext"))]
+/// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
+pub(crate) fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
+    a: &A,
+    layout: Layout,
+    e: E,
+    then: F,
+) -> Result<Ret, AllocError> {
+    match a.alloc(layout) {
+        Ok(ptr) => Ok(then(ptr, e)),
+        Err(e) => Err(e),
+    }
+}
 
 /// Creates a `NonNull<[T]>` from a pointer and a length.
 ///
@@ -55,7 +66,7 @@ pub(crate) fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
     f: F,
 ) -> Result<NonNull<u8>, AllocError> {
     zsl_check(layout, |layout: Layout| {
-        null_q(f(layout) as *mut u8, layout)
+        null_q(f(layout).cast::<u8>(), layout)
     })
 }
 
@@ -64,7 +75,7 @@ pub(crate) fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Allo
     if ptr.is_null() {
         Err(AllocError::AllocFailed(layout))
     } else {
-        Ok(unsafe { NonNull::new_unchecked(ptr as *mut u8) })
+        Ok(unsafe { NonNull::new_unchecked(ptr.cast::<u8>()) })
     }
 }
 
@@ -78,64 +89,6 @@ pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
         Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
     } else {
         f(layout)
-    }
-}
-
-#[cfg(any(feature = "alloc_slice", feature = "owned"))]
-/// Deallocates `n` elements of type `T` at `ptr` using a reference to an `A`.
-#[cfg_attr(miri, track_caller)]
-#[inline]
-pub(crate) unsafe fn dealloc_n<T, A: Alloc + ?Sized>(a: &A, ptr: NonNull<T>, n: usize) {
-    // Here, we assume the layout is valid as it was presumably used to allocate previously.
-    a.dealloc(
-        ptr.cast(),
-        Layout::from_size_align_unchecked(T::SZ * n, T::ALIGN),
-    );
-}
-
-#[cfg(any(feature = "alloc_slice", feature = "owned"))]
-/// Allocates a slice of `len` elements of type `T` using the given reference to an `A` and an
-/// allocation function pointer.
-#[cfg_attr(miri, track_caller)]
-#[inline]
-pub(crate) fn alloc_slice<T, A: Alloc + ?Sized>(
-    a: &A,
-    len: usize,
-    alloc: fn(&A, Layout) -> Result<NonNull<u8>, AllocError>,
-) -> Result<NonNull<[T]>, AllocError> {
-    let layout =
-        layout_or_sz_align::<T>(len).map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-    alloc(a, layout).map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
-}
-
-#[cfg(all(any(feature = "alloc_ext", feature = "owned"), feature = "metadata"))]
-/// Allocates space for a copy of the value behind `data`, and copies it into the new memory.
-#[cfg_attr(miri, track_caller)]
-#[inline]
-pub(crate) unsafe fn alloc_copy_ptr_to_unchecked<T: ?Sized, A: Alloc + ?Sized>(
-    a: &A,
-    data: *const T,
-) -> Result<NonNull<T>, AllocError> {
-    match a.alloc(data.layout()) {
-        Ok(ptr) => Ok({
-            ptr::copy_nonoverlapping(data as *const u8, ptr.as_ptr(), data.size());
-            NonNull::from_raw_parts(ptr, core::ptr::metadata(data))
-        }),
-        Err(e) => Err(e),
-    }
-}
-
-#[cfg(any(feature = "alloc_ext", feature = "owned"))]
-#[cfg_attr(miri, track_caller)]
-#[inline]
-pub(crate) fn alloc_write<T, A: Alloc + ?Sized>(a: &A, val: T) -> Result<NonNull<T>, AllocError> {
-    match a.alloc(T::LAYOUT) {
-        Ok(ptr) => Ok(unsafe {
-            let ptr: NonNull<T> = ptr.cast();
-            ptr::write(ptr.as_ptr(), val);
-            ptr
-        }),
-        Err(e) => Err(e),
     }
 }
 
@@ -183,12 +136,22 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
     transmute::<NonZeroUsize, NonNull<u8>>(NonZeroUsize::new_unchecked(align))
 }
 
+// here only because it may be used elsewhere later
+#[cfg(feature = "alloc_slice")]
+/// Gets either a valid layout with space for `n` count of `T`, or an 
+/// `AllocError::LayoutError(sz, aln)`.
+pub(crate) const fn layout_or_err<T>(n: usize) -> Result<Layout, AllocError> {
+    match layout_or_sz_align::<T>(n) {
+        Ok(l) => Ok(l),
+        Err((sz, aln)) => Err(AllocError::InvalidLayout(sz, aln))
+    }
+}
+
 /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
 ///
 /// # Errors
 ///
 /// Returns `Err(size, align)` if creation of a layout with the given size and alignment fails.
-#[inline]
 pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
     let (sz, align) = (T::SZ, T::ALIGN);
 
@@ -203,7 +166,7 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
 /// released.
 ///
 /// `AllocGuard` wraps a `NonNull<T>` pointer and an allocator reference `&A`. When the guard
-/// goes out of scope, it will deallocate the underlying memory via the allocator.
+/// goes out of scope, the underlying memory will be deallocated via the allocator.
 ///
 /// To take ownership of the allocation without deallocating, call
 /// [`release`](SliceAllocGuard::release), which returns the raw pointer and prevents the guard
@@ -214,7 +177,7 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust
 /// # use core::ptr::NonNull;
 /// # use memapi::{helpers::AllocGuard, Alloc, DefaultAlloc};
 /// # let alloc = DefaultAlloc;
@@ -226,7 +189,7 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
 /// unsafe { guard.as_ptr().write(123) };
 ///
 /// // If everything is OK, take ownership and prevent automatic deallocation
-/// // (commented out for this example as the pointer will not be used)
+/// // (commented out for this example as the pointer won't be used)
 /// // let raw = guard.release();
 /// ```
 pub struct AllocGuard<'a, T: ?Sized, A: Alloc + ?Sized> {
@@ -249,7 +212,7 @@ impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
         "Initializes the value by writing to the contained pointer.",
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        pub const fn init(&self, elem: T)
+        pub const fn init(&mut self, elem: T)
         where
             T: Sized
         {
@@ -294,34 +257,41 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 ///
 /// On drop, it will:
 /// 1. Run destructors for each initialized element.
-/// 2. Deallocate the entire slice memory.
+/// 2. Deallocate the entire slice of memory.
 ///
 /// Use [`init`](SliceAllocGuard::init) or [`init_unchecked`](SliceAllocGuard::init_unchecked)
 /// to initialize elements one by one, [`extend_init`](SliceAllocGuard::extend_init) to
 /// initialize many elements at once, and [`release`](SliceAllocGuard::release) to take
 /// ownership of the fully‐initialized slice without running cleanup.
-// ///
-// /// # Examples
-// ///
-// /// ```
-// /// # use core::ptr::NonNull;
-// /// # use memapi::{helpers::SliceAllocGuard, Alloc, DefaultAlloc};
-// /// # let alloc = DefaultAlloc;
-// /// # let len = 5;
-// /// let mut guard = SliceAllocGuard::new(
-// ///     alloc.alloc_slice::<u32>(len).unwrap().cast::<u32>(),
-// ///     &alloc,
-// ///     len
-// /// );
-// ///
-// /// for i in 0..len {
-// ///     guard.init(i as u32).unwrap();
-// /// }
-// ///
-// /// // All elements are now initialized; take ownership:
-// /// // (commented out for this example as the pointer will not be used)
-// /// // let slice_ptr = guard.release();
-// /// ```
+///
+/// # Examples
+///
+/// ```rust
+/// # use core::{ptr::NonNull, alloc::Layout};
+/// # use memapi::{
+/// #  helpers::SliceAllocGuard,
+/// #  Alloc,
+/// #  DefaultAlloc,
+/// #  type_props::SizedProps
+/// # };
+/// # let alloc = DefaultAlloc;
+/// # let len = 5;
+///
+/// let mut guard = SliceAllocGuard::new(
+///     alloc.alloc(unsafe { Layout::from_size_align_unchecked(u32::SZ * len, u32::ALIGN) })
+///             .unwrap().cast(),
+///     &alloc,
+///     len
+/// );
+///
+/// for i in 0..len {
+///     guard.init(i as u32).unwrap();
+/// }
+///
+/// // All elements are now initialized; take ownership:
+/// // (commented out for this example as the pointer won't be used)
+/// // let slice_ptr = guard.release();
+/// ```
 pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
     ptr: NonNull<T>,
     alloc: &'a A,
@@ -521,7 +491,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
             let to_copy = if slice.len() < lim { slice.len() } else { lim };
 
             unsafe {
-                ptr::copy_nonoverlapping(
+                ptr::copy(
                     slice.as_ptr(),
                     self.ptr.as_ptr().add(self.init),
                     to_copy
@@ -537,6 +507,8 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
             }
         }
     }
+
+    // TODO: other *_from_slice methods
 }
 
 impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {

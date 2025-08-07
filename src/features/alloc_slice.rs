@@ -2,8 +2,8 @@ use crate::{
     error::AllocError,
     grow,
     helpers::{
-        alloc_slice, dealloc_n, layout_or_sz_align, nonnull_slice_from_raw_parts,
-        nonnull_slice_len, slice_ptr_from_raw_parts, SliceAllocGuard, TRUNC_LGR,
+        alloc_then, layout_or_err, nonnull_slice_from_raw_parts, nonnull_slice_len,
+        slice_ptr_from_raw_parts, SliceAllocGuard,
     },
     ralloc, shrink,
     type_props::{PtrProps, SizedProps},
@@ -14,7 +14,9 @@ use core::{
     mem::MaybeUninit,
     ptr::{self, NonNull},
 };
-// TODO: slice growth and realloc with copying and cloning.
+// TODO: slice growth and realloc with copying and cloning
+// TODO: review usage and make small semantic adjustments, like making functions take
+//  [MaybeUninit<T>] and an extra `init` count instead of just [T] for ease of use.
 
 macro_rules! realloc {
     (
@@ -49,8 +51,7 @@ macro_rules! realloc {
             $self,
             $ptr.cast(),
             Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALIGN),
-            layout_or_sz_align::<$ty>($new_len)
-                .map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?,
+            layout_or_err::<$ty>($new_len)?,
             $(AllocPattern::<$f>::$pat$(($val))?)?
         )
         .map(NonNull::cast)
@@ -58,6 +59,7 @@ macro_rules! realloc {
 }
 
 /// Small helper to fill new elements of a grown slice using a predicate.
+#[cfg_attr(miri, track_caller)]
 unsafe fn fill_new_elems_with<T, A: Alloc + ?Sized, F: Fn(usize) -> T>(
     a: &A,
     p: NonNull<T>,
@@ -73,6 +75,8 @@ unsafe fn fill_new_elems_with<T, A: Alloc + ?Sized, F: Fn(usize) -> T>(
     guard.release_first()
 }
 
+/// Small helper to resize and initialize a slice's elements with two predicates.
+#[cfg_attr(miri, track_caller)]
 unsafe fn resize_init<
     T,
     I: Fn(NonNull<[T]>, &mut usize),
@@ -97,6 +101,20 @@ unsafe fn resize_init<
     }
 }
 
+/// Small helper to allocate a slice using a given allocation function.
+#[cfg_attr(miri, track_caller)]
+pub(crate) fn alloc_slice<
+    T,
+    A: Alloc + ?Sized,
+    F: Fn(&A, Layout) -> Result<NonNull<u8>, AllocError>,
+>(
+    a: &A,
+    len: usize,
+    alloc: F,
+) -> Result<NonNull<[T]>, AllocError> {
+    alloc(a, layout_or_err::<T>(len)?).map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
+}
+
 /// Slice-specific extension methods for [`Alloc`], providing convenient functions for slice
 /// allocator operations.
 pub trait AllocSlice: Alloc {
@@ -105,7 +123,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -118,7 +136,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -136,16 +154,13 @@ pub trait AllocSlice: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_clone_slice_to<T: Clone>(&self, data: &[T]) -> Result<NonNull<[T]>, AllocError> {
-        match self.alloc(unsafe { data.layout() }) {
-            Ok(ptr) => Ok(unsafe {
-                let mut guard = SliceAllocGuard::new(ptr.cast(), self, data.len());
-                for elem in data {
-                    guard.init_unchecked(elem.clone());
-                }
-                guard.release()
-            }),
-            Err(e) => Err(e),
-        }
+        alloc_then(self, unsafe { data.layout() }, data, |p, data| unsafe {
+            let mut guard = SliceAllocGuard::new(p.cast(), self, data.len());
+            for elem in data {
+                guard.init_unchecked(elem.clone());
+            }
+            guard.release()
+        })
     }
 
     /// Allocates uninitialized memory for a slice of `T` and copies each element from `data` into
@@ -178,15 +193,12 @@ pub trait AllocSlice: Alloc {
         &self,
         data: &[T],
     ) -> Result<NonNull<[T]>, AllocError> {
-        match self.alloc(data.layout()) {
-            Ok(ptr) => Ok({
-                let p = ptr.cast::<T>();
-                ptr::copy_nonoverlapping(data as *const [T] as *const T, p.as_ptr(), data.len());
+        alloc_then(self, data.layout(), data, |p, data| {
+            let p = p.cast::<T>();
+            ptr::copy_nonoverlapping((data as *const [T]).cast::<T>(), p.as_ptr(), data.len());
 
-                nonnull_slice_from_raw_parts(p, data.len())
-            }),
-            Err(e) => Err(e),
-        }
+            nonnull_slice_from_raw_parts(p, data.len())
+        })
     }
 
     /// Allocates uninitialized memory for a `[T]` of length `len` and fills each element with the
@@ -195,7 +207,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
     #[inline]
@@ -204,18 +216,13 @@ pub trait AllocSlice: Alloc {
         len: usize,
         f: F,
     ) -> Result<NonNull<[T]>, AllocError> {
-        match self.alloc(
-            layout_or_sz_align::<T>(len).map_err(|(sz, aln)| AllocError::LayoutError(sz, aln))?,
-        ) {
-            Ok(ptr) => Ok(unsafe {
-                let mut guard = SliceAllocGuard::new(ptr.cast(), self, len);
-                for i in 0..len {
-                    guard.init_unchecked(f(i));
-                }
-                guard.release()
-            }),
-            Err(e) => Err(e),
-        }
+        alloc_then(self, layout_or_err::<T>(len)?, f, |p, f| unsafe {
+            let mut guard = SliceAllocGuard::new(p.cast(), self, len);
+            for i in 0..len {
+                guard.init_unchecked(f(i));
+            }
+            guard.release()
+        })
     }
 
     /// Allocates uninitialized memory for a `[T]` of length `len` and initializes it using `init`.
@@ -226,14 +233,14 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     ///
     /// # Safety
     ///
     /// The caller must ensure the initialized element counter will be the same as the slice's
     /// length after `init` finishes, and that at any time `init` may panic, the counter will be
-    /// accurate.
+    /// correct.
     #[track_caller]
     #[inline]
     unsafe fn alloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
@@ -252,7 +259,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
     #[inline]
@@ -269,7 +276,7 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
-        ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr() as *mut T, init));
+        ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr().cast::<T>(), init));
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
     }
 
@@ -287,8 +294,8 @@ pub trait AllocSlice: Alloc {
         slice: NonNull<[MaybeUninit<T>]>,
         init: usize,
     ) {
-        ptr::drop_in_place(slice_ptr_from_raw_parts(slice.as_ptr() as *mut T, init));
-        ptr::write_bytes(slice.as_ptr() as *mut T, 0, nonnull_slice_len(slice));
+        ptr::drop_in_place(slice_ptr_from_raw_parts(slice.as_ptr().cast::<T>(), init));
+        ptr::write_bytes(slice.as_ptr().cast::<T>(), 0, nonnull_slice_len(slice));
         self.dealloc(slice.cast::<u8>(), slice.layout());
     }
 
@@ -298,7 +305,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -311,13 +318,115 @@ pub trait AllocSlice: Alloc {
             Err(e) => Err(e),
         }
     }
+    
+    /// Extends a slice with elements from a reference to another via either copying or cloning.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    fn extend_slice_from_ref<T: Clone>(
+        &self,
+        slice: NonNull<[T]>,
+        extra: &[T]
+    ) -> Result<NonNull<[T]>, AllocError> {
+        // SAFETY: a NonNull<[T]> has the exact same layout as a &[T].
+        self.extend_slice(slice, unsafe {
+            *(&extra as *const &[T]).cast::<NonNull<[T]>>()
+        })
+    }
+
+    /// Extends a slice with elements from another via either copying or cloning.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    #[cfg_attr(miri, track_caller)]
+    fn extend_slice<T: Clone>(
+        &self,
+        slice: NonNull<[T]>,
+        extra: NonNull<[T]>,
+    ) -> Result<NonNull<[T]>, AllocError> {
+        let len = nonnull_slice_len(slice);
+        let ext_len = nonnull_slice_len(extra);
+        self.extend_raw_slice(slice.cast::<T>(), len, extra.cast::<T>(), ext_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, len + ext_len))
+    }
+
+    /// Extends a slice with elements from another via either copying or cloning, given pointers
+    /// to their first elements and their lengths.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    #[cfg_attr(miri, track_caller)]
+    fn extend_raw_slice<T: Clone>(
+        &self,
+        ptr: NonNull<T>,
+        len: usize,
+        extra_ptr: NonNull<T>,
+        extra_len: usize,
+    ) -> Result<NonNull<T>, AllocError> {
+        trait SpecExtendSlice<T: Clone, A: AllocSlice + ?Sized> {
+            fn dupe_into(slf: NonNull<T>, len: usize, dst: NonNull<T>);
+        }
+
+        macro_rules! spec_extend_slice_impl {
+            ($($extra_token:tt)?) => {
+                impl<T: Clone, A: AllocSlice + ?Sized> SpecExtendSlice<T, A> for [T] {
+                    $($extra_token)? fn dupe_into(slf: NonNull<T>, len: usize, dst: NonNull<T>) {
+                        let p = dst.as_ptr();
+                        let slf = slf.as_ptr();
+
+                        unsafe {
+                            #[cfg(not(feature = "clone_to_uninit"))]
+                            for i in 0..len {
+                                p.add(i).write((&*slf.add(i)).clone());
+                            }
+
+                            #[cfg(feature = "clone_to_uninit")]
+                            <[T] as core::clone::CloneToUninit>::clone_to_uninit(
+                                &*slice_ptr_from_raw_parts(slf, len), p.cast()
+                            );
+                        }
+                    }
+                }
+            };
+        }
+
+        #[cfg(not(feature = "specialization"))]
+        spec_extend_slice_impl!();
+
+        #[cfg(feature = "specialization")]
+        spec_extend_slice_impl!(default);
+
+        #[cfg(feature = "specialization")]
+        impl<T: Copy, A: AllocSlice + ?Sized> SpecExtendSlice<T, A> for [T] {
+            fn dupe_into(slf: NonNull<T>, len: usize, dst: NonNull<T>) {
+                unsafe {
+                    ptr::copy(slf.as_ptr(), dst.as_ptr(), len);
+                }
+            }
+        }
+
+        let new_ptr = unsafe { self.grow_raw_slice(ptr, len, len + extra_len)? };
+        <[T] as SpecExtendSlice<T, Self>>::dupe_into(extra_ptr, extra_len, new_ptr);
+        Ok(new_ptr)
+    }
+
+    // TODO: extend_slice_from_iter, alloc_slice_from_iter
 
     /// Grows a slice to a new length.
     ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
@@ -341,7 +450,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
@@ -367,7 +476,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
@@ -391,7 +500,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
@@ -416,7 +525,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
@@ -442,7 +551,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
@@ -473,7 +582,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
@@ -482,7 +591,7 @@ pub trait AllocSlice: Alloc {
     /// - `slice` must point to a slice allocated using this allocator.
     /// - the initialized element counter must be the same as the slice's length after `init`
     ///   finishes
-    /// - at any time `init` may panic, the counter must be accurate.
+    /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
     #[inline]
     unsafe fn grow_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
@@ -504,7 +613,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
@@ -515,7 +624,7 @@ pub trait AllocSlice: Alloc {
     /// - `len` must describe exactly the number of elements in that slice.
     /// - the initialized element counter must be the same as the slice's length after `init`
     ///   finishes
-    /// - at any time `init` may panic, the counter must be accurate.
+    /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
     #[inline]
     unsafe fn grow_raw_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
@@ -540,7 +649,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
@@ -564,7 +673,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
@@ -588,7 +697,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::ShrinkBiggerNewLayout`] if `new_len > slice.len()`.
     ///
@@ -612,7 +721,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::ShrinkBiggerNewLayout`] if `new_len > len`.
     ///
@@ -636,7 +745,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::Other("attempted to truncate a slice to a larger size")`] if
     ///   `new_len > slice.len()`.
@@ -662,7 +771,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::Other("attempted to truncate a slice to a larger size")`] if
     ///   `new_len > len`.
@@ -681,7 +790,9 @@ pub trait AllocSlice: Alloc {
         new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         if new_len > len {
-            return Err(AllocError::Other(TRUNC_LGR));
+            return Err(AllocError::Other(
+                "attempted to truncate a slice to a larger size",
+            ));
         }
 
         if new_len < init {
@@ -699,7 +810,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -725,7 +836,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -752,7 +863,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -780,7 +891,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -807,7 +918,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -835,7 +946,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -874,7 +985,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -882,7 +993,7 @@ pub trait AllocSlice: Alloc {
     /// - `slice` must point to a slice allocated using this allocator.
     /// - the initialized element counter must be the same as the slice's length after `init`
     ///   finishes
-    /// - at any time `init` may panic, the counter must be accurate.
+    /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
     #[inline]
     unsafe fn realloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
@@ -907,7 +1018,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -916,7 +1027,7 @@ pub trait AllocSlice: Alloc {
     /// - `len` must describe exactly the number of elements in that slice.
     /// - the initialized element counter must be the same as the slice's length after `init`
     ///   finishes
-    /// - at any time `init` may panic, the counter must be accurate.
+    /// - at any time `init` may panic, the counter must be correct.
     #[track_caller]
     #[inline]
     unsafe fn realloc_raw_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
@@ -944,7 +1055,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
@@ -967,7 +1078,7 @@ pub trait AllocSlice: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     ///
     /// # Safety
@@ -994,7 +1105,11 @@ pub trait AllocSlice: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        dealloc_n(self, ptr, n);
+        // Here, we assume the layout is valid as it was presumably used to allocate previously.
+        self.dealloc(
+            ptr.cast(),
+            Layout::from_size_align_unchecked(T::SZ * n, T::ALIGN),
+        );
     }
 
     /// Zeroes and deallocates `n` elements at the given pointer.
@@ -1028,6 +1143,7 @@ pub trait AllocSlice: Alloc {
 impl<A: Alloc + ?Sized> AllocSlice for A {}
 
 #[cfg(feature = "alloc_ext")]
+#[allow(clippy::module_name_repetitions)]
 /// Slice-specific extension methods for [`AllocExt`](crate::AllocExt), providing
 /// extended convenient functions for slice allocator operations.
 pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
@@ -1037,15 +1153,12 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_slice_filled<T>(&self, len: usize, n: u8) -> Result<NonNull<[T]>, AllocError> {
-        let layout = layout_or_sz_align::<T>(len)
-            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        self.alloc_filled(layout, n)
-            .map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
+        alloc_slice(self, len, |a, layout| a.alloc_filled(layout, n))
     }
 
     /// Attempts to allocate a block of memory for `len` instances of `T` and
@@ -1054,7 +1167,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
     #[inline]
@@ -1063,10 +1176,9 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         len: usize,
         pattern: F,
     ) -> Result<NonNull<[T]>, AllocError> {
-        let layout = layout_or_sz_align::<T>(len)
-            .map_err(|(sz, align)| AllocError::LayoutError(sz, align))?;
-        self.alloc_patterned(layout, pattern)
-            .map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
+        alloc_slice(self, len, move |a, layout| {
+            a.alloc_patterned(layout, pattern.clone())
+        })
     }
 
     /// Grows a slice to a new length, filling any newly allocated bytes with `n`.
@@ -1074,7 +1186,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed slice would be zero-sized.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
     /// # Safety
@@ -1098,7 +1210,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
@@ -1124,7 +1236,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed slice would be zero-sized.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
     /// # Safety
@@ -1142,7 +1254,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
             slice.cast::<T>(),
             nonnull_slice_len(slice),
             new_len,
-            pattern.clone(),
+            pattern,
         )
         .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
@@ -1154,7 +1266,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed layout is invalid.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
     ///
@@ -1181,7 +1293,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed slice would be zero-sized.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///
@@ -1206,7 +1318,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed slice would be zero-sized.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///
@@ -1232,7 +1344,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed slice would be zero-sized.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///
@@ -1249,7 +1361,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
             slice.cast::<T>(),
             nonnull_slice_len(slice),
             new_len,
-            pattern.clone(),
+            pattern,
         )
         .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
@@ -1263,7 +1375,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::LayoutError`] if the computed slice would be zero-sized.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///
@@ -1282,4 +1394,5 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     }
 }
 
+#[cfg(feature = "alloc_ext")]
 impl<A: AllocSlice + ?Sized> AllocSliceExt for A {}

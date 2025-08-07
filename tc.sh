@@ -2,9 +2,6 @@
 
 set -e
 
-# test most recent
-cargo test -F owned --no-default-features -F full_no_nightly
-
 # test extra_extra_const with its msrv of 1.83, as well as external_allocs_in_place (msrv 1.63)
 cargo +1.83.0 test --no-default-features --features="full_min,extra_extra_const,external_allocs_in_place"
 

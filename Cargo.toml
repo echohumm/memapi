@@ -1,7 +1,7 @@
 [package]
 name = "memapi"
 # major will probably always be 0
-version = "0.14.2"
+version = "0.14.3"
 edition = "2018"
 authors = ["echohumm"]
 readme = "README.md"
@@ -24,7 +24,7 @@ docsrs = { status = "passing" }
 
 [features]
 nightly = []
-std = []
+std = ["libc/std"]
 
 metadata = ["nightly"]
 sized_hierarchy = ["nightly"]
@@ -36,16 +36,13 @@ extra_extra_const = ["extra_const"]
 c_str = []
 
 all_nightly = ["metadata", "sized_hierarchy", "clone_to_uninit", "specialization"]
+default_nightly = ["metadata", "clone_to_uninit", "specialization"]
 
 alloc_ext = []
-alloc_slice = ["alloc_ext"]
+alloc_slice = []
 resize_in_place = []
 
 stats = []
-owned = []
-
-drop_for_owned = ["owned"]
-zero_drop_for_owned = ["owned"]
 
 external_alloc = ["libc"]
 
@@ -60,8 +57,8 @@ external_allocs_in_place = ["jemalloc_in_place", "mimalloc_in_place"]
 
 full_min = [
     "alloc_slice",
+    "alloc_ext",
     "stats",
-    "owned",
 ]
 
 full_min_std = [
@@ -134,11 +131,6 @@ path = "tests/stats.rs"
 required-features = ["stats", "std"]
 
 [[test]]
-name = "owned"
-path = "tests/owned.rs"
-required-features = ["owned"]
-
-[[test]]
 name = "jem"
 path = "tests/jemalloc.rs"
 required-features = ["jemalloc"]
@@ -153,6 +145,6 @@ name = "dangerous"
 path = "tests/potential_ub.rs"
 
 [dependencies]
-libc = { version = "^0.2", optional = true }
+libc = { version = "^0.2", optional = true, default-features = false }
 memapi-jemalloc-sys = { version = "0.1.1", optional = true }
 memapi-mimalloc-sys = { version = "0.1.2", optional = true, features = ["extended"] }

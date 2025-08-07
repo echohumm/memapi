@@ -16,25 +16,25 @@ unsafe impl GlobalAlloc for MiMalloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        ffi::mi_malloc_aligned(layout.size(), layout.align()) as *mut u8
+        ffi::mi_malloc_aligned(layout.size(), layout.align()).cast::<u8>()
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        ffi::mi_free_size_aligned(ptr as *mut c_void, layout.size(), layout.align());
+        ffi::mi_free_size_aligned(ptr.cast::<c_void>(), layout.size(), layout.align());
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        ffi::mi_zalloc_aligned(layout.size(), layout.align()) as *mut u8
+        ffi::mi_zalloc_aligned(layout.size(), layout.align()).cast::<u8>()
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        ffi::mi_realloc_aligned(ptr as *mut c_void, new_size, layout.align()) as *mut u8
+        ffi::mi_realloc_aligned(ptr.cast::<c_void>(), new_size, layout.align()).cast::<u8>()
     }
 }
 
@@ -44,7 +44,7 @@ fn zsl_check_alloc(
     alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
 ) -> Result<NonNull<u8>, AllocError> {
     null_q_zsl_check(layout, |layout| unsafe {
-        alloc(layout.size(), layout.align()) as *mut u8
+        alloc(layout.size(), layout.align()).cast::<u8>()
     })
 }
 
@@ -65,7 +65,7 @@ impl Alloc for MiMalloc {
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if layout.size() != 0 {
-            ffi::mi_free_size_aligned(ptr.as_ptr() as *mut c_void, layout.size(), layout.align());
+            ffi::mi_free_size_aligned(ptr.as_ptr().cast::<c_void>(), layout.size(), layout.align());
         }
     }
 
@@ -80,7 +80,7 @@ impl Alloc for MiMalloc {
         resize(
             || {
                 ffi::mi_realloc_aligned(
-                    ptr.as_ptr() as *mut c_void,
+                    ptr.as_ptr().cast::<c_void>(),
                     new_layout.size(),
                     new_layout.align(),
                 )
@@ -104,7 +104,7 @@ impl Alloc for MiMalloc {
         resize(
             || {
                 ffi::mi_realloc_aligned(
-                    ptr.as_ptr() as *mut c_void,
+                    ptr.as_ptr().cast::<c_void>(),
                     new_layout.size(),
                     new_layout.align(),
                 )
@@ -127,7 +127,7 @@ impl Alloc for MiMalloc {
     ) -> Result<NonNull<u8>, AllocError> {
         null_q_zsl_check(new_layout, |new_layout| {
             ffi::mi_realloc_aligned(
-                ptr.as_ptr() as *mut c_void,
+                ptr.as_ptr().cast::<c_void>(),
                 new_layout.size(),
                 new_layout.align(),
             )

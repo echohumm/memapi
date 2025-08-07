@@ -1,4 +1,4 @@
-# t(est)a(ll)
+# t(est)a(ll)m(srv)
 import argparse
 import itertools
 import subprocess
@@ -6,34 +6,14 @@ import sys
 import os
 
 FEATURES = [
-    "nightly",
     "std",
-
-    "c_str",
-
-    "metadata",
-    "clone_to_uninit",
-    "specialization",
-    "sized_hierarchy",
 
     "alloc_ext",
     "alloc_slice",
     "resize_in_place",
 
     "stats",
-
-    "external_alloc",
-    "jemalloc",
-    "mimalloc",
 ]
-
-NIGHTLY_FEATURES = {
-    "nightly",
-    "metadata",
-    "sized_hierarchy",
-    "clone_to_uninit",
-    "specialization",
-}
 
 def all_feature_combinations(features):
     for r in range(len(features) + 1):
@@ -43,47 +23,28 @@ def all_feature_combinations(features):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run `cargo test`, `cargo miri test`, or `cargo clippy` for every combination of features."
-    )
-    parser.add_argument(
-        "-M", "--miri",
-        action="store_true",
-        help="Use `cargo miri test` instead of `cargo test`."
+        description="Run `cargo +1.56.0 test` or `cargo +1.56.0 clippy` for every combination of features."
     )
     parser.add_argument(
         "-C", "--clippy",
         action="store_true",
-        help="Use `cargo clippy -- -D clippy::all -D clippy::pedantic`."
-    )
-    parser.add_argument(
-        "-N", "--no-nightly",
-        action="store_true",
-        help="Skip any combinations that include nightly-only features"
+        help="Use `clippy -- -D clippy::all -D clippy::pedantic`."
     )
     args = parser.parse_args()
 
-    if args.miri and args.clippy:
-        parser.error("Cannot use both --miri and --clippy")
-
     # Choose the base cargo command
     if args.clippy:
-        cargo_cmd = ["cargo", "clippy"]
+        cargo_cmd = ["cargo", "+1.56.0", "clippy"]
         # clap will pass dashes into the "flags" section after '--'
-        extra_args = ["--", "-D", "clippy::all", "-D", "clippy::pedantic", "-D", "clippy::cargo", "-A",
-                      "clippy::redundant_feature_names"]
+        extra_args = ["--", "-D", "clippy::all", "-D", "clippy::pedantic", "-D", "clippy::cargo"]
     else:
-        cargo_cmd = ["cargo", "miri", "test"] if args.miri else ["cargo", "test"]
+        cargo_cmd = ["cargo", "+1.56.0", "test"]
         extra_args = []
 
-    # Prepare environment with RUSTFLAGS (only for tests; clippy ignores this)
     env = os.environ.copy()
-    if not args.clippy:
-        env["RUSTFLAGS"] = "-D warnings"
+    env["RUSTFLAGS"] = "-D warnings"
 
     for combo in all_feature_combinations(FEATURES):
-        if args.no_nightly and any(f in NIGHTLY_FEATURES for f in combo):
-            continue
-
         cmd = list(cargo_cmd)
         cmd.append("--no-default-features")
         if combo:
@@ -96,7 +57,7 @@ def main():
         try:
             subprocess.run(cmd, check=True, env=env)
         except subprocess.CalledProcessError as e:
-            action = "clippy check" if args.clippy else ("miri test" if args.miri else "test")
+            action = "clippy check" if args.clippy else "test"
             print(f"Command failed ({action}, exit code {e.returncode}): {' '.join(cmd)}",
                   file=sys.stderr)
             sys.exit(e.returncode)
