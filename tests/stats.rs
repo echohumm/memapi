@@ -47,7 +47,8 @@ fn test_stats_str_logger_test() {
         format!(
             "Successful initial allocation of 16 bytes with alignment 8 at {p:p}, and newly \
                 allocated bytes being uninitialized. (16 total bytes allocated)\nDeallocation of \
-                16 bytes with alignment 8 at {p:p}. (0 total bytes allocated)\n", p = ptr
+                16 bytes with alignment 8 at {p:p}. (0 total bytes allocated)\n",
+            p = ptr
         )
     );
 }

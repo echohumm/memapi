@@ -79,6 +79,7 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
 /// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
 #[inline]
 pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
+    #[allow(clippy::option_if_let_else)]
     if let Some(size) = { layout.size().checked_mul(count) } {
         let align = layout.align();
         match Layout::from_size_align(size, align) {

@@ -9,6 +9,8 @@ FEATURES = [
     "nightly",
     "std",
 
+    "extra_const",
+    "extra_extra_const",
     "c_str",
 
     "metadata",

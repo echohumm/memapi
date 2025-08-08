@@ -1,11 +1,11 @@
 #![allow(unused_qualifications, missing_docs)]
 
+use crate::helpers::dangling_nonnull;
 use alloc::alloc::Layout;
 use core::{
     mem::{align_of, align_of_val, size_of, size_of_val},
     ptr::NonNull,
 };
-use crate::helpers::dangling_nonnull;
 
 /// The maximum value of a `usize` with no high bit.
 ///
@@ -17,9 +17,9 @@ pub trait SizedProps: Sized {
     /// The size of the type.
     const SZ: usize = size_of::<Self>();
     /// The alignment of the type.
-    const ALIGN: usize = align_of::<Self>();
+    const ALN: usize = align_of::<Self>();
     /// The memory layout for the type.
-    const LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(Self::SZ, Self::ALIGN) };
+    const LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(Self::SZ, Self::ALN) };
 
     /// Whether the type is zero-sized.
     const IS_ZST: bool = Self::SZ == 0;
@@ -40,7 +40,7 @@ pub trait PtrProps<T: ?Sized> {
     /// # Safety
     ///
     /// The pointer must be valid as a reference.
-	unsafe fn size(&self) -> usize;
+    unsafe fn size(&self) -> usize;
     /// Gets the alignment of the value.
     ///
     /// # Safety
@@ -160,18 +160,18 @@ impl_ptr_props_as_ref! {
 }
 
 impl<T: ?Sized> PtrProps<T> for NonNull<T> {
-	#[inline]
-	unsafe fn size(&self) -> usize {
-		size_of_val::<T>(&*self.as_ptr())
-	}
-	#[inline]
-	unsafe fn align(&self) -> usize {
-		align_of_val::<T>(&*self.as_ptr())
-	}
-	#[cfg(feature = "metadata")]
-	unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata {
-		core::ptr::metadata(&*self.as_ptr())
-	}
+    #[inline]
+    unsafe fn size(&self) -> usize {
+        size_of_val::<T>(&*self.as_ptr())
+    }
+    #[inline]
+    unsafe fn align(&self) -> usize {
+        align_of_val::<T>(&*self.as_ptr())
+    }
+    #[cfg(feature = "metadata")]
+    unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata {
+        core::ptr::metadata(&*self.as_ptr())
+    }
 }
 
 #[cfg(not(feature = "metadata"))]
@@ -183,7 +183,7 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
 /// requirement of the type in any safe context and that the type's pointee metadata is `usize`.
 pub unsafe trait VarSized {
     /// The alignment of the type.
-    const ALIGN: usize;
+    const ALN: usize;
 }
 
 #[cfg(feature = "metadata")]
@@ -195,30 +195,30 @@ pub unsafe trait VarSized {
 /// alignment requirement of the type in any safe context.
 pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
     /// The alignment of the type.
-    const ALIGN: usize;
+    const ALN: usize;
 }
 
 unsafe impl<T> VarSized for [T] {
-    const ALIGN: usize = T::ALIGN;
+    const ALN: usize = T::ALN;
 }
 
 unsafe impl VarSized for str {
-    const ALIGN: usize = u8::ALIGN;
+    const ALN: usize = u8::ALN;
 }
 
 #[cfg(feature = "c_str")]
 unsafe impl VarSized for core::ffi::CStr {
-    const ALIGN: usize = u8::ALIGN;
+    const ALN: usize = u8::ALN;
 }
 #[cfg(feature = "std")]
 // `OsStr == [u8]` and `[u8]: VarSized`
 unsafe impl VarSized for std::ffi::OsStr {
-    const ALIGN: usize = u8::ALIGN;
+    const ALN: usize = u8::ALN;
 }
 
 #[cfg(feature = "std")]
 unsafe impl VarSized for std::path::Path {
-    const ALIGN: usize = u8::ALIGN;
+    const ALN: usize = u8::ALN;
 }
 
 // not associated to reduce clutter, and so they can be const
@@ -229,28 +229,28 @@ unsafe impl VarSized for std::path::Path {
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
-    varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN) }, 0)
+    varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
 }
 
 #[cfg(not(feature = "extra_const"))]
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
-    varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN) }, 0)
+    varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
 }
 
 #[cfg(feature = "extra_const")]
 /// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub const fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
-    varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN).as_ptr() }, 0)
+    varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
 }
 
 #[cfg(not(feature = "extra_const"))]
 /// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
-    varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALIGN).as_ptr() }, 0)
+    varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
 }
 
 #[cfg(feature = "extra_const")]
@@ -294,10 +294,7 @@ pub const fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 #[must_use]
 #[inline]
-pub fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
-    p: *mut u8,
-    meta: usize,
-) -> *mut T {
+pub fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
         // i hate this so much

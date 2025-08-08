@@ -1,5 +1,5 @@
 use crate::{
-    error::AllocError,
+    error::{AllocError, ArithOp},
     type_props::{
         varsized_nonnull_from_raw_parts, varsized_pointer_from_raw_parts, PtrProps, SizedProps,
         USIZE_MAX_NO_HIGH_BIT,
@@ -14,7 +14,50 @@ use core::{
     ptr::{self, NonNull},
 };
 
-#[cfg(any(feature = "alloc_slice", feature = "alloc_ext"))]
+/// Performs a checked arithmetic operation on two `usize`s.
+///
+/// # Errors
+///
+/// [`AllocError::ArithmeticOverflow`] if the operation would overflow.
+pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, AllocError> {
+    let res = match op {
+        ArithOp::Add => l.checked_add(r),
+        ArithOp::Sub => l.checked_sub(r),
+        ArithOp::Mul => l.checked_mul(r),
+        ArithOp::Div => l.checked_div(r),
+        ArithOp::Rem => l.checked_rem(r),
+    };
+
+    match res {
+        Some(v) => Ok(v),
+        None => Err(AllocError::ArithmeticOverflow(l, op, r)),
+    }
+}
+
+/// Performs a checked arithmetic operation on two `usize`s.
+///
+/// # Panics
+///
+/// Panics with information about this function's arguments if the operation would overflow.
+pub fn checked_op_panic(l: usize, op: ArithOp, r: usize) -> usize {
+    match checked_op(l, op, r) {
+        Ok(v) => v,
+        Err(e) => panic!("{}", e),
+    }
+}
+
+/// Performs a checked arithmetic operation on two `usize`s.
+///
+/// # Panics
+///
+/// Panics with a generic message if the operation would overflow.
+pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
+    match checked_op(l, op, r) {
+        Ok(v) => v,
+        Err(_) => panic!("An arithmetic operation overflowed"),
+    }
+}
+
 /// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
 pub(crate) fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
     a: &A,
@@ -28,25 +71,24 @@ pub(crate) fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret
     }
 }
 
-/// Creates a `NonNull<[T]>` from a pointer and a length.
-///
-/// This is a helper used in place of [`NonNull::slice_from_raw_parts`], which was stabilized
-/// after this crate's MSRV.
-#[must_use]
-pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
-    varsized_nonnull_from_raw_parts(p.cast(), len)
+const_if! {
+    "extra_const",
+    "Creates a `NonNull<[T]>` from a pointer and a length.\n\nThis is a helper used in place of
+    [`NonNull::slice_from_raw_parts`], which was stabilized after this crate's MSRV.",
+    #[must_use]
+    pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
+        varsized_nonnull_from_raw_parts(p.cast(), len)
+    }
 }
 
-/// Creates a `*mut [T]` from a pointer and a length.
-///
-/// This is a helper used in place of [`ptr::slice_from_raw_parts_mut`], which was
-/// const-stabilized after this crate's MSRV.
-///
-#[doc = "## Small disclaimer: the caller must guarantee this function will work, as Rust's fat \
-    pointers changing layout would result in this function causing UB."]
-#[must_use]
-pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
-    varsized_pointer_from_raw_parts(p.cast(), len)
+const_if! {
+    "extra_const",
+    "Creates a `*mut [T]` from a pointer and a length.\n\nThis is a helper used in place of \
+    [`ptr::slice_from_raw_parts_mut`], which was const-stabilized after this crate's MSRV.",
+        #[must_use]
+        pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
+            varsized_pointer_from_raw_parts(p.cast(), len)
+        }
 }
 
 const_if! {
@@ -93,21 +135,29 @@ pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
 }
 
 /// Aligns the given value up to a non-zero alignment.
-#[must_use]
-pub const fn align_up(n: usize, align: NonZeroUsize) -> usize {
-    unsafe { align_up_unchecked(n, align.get()) }
+///
+/// # Errors
+///
+/// [`AllocError::InvalidLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`].
+pub const fn align_up(sz: usize, align: NonZeroUsize) -> Result<usize, AllocError> {
+    if sz > USIZE_MAX_NO_HIGH_BIT || align.get() > USIZE_MAX_NO_HIGH_BIT {
+        return Err(AllocError::InvalidLayout(sz, align.get()));
+    }
+
+    Ok(unsafe { align_up_unchecked(sz, align.get()) })
 }
 
 /// Aligns the given value up to an alignment.
 ///
 /// # Safety
 ///
-/// `align` must be non-zero.
+/// `sz` must be no greater than [`isize::MAX`].
+/// `align` must be non-zero, but no greater than `isize::MAX`.
 #[must_use]
 #[inline]
-pub const unsafe fn align_up_unchecked(n: usize, align: usize) -> usize {
+pub const unsafe fn align_up_unchecked(sz: usize, align: usize) -> usize {
     let m1 = align - 1;
-    (n + m1) & !m1
+    (sz + m1) & !m1
 }
 
 /// Returns a valid, dangling [`NonNull`] for the given layout.
@@ -144,7 +194,7 @@ pub(crate) const fn layout_or_err<T>(n: usize) -> Result<Layout, AllocError> {
 ///
 /// Returns `Err(size, align)` if creation of a layout with the given size and alignment fails.
 pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
-    let (sz, align) = (T::SZ, T::ALIGN);
+    let (sz, align) = (T::SZ, T::ALN);
 
     if sz != 0 && n > (((USIZE_MAX_NO_HIGH_BIT) + 1) - align) / sz {
         return Err((sz, align));
@@ -270,7 +320,7 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// # let len = 5;
 ///
 /// let mut guard = SliceAllocGuard::new(
-///     alloc.alloc(unsafe { Layout::from_size_align_unchecked(u32::SZ * len, u32::ALIGN) })
+///     alloc.alloc(unsafe { Layout::from_size_align_unchecked(u32::SZ * len, u32::ALN) })
 ///             .unwrap().cast(),
 ///     &alloc,
 ///     len
@@ -505,7 +555,7 @@ impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
             ptr::drop_in_place(slice_ptr_from_raw_parts(self.ptr.as_ptr(), self.init));
             self.alloc.dealloc(
                 self.ptr.cast(),
-                Layout::from_size_align_unchecked(T::SZ * self.full, T::ALIGN),
+                Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN),
             );
         }
     }

@@ -1,4 +1,3 @@
-use crate::error::AllocError::ArithmeticOverflow;
 use alloc::alloc::Layout;
 use core::{
     fmt::{Debug, Display, Formatter, Result as FmtResult},
@@ -26,7 +25,7 @@ pub enum AllocError {
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger layout.
     ShrinkBiggerNewLayout(usize, usize),
-    /// An arithmetic operation overflowed.
+    /// An arithmetic operation would overflow.
     ///
     /// This error contains both sides of the operation and the operation itself.
     ArithmeticOverflow(usize, ArithOp, usize),
@@ -39,8 +38,8 @@ impl PartialEq for AllocError {
     #[inline]
     fn eq(&self, other: &AllocError) -> bool {
         use AllocError::{
-            AllocFailed, GrowSmallerNewLayout, InvalidLayout, Other, ShrinkBiggerNewLayout,
-            ZeroSizedLayout,
+            AllocFailed, ArithmeticOverflow, GrowSmallerNewLayout, InvalidLayout, Other,
+            ShrinkBiggerNewLayout, ZeroSizedLayout,
         };
 
         match (self, other) {
@@ -90,7 +89,11 @@ impl Display for AllocError {
                 old, new
             ),
             AllocError::ArithmeticOverflow(lhs, op, rhs) => {
-                write!(f, "arithmetic operation overflowed: {} {} {}", lhs, op, rhs)
+                write!(
+                    f,
+                    "arithmetic operation would overflow: {} {} {}",
+                    lhs, op, rhs
+                )
             }
             AllocError::Other(other) => write!(f, "{}", other),
         }

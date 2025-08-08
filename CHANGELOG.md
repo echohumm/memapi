@@ -6,6 +6,8 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Version 0.16.0 Predicted](#version-0160-predicted)
 - [Version 0.15.0](#version-0150)
+  - [Commit 9](#commit-9-2025-8-07)
+  - [Commit 8](#commit-8-2025-8-07)
   - [Commit 7](#commit-7-2025-8-06)
   - [Commit 6](#commit-6-2025-8-05)
   - [Commit 5](#commit-5-2025-8-05)
@@ -39,7 +41,19 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - use helpers for repetitive code [size]
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
-## Version 0.15.0
+## Version 0.15.0 (2025-8-07)
+
+### Commit 9 (2025-8-07)
+
+- Inline alloc_slice.rs
+- Improve lib.rs inlining
+- Fix formatting
+- Add some benchmarks
+- Use a build.rs to verify no UB before compiling
+- Separate `std` and `libc_std` to allow using `std` on lower versions of rust (and thus libc)
+- Comment out outdated portions of the readme
+- Add `AllocExt::alloc_guard_for`
+- Switch to manual overflow checks where necessary (using `helpers::checked_op[_panic[_const]]`)
 
 ### Commit 8 (2025-8-07)
 

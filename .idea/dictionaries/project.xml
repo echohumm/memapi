@@ -3,6 +3,7 @@
     <words>
       <w>aarch</w>
       <w>allocs</w>
+      <w>criter</w>
       <w>dontfixme</w>
       <w>dptr</w>
       <w>dslice</w>
@@ -23,6 +24,7 @@
       <w>ralloc</w>
       <w>rustflags</w>
       <w>sptr</w>
+      <w>superlint</w>
       <w>uarc</w>
       <w>usizes</w>
       <w>varsized</w>

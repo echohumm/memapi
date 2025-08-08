@@ -57,7 +57,6 @@
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 #![allow(unknown_lints, unsafe_op_in_unsafe_fn, internal_features)]
 
-// TODO: less inlining
 // TODO: get rid of all placeholders (like in docs)
 // TODO: fix docs grammar
 // TODO: create fewer scopes (particularly with unsafe)
@@ -139,8 +138,6 @@ macro_rules! const_if {
     };
 }
 
-// TODO: inlining for alloc_slice.rs.
-
 extern crate alloc;
 extern crate core;
 
@@ -179,7 +176,6 @@ pub mod unstable_util;
 /// Errors that can occur during allocation.
 pub mod error;
 
-use crate::helpers::alloc_then;
 use alloc::alloc::{
     alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de, realloc as re, GlobalAlloc, Layout,
 };
@@ -187,7 +183,10 @@ use core::{
     cmp::Ordering,
     ptr::{self, NonNull},
 };
-use {error::AllocError, helpers::null_q_zsl_check};
+use {
+    error::AllocError,
+    helpers::{alloc_then, null_q_zsl_check},
+};
 
 /// Default allocator, delegating to the global allocator.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -302,6 +301,7 @@ pub trait Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
@@ -464,6 +464,7 @@ pub(crate) mod nightly {
         }
 
         #[cfg_attr(miri, track_caller)]
+        #[inline]
         unsafe fn grow(
             &self,
             ptr: NonNull<u8>,
@@ -630,9 +631,7 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
         #[cfg(feature = "alloc_ext")]
         AllocPattern::All(n) => a.alloc_filled(new_layout, n)?.cast::<u8>(),
         #[cfg(not(feature = "alloc_ext"))]
-        AllocPattern::PhantomFn(_) => {
-            unreachable!("if this is reached, somebody did something really wrong")
-        }
+        AllocPattern::PhantomFn(_) => core::hint::unreachable_unchecked(),
     };
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_layout.size());

@@ -50,7 +50,7 @@ macro_rules! realloc {
         $fun(
             $self,
             $ptr.cast(),
-            Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALIGN),
+            Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALN),
             layout_or_err::<$ty>($new_len)?,
             $(AllocPattern::<$f>::$pat$(($val))?)?
         )
@@ -126,6 +126,7 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     fn alloc_slice<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
         alloc_slice(self, len, Self::alloc)
     }
@@ -138,6 +139,7 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     fn alloc_slice_zeroed<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
         alloc_slice(self, len, Self::alloc_zeroed)
     }
@@ -236,6 +238,7 @@ pub trait AllocSlice: Alloc {
     /// length after `init` finishes, and that at any time `init` may panic, the counter will be
     /// correct.
     #[track_caller]
+    #[inline]
     unsafe fn alloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
         &self,
         init: I,
@@ -255,10 +258,12 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[track_caller]
+    #[inline]
     fn alloc_slice_default<T: Default>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
         self.alloc_slice_with(len, |_| T::default())
     }
 
+    // TODO: make these actual bulleted lists instead of just "a, b, c, and d".
     /// Drops `init` elements from a partially initialized slice and deallocates it.
     ///
     /// # Safety
@@ -266,6 +271,7 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, a valid `[T]` for `init` elements, and a valid `[MaybeUninit<T>]`.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
         ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr().cast::<T>(), init));
         self.dealloc(ptr.cast::<u8>(), ptr.layout());
@@ -279,6 +285,7 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn drop_zero_and_dealloc_uninit_slice<T>(
         &self,
         slice: NonNull<[MaybeUninit<T>]>,
@@ -289,6 +296,7 @@ pub trait AllocSlice: Alloc {
         self.dealloc(slice.cast::<u8>(), slice.layout());
     }
 
+    // TODO: more variants of this, actually use this in places.
     /// Allocates memory for a slice of uninitialized `T` with the given length and returns a
     /// [`SliceAllocGuard`] around it to ensure proper destruction and deallocation on panic.
     ///
@@ -298,6 +306,7 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     fn alloc_slice_guard<T>(
         &'_ self,
         len: usize,
@@ -307,7 +316,7 @@ pub trait AllocSlice: Alloc {
             Err(e) => Err(e),
         }
     }
-    
+
     /// Extends a slice with elements from a reference to another via either copying or cloning.
     ///
     /// # Errors
@@ -318,10 +327,13 @@ pub trait AllocSlice: Alloc {
     fn extend_slice_from_ref<T: Clone>(
         &self,
         slice: NonNull<[T]>,
-        extra: &[T]
+        extra: &[T],
     ) -> Result<NonNull<[T]>, AllocError> {
         // SAFETY: a NonNull<[T]> has the exact same layout as a &[T].
         self.extend_slice(slice, unsafe {
+            // have to use this superlint instead of just borrow_as_ptr as it doesn't exist in our
+            //  msrv
+            #[allow(clippy::pedantic)]
             *(&extra as *const &[T]).cast::<NonNull<[T]>>()
         })
     }
@@ -423,6 +435,7 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn grow_slice<T>(
         &self,
         slice: NonNull<[T]>,
@@ -449,6 +462,7 @@ pub trait AllocSlice: Alloc {
     // Safety #2 implies that `len` must be a valid length for the slice (which is required because
     // we use from_size_align_unchecked)
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn grow_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
@@ -730,6 +744,7 @@ pub trait AllocSlice: Alloc {
     /// # Safety
     ///
     /// - `slice` must point to a slice allocated using this allocator.
+    /// - `init` must describe exactly the number of initialized elements of that slice.
     #[cfg_attr(miri, track_caller)]
     unsafe fn truncate_slice<T>(
         &self,
@@ -755,7 +770,8 @@ pub trait AllocSlice: Alloc {
     /// # Safety
     ///
     /// - `ptr` must point to a slice allocated using this allocator.
-    /// - `len` must describe exactly the number of elements in that slice.
+    /// - `init` must describe exactly the number of initialized elements of that slice.
+    /// - `len` must describe exactly the total number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
     unsafe fn truncate_raw_slice<T>(
         &self,
@@ -1072,7 +1088,7 @@ pub trait AllocSlice: Alloc {
         // Here, we assume the layout is valid as it was presumably used to allocate previously.
         self.dealloc(
             ptr.cast(),
-            Layout::from_size_align_unchecked(T::SZ * n, T::ALIGN),
+            Layout::from_size_align_unchecked(T::SZ * n, T::ALN),
         );
     }
 

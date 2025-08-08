@@ -48,9 +48,6 @@ pub mod ffi {
     pub mod jem {
         #![allow(unexpected_cfgs)]
 
-        use core::alloc::Layout;
-        use libc::c_void;
-
         #[cfg(any(
             target_arch = "arm",
             target_arch = "mips",

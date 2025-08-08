@@ -1,6 +1,8 @@
 use crate::{
+    error::{AllocError, ArithOp},
+    helpers::checked_op_panic,
     stats::AllocRes::{Fail, Succ},
-    Alloc, AllocError, DefaultAlloc,
+    Alloc, DefaultAlloc,
 };
 use alloc::{alloc::Layout, format, string::ToString};
 use core::{
@@ -61,7 +63,7 @@ impl StatsLogger for () {
 /// Internal helper of [`atomic_total_ops`] for adding to an atomic value.
 #[doc(hidden)]
 pub fn inc_atomic(atomic: &AtomicUsize, bytes: usize) -> usize {
-    let res = atomic.load(Acquire) + bytes;
+    let res = checked_op_panic(atomic.load(Acquire), ArithOp::Add, bytes);
     atomic.store(res, Release);
     res
 }
@@ -69,7 +71,7 @@ pub fn inc_atomic(atomic: &AtomicUsize, bytes: usize) -> usize {
 /// Internal helper of [`atomic_total_ops`] for subtracting from an atomic value.
 #[doc(hidden)]
 pub fn dec_atomic(atomic: &AtomicUsize, bytes: usize) -> usize {
-    let res = atomic.load(Acquire) - bytes;
+    let res = checked_op_panic(atomic.load(Acquire), ArithOp::Sub, bytes);
     atomic.store(res, Release);
     res
 }

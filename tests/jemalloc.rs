@@ -72,7 +72,7 @@ fn realloc_preserves_initial_contents() {
 
         // grow to twice as many elements
         let new_size = old_count * 2 * u32::SZ;
-        let new_layout = Layout::from_size_align_unchecked(new_size, u32::ALIGN);
+        let new_layout = Layout::from_size_align_unchecked(new_size, u32::ALN);
         let new_ptr: NonNull<u32> = alloc
             .realloc(ptr.cast(), old_layout, new_layout)
             .unwrap()
