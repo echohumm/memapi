@@ -10,7 +10,12 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/echohumm/memapi"
 keywords = ["allocator", "no_std", "memory", "allocation"]
 categories = ["no-std", "memory-management"]
-exclude = ["/tests", "/bin", "testall.py", "src/expanded"]
+include = [
+    "src/**",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+]
 build = "build.rs"
 
 [package.metadata.docs.rs]
