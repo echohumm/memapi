@@ -14,31 +14,34 @@ MSRV with `c_str` feature: 1.64
 
 MSRV with `extra_extra_const` feature: 1.83
 
-[//]: # (---)
+---
 
-[//]: # ()
+## Features
 
-[//]: # (## Features)
+## Features
 
-[//]: # ()
-
-[//]: # (* **Error reporting via `AllocError`**)
-
-[//]: # (* **`no_std` compatible**)
-
-[//]: # (* Optional **nightly/allocator_api** support via `allocator_api` feature)
-
-[//]: # (* **Extension methods** via `alloc_ext` feature)
-
-[//]: # (* Optional **unstable utilities** via `unstable_util` feature)
-
-[//]: # (* Optional **allocation statistics** via `stats` feature)
-
-[//]: # (* Zero-cost wrapper over the global allocator)
-
-[//]: # (* Fall-back implementation for stable Rust)
-
-[//]: # (* Allocation, deallocation, grow/shrink, and realloc operations)
+- Allocation primitives: allocation, deallocation, grow/shrink, and realloc operations
+- Allocation statistics (feature: `stats`)
+- Allocator API support on nightly (feature: `nightly`)
+  - Clone/Copy specialization for performance and ease of use (feature: `specialization`)
+  - CloneToUninit usage in some functions (feature: `clone_to_uninit`)
+  - Pointer metadata usage in some functions (feature: `metadata`)
+  - Sized hierarchy support (feature: `sized_hierarchy`)
+- C-style string support (feature: `c_str`) (MSRV: 1.64)
+- Constants: extra (feature: `extra_const`) (MSRV: 1.61)
+- Constants: even more (feature: `extra_extra_const`) (MSRV: 1.83)
+- Error reporting via `AllocError`
+- External allocator support (MSRV: 1.63)
+  - jemalloc (feature: `jemalloc`)
+  - mimalloc (feature: `mimalloc`)
+- Fallback implementation for stable Rust
+- Low-cost wrapper over the global allocator
+- `no_std` compatible
+- Resize-in-place extension methods (feature: `resize_in_place`)
+- Basic extension methods (feature: `alloc_ext`)
+- Slice-focused extension methods (feature: `alloc_slice`)
+- `std` support (feature: `std`)
+- Unstable utilities (feature: `unstable_util`)
 
 ---
 
@@ -176,36 +179,19 @@ memapi = "0.15.0"
 
 [//]: # ()
 
-[//]: # (## No-Std Support)
+## No-Std Support
 
-[//]: # ()
+This crate works without the Rust standard library. It relies on `alloc` from the core distribution.
 
-[//]: # (This crate works without the Rust standard library. It relies on `alloc` from the core)
+---
 
-[//]: # (distribution.)
+## Documentation
 
-[//]: # ()
+- [API Reference on docs.rs](https://docs.rs/memapi)
+- In-code documentation with a feature set via `cargo doc --open` with feature flags
 
-[//]: # (---)
+---
 
-[//]: # ()
+## License
 
-[//]: # (## Documentation)
-
-[//]: # ()
-
-[//]: # (* [API Reference on docs.rs]&#40;https://docs.rs/memapi&#41;)
-
-[//]: # (* In-code documentation with a feature set via `cargo doc --open` with feature flags)
-
-[//]: # ()
-
-[//]: # (---)
-
-[//]: # ()
-
-[//]: # (## License)
-
-[//]: # ()
-
-[//]: # (Licensed under **Apache-2.0** OR **MIT**. See [LICENSE-APACHE]&#40;LICENSE-APACHE&#41; and [LICENSE-MIT]&#40;LICENSE-MIT&#41;.)
+Licensed under **Apache-2.0** OR **MIT**. See [LICENSE-APACHE](LICENSE-APACHE) and [LICENSE-MIT](LICENSE-MIT).

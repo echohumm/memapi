@@ -41,6 +41,11 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - use helpers for repetitive code [size]
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
+## Version 0.15.2 (2025-8-07)
+
+- Fix docs and some of the README
+- Fix `checked_op_panic_const` issue with MSRV
+
 ## Version 0.15.0 (2025-8-07)
 
 ### Commit 9 (2025-8-07)

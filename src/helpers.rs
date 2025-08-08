@@ -46,15 +46,16 @@ pub fn checked_op_panic(l: usize, op: ArithOp, r: usize) -> usize {
     }
 }
 
-/// Performs a checked arithmetic operation on two `usize`s.
-///
-/// # Panics
-///
-/// Panics with a generic message if the operation would overflow.
-pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
-    match checked_op(l, op, r) {
-        Ok(v) => v,
-        Err(_) => panic!("An arithmetic operation overflowed"),
+const_if! {
+    "extra_const",
+    "Performs a checked arithmetic operation on two `usize`s.\n\n# Panics\n\nPanics with a generic \
+    message if the operation would overflow.\n\nIf this function isn't const for you, you need to \
+    enable the `extra_const` feature. (Raises MSRV to 1.61.0)",
+    pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
+        match checked_op(l, op, r) {
+            Ok(v) => v,
+            Err(_) => panic!("An arithmetic operation overflowed"),
+        }
     }
 }
 

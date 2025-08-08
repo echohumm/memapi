@@ -6,11 +6,12 @@
 //! - [`Alloc`]: a trait defining basic allocation, deallocation, grow, and shrink operations.
 //! - [`DefaultAlloc`]: a zero-cost wrapper delegating to the global allocator.
 //! - [`AllocError`]: an enum representing allocation failure cases.
-//! - [`PtrProps`]: property getters for pointers to values.
-//! - [`SizedProps`]: properties for sized types, similar to the unstable, hidden
-//!   [`SizedTypeProperties`](core::mem::SizedTypeProperties).
-//! - [`UnsizedCopy`]: a marker trait for safe copying of unsized values.
-//! - [`Thin`]: a marker trait for pointers without metadata.
+//! - [`PtrProps`](type_props::PtrProps): property getters for pointers to values.
+//! - [`SizedProps`](type_props::SizedProps): properties for sized types, similar to the unstable,
+//!   hidden [`SizedTypeProperties`](core::mem::SizedTypeProperties).
+//! - [`VarSized`](type_props::VarSized): a marker trait for types with `usize` metadata.
+//! - [`UnsizedCopy`](marker::UnsizedCopy): a marker trait for safe copying of unsized values.
+//! - [`Thin`](marker::Thin): a marker trait for pointers without metadata.
 //!
 //! # Features
 //!
@@ -49,13 +50,14 @@
 // MAYBEDO: use this lint
 // #![warn(clippy::undocumented_unsafe_blocks)]
 #![deny(missing_docs)]
+#![allow(unknown_lints, unsafe_op_in_unsafe_fn, internal_features, rustdoc::broken_intra_doc_links)]
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "specialization", feature(min_specialization))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
-#![allow(unknown_lints, unsafe_op_in_unsafe_fn, internal_features)]
 
 // TODO: get rid of all placeholders (like in docs)
 // TODO: fix docs grammar
