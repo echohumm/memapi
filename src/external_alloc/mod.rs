@@ -7,8 +7,9 @@ pub mod jemalloc;
 pub mod mimalloc;
 
 #[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
-pub(crate) const REALLOC_DIFF_ALIGN: &str =
-    "unsupported operation: attempted to reallocate with a different alignment";
+pub(crate) const REALLOC_DIFF_ALIGN: crate::error::AllocError = crate::error::AllocError::Other(
+    "unsupported operation: attempted to reallocate with a different alignment",
+);
 
 #[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
 pub(crate) unsafe fn resize<F: Fn() -> *mut libc::c_void>(
@@ -22,7 +23,7 @@ pub(crate) unsafe fn resize<F: Fn() -> *mut libc::c_void>(
     use crate::{error::AllocError, helpers::null_q};
 
     if need_same_align && new_layout.align() != old_layout.align() {
-        return Err(AllocError::Other(REALLOC_DIFF_ALIGN));
+        return Err(REALLOC_DIFF_ALIGN);
     }
 
     let old_size = old_layout.size();

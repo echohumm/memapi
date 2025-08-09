@@ -11,12 +11,15 @@ use crate::{
 };
 use core::{
     alloc::Layout,
-    mem::MaybeUninit,
+    mem::{forget, MaybeUninit},
     ptr::{self, NonNull},
 };
-// TODO: slice growth and realloc with copying and cloning
+
 // TODO: review usage and make small semantic adjustments, like making functions take
 //  [MaybeUninit<T>] and an extra `init` count instead of just [T] for ease of use.
+
+const INSUF_GROW_SRC: AllocError =
+    AllocError::Other("source slice length is insufficient to fill new elements");
 
 macro_rules! realloc {
     (
@@ -51,7 +54,7 @@ macro_rules! realloc {
             $self,
             $ptr.cast(),
             Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALN),
-            layout_or_err::<$ty>($new_len)?,
+            tri!(layout_or_err::<$ty>($new_len)),
             $(AllocPattern::<$f>::$pat$(($val))?)?
         )
         .map(NonNull::cast)
@@ -67,8 +70,8 @@ unsafe fn fill_new_elems_with<T, A: Alloc + ?Sized, F: Fn(usize) -> T>(
     new_len: usize,
     f: F,
 ) -> NonNull<T> {
-    let mut guard = SliceAllocGuard::new(p, a, new_len);
-    guard.set_init(len);
+    let mut guard = SliceAllocGuard::new_with_init(p, a, len, new_len);
+
     for i in len..new_len {
         guard.init_unchecked(f(i));
     }
@@ -92,8 +95,7 @@ unsafe fn resize_init<
 ) -> Result<NonNull<T>, AllocError> {
     match f(a, ptr, len, new_len) {
         Ok(p) => {
-            let mut guard = SliceAllocGuard::new(p, a, new_len);
-            guard.set_init(len);
+            let mut guard = SliceAllocGuard::new_with_init(p, a, len, new_len);
             init(guard.get_uninit_part(), &mut guard.init);
             Ok(guard.release_first())
         }
@@ -112,7 +114,7 @@ pub(crate) fn alloc_slice<
     len: usize,
     alloc: F,
 ) -> Result<NonNull<[T]>, AllocError> {
-    alloc(a, layout_or_err::<T>(len)?).map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
+    alloc(a, tri!(layout_or_err::<T>(len))).map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
 }
 
 /// Slice-specific extension methods for [`Alloc`], providing convenient functions for slice
@@ -175,7 +177,9 @@ pub trait AllocSlice: Alloc {
     }
 
     /// Allocates uninitialized memory for a slice of `T` and copies each element from `data` into
-    /// it. This method does not require `T: Copy`.
+    /// it. 
+    /// 
+    /// This method does not require `T: Copy`.
     ///
     /// # Errors
     ///
@@ -184,7 +188,7 @@ pub trait AllocSlice: Alloc {
     ///
     /// # Safety
     ///
-    /// The caller must ensure it is safe to copy the elements in `data`.
+    /// Callers must ensure it is safe to copy the elements in `data`.
     #[cfg_attr(miri, track_caller)]
     unsafe fn alloc_copy_slice_to_unchecked<T>(
         &self,
@@ -212,7 +216,7 @@ pub trait AllocSlice: Alloc {
         len: usize,
         f: F,
     ) -> Result<NonNull<[T]>, AllocError> {
-        alloc_then(self, layout_or_err::<T>(len)?, f, |p, f| unsafe {
+        alloc_then(self, tri!(layout_or_err::<T>(len)), f, |p, f| unsafe {
             let mut guard = SliceAllocGuard::new(p.cast(), self, len);
             for i in 0..len {
                 guard.init_unchecked(f(i));
@@ -234,9 +238,8 @@ pub trait AllocSlice: Alloc {
     ///
     /// # Safety
     ///
-    /// The caller must ensure the initialized element counter will be the same as the slice's
-    /// length after `init` finishes, and that at any time `init` may panic, the counter will be
-    /// correct.
+    /// Callers must ensure the initialized element counter will be the same as the slice's length
+    /// after `init` finishes, and that at any time `init` may panic, the counter will be correct.
     #[track_caller]
     #[inline]
     unsafe fn alloc_slice_init<T, I: Fn(NonNull<[T]>, &mut usize)>(
@@ -244,7 +247,8 @@ pub trait AllocSlice: Alloc {
         init: I,
         len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        let mut guard = SliceAllocGuard::new(self.alloc_slice::<T>(len)?.cast::<T>(), self, len);
+        let mut guard =
+            SliceAllocGuard::new(tri!(self.alloc_slice::<T>(len)).cast::<T>(), self, len);
         init(guard.get_full(), &mut guard.init);
         Ok(guard.release())
     }
@@ -263,40 +267,97 @@ pub trait AllocSlice: Alloc {
         self.alloc_slice_with(len, |_| T::default())
     }
 
-    // TODO: make these actual bulleted lists instead of just "a, b, c, and d".
-    /// Drops `init` elements from a partially initialized slice and deallocates it.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
-    ///   and writes, aligned, a valid `[T]` for `init` elements, and a valid `[MaybeUninit<T>]`.
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
-        ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr().cast::<T>(), init));
-        self.dealloc(ptr.cast::<u8>(), ptr.layout());
-    }
-
     /// Drops `init` elements from a partially initialized slice, then zeroes and deallocates its
     /// memory.
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
-    ///   and writes, aligned, and a valid `T`.
-    #[cfg_attr(miri, track_caller)]
+    /// `ptr` must point to a block of memory allocated using this allocator, be valid for reads
+    ///  and writes, aligned, and a valid `[T]` for `init` elements.
+    #[track_caller]
     #[inline]
     unsafe fn drop_zero_and_dealloc_uninit_slice<T>(
         &self,
         slice: NonNull<[MaybeUninit<T>]>,
         init: usize,
     ) {
-        ptr::drop_in_place(slice_ptr_from_raw_parts(slice.as_ptr().cast::<T>(), init));
-        ptr::write_bytes(slice.as_ptr().cast::<T>(), 0, nonnull_slice_len(slice));
-        self.dealloc(slice.cast::<u8>(), slice.layout());
+        self.drop_zero_and_dealloc_raw_slice(slice.cast::<T>(), init, nonnull_slice_len(slice));
     }
 
-    // TODO: more variants of this, actually use this in places.
+    /// Drops `init` elements from a pointer to a slice, then zeroes and deallocates its previously
+    /// allocated block.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
+    ///   and writes, aligned, and contain `init` valid `T`.
+    /// - `len` must be the total number of `T` which fit in that block.
+    #[track_caller]
+    #[inline]
+    unsafe fn drop_zero_and_dealloc_raw_slice<T>(
+        &self,
+        slice: NonNull<T>,
+        init: usize,
+        len: usize,
+    ) {
+        ptr::drop_in_place(slice_ptr_from_raw_parts(slice.as_ptr(), init));
+        self.zero_and_dealloc_n(slice, len);
+    }
+
+    /// Drops `init` elements from a partially initialized slice and deallocates it.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must point to a block of memory allocated using this allocator, be valid for reads
+    ///  and writes, aligned, and a valid `[T]` for `init` elements.
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    unsafe fn drop_and_dealloc_uninit_slice<T>(&self, ptr: NonNull<[MaybeUninit<T>]>, init: usize) {
+        self.drop_and_dealloc_raw_slice(ptr.cast::<T>(), init, nonnull_slice_len(ptr));
+    }
+
+    /// Drops `init` elements from a pointer to a slice and deallocates its previously allocated
+    /// block.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
+    ///   and writes, aligned, and contain `init` valid `T`.
+    /// - `len` must be the total number of `T` which fit in that block.
+    #[track_caller]
+    #[inline]
+    unsafe fn drop_and_dealloc_raw_slice<T>(&self, ptr: NonNull<T>, init: usize, len: usize) {
+        ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr(), init));
+        self.dealloc_n(ptr, len);
+    }
+
+    /// Zeroes and deallocates `n` elements at the given pointer.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must point to a block of memory allocated using this allocator, be valid for writes,
+    /// aligned, and contain `n` valid `T`.
+    #[cfg_attr(miri, track_caller)]
+    unsafe fn zero_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
+        ptr::write_bytes(ptr.as_ptr(), 0, n);
+        self.dealloc_n(ptr, n);
+    }
+
+    /// Deallocates a previously allocated block.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// - `n` must be the exact number of `T` held in that block.
+    #[cfg_attr(miri, track_caller)]
+    unsafe fn dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
+        // Here, we assume the layout is valid as it was presumably used to allocate previously.
+        self.dealloc(
+            ptr.cast(),
+            Layout::from_size_align_unchecked(T::SZ * n, T::ALN),
+        );
+    }
+
     /// Allocates memory for a slice of uninitialized `T` with the given length and returns a
     /// [`SliceAllocGuard`] around it to ensure proper destruction and deallocation on panic.
     ///
@@ -353,6 +414,7 @@ pub trait AllocSlice: Alloc {
     ) -> Result<NonNull<[T]>, AllocError> {
         let len = nonnull_slice_len(slice);
         let ext_len = nonnull_slice_len(extra);
+
         self.extend_raw_slice(slice.cast::<T>(), len, extra.cast::<T>(), ext_len)
             .map(|p| nonnull_slice_from_raw_parts(p, len + ext_len))
     }
@@ -370,30 +432,39 @@ pub trait AllocSlice: Alloc {
         &self,
         ptr: NonNull<T>,
         len: usize,
+
         extra_ptr: NonNull<T>,
         extra_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         trait SpecExtendSlice<T: Clone, A: AllocSlice + ?Sized> {
-            fn dupe_into(slf: NonNull<T>, len: usize, dst: NonNull<T>);
+            fn dupe_into(a: &A, slf: NonNull<T>, len: usize, extra_len: usize, dst: NonNull<T>);
         }
 
         macro_rules! spec_extend_slice_impl {
             ($($extra_token:tt)?) => {
                 impl<T: Clone, A: AllocSlice + ?Sized> SpecExtendSlice<T, A> for [T] {
-                    $($extra_token)? fn dupe_into(slf: NonNull<T>, len: usize, dst: NonNull<T>) {
-                        let p = dst.as_ptr();
+                    $($extra_token)? fn dupe_into(
+                        a: &A,
+                        slf: NonNull<T>,
+                        len: usize,
+                        extra_len: usize,
+                        dst: NonNull<T>
+                    ) {
                         let slf = slf.as_ptr();
 
                         unsafe {
-                            #[cfg(not(feature = "clone_to_uninit"))]
+                            let mut guard = SliceAllocGuard::new_with_init(
+                                dst,
+                                a,
+                                len,
+                                len + extra_len
+                            );
+
                             for i in 0..len {
-                                p.add(i).write((&*slf.add(i)).clone());
+                                guard.init_unchecked((&*slf.add(i)).clone());
                             }
 
-                            #[cfg(feature = "clone_to_uninit")]
-                            <[T] as core::clone::CloneToUninit>::clone_to_uninit(
-                                &*slice_ptr_from_raw_parts(slf, len), p.cast()
-                            );
+                            forget(guard);
                         }
                     }
                 }
@@ -408,15 +479,19 @@ pub trait AllocSlice: Alloc {
 
         #[cfg(feature = "specialization")]
         impl<T: Copy, A: AllocSlice + ?Sized> SpecExtendSlice<T, A> for [T] {
-            fn dupe_into(slf: NonNull<T>, len: usize, dst: NonNull<T>) {
+            fn dupe_into(_: &A, slf: NonNull<T>, len: usize, extra_len: usize, dst: NonNull<T>) {
                 unsafe {
-                    ptr::copy(slf.as_ptr(), dst.as_ptr(), len);
+                    ptr::copy(slf.as_ptr(), dst.as_ptr().add(len), extra_len);
                 }
             }
         }
 
-        let new_ptr = unsafe { self.grow_raw_slice(ptr, len, len + extra_len)? };
-        <[T] as SpecExtendSlice<T, Self>>::dupe_into(extra_ptr, extra_len, new_ptr);
+        if extra_len == 0 {
+            return Ok(ptr);
+        }
+
+        let new_ptr = unsafe { tri!(self.grow_raw_slice(ptr, len, len + extra_len)) };
+        <[T] as SpecExtendSlice<T, Self>>::dupe_into(self, extra_ptr, len, extra_len, new_ptr);
         Ok(new_ptr)
     }
 
@@ -685,6 +760,226 @@ pub trait AllocSlice: Alloc {
         self.grow_raw_slice_with(ptr, len, new_len, |_| T::default())
     }
 
+    /// Grows a slice to a new length and clones elements from `src` into the newly allocated
+    /// region.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
+    ///
+    /// # Safety
+    ///
+    /// - `slice` must point to a slice allocated using this allocator.
+    /// - `src` must contain at least `new_len - slice.len()` readable elements.
+    #[track_caller]
+    unsafe fn grow_slice_clone_from<T: Clone>(
+        &self,
+        slice: NonNull<[T]>,
+        new_len: usize,
+        src: NonNull<[T]>,
+    ) -> Result<NonNull<[T]>, AllocError> {
+        self.grow_raw_slice_clone_from(
+            slice.cast::<T>(),
+            nonnull_slice_len(slice),
+            new_len,
+            src.cast::<T>(),
+            nonnull_slice_len(src),
+        )
+        .map(|p| nonnull_slice_from_raw_parts(p, new_len))
+    }
+
+    // TODO: make stuff in this helpers to reduce rep
+    /// Grows a slice to a new length given the pointer to its first element, current length,
+    /// and requested length, then clones elements from `src` into the newly allocated region.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
+    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
+    ///   `src_len < new_len - len`.
+    ///
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
+    /// - `src` must contain at least `new_len - len` readable elements.
+    #[track_caller]
+    unsafe fn grow_raw_slice_clone_from<T: Clone>(
+        &self,
+        ptr: NonNull<T>,
+        len: usize,
+        new_len: usize,
+
+        src: NonNull<T>,
+        src_len: usize,
+    ) -> Result<NonNull<T>, AllocError> {
+        if new_len == len {
+            return Ok(ptr);
+        }
+
+        let to_add = new_len - len;
+        if src_len < to_add {
+            return Err(INSUF_GROW_SRC);
+        }
+
+        let mut guard = SliceAllocGuard::new_with_init(
+            tri!(self.grow_raw_slice(ptr, len, new_len)),
+            self,
+            len,
+            new_len,
+        );
+
+        for i in 0..to_add {
+            guard.init_unchecked((&*src.as_ptr().add(i)).clone());
+        }
+
+        Ok(guard.release_first())
+    }
+
+    /// Grows a slice to a new length and copies elements from `src` into the newly allocated
+    /// region.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
+    ///
+    /// # Safety
+    ///
+    /// - `slice` must point to a slice allocated using this allocator.
+    /// - `src` must contain at least `new_len - slice.len()` readable elements.
+    #[track_caller]
+    unsafe fn grow_slice_copy_from<T: Copy>(
+        &self,
+        slice: NonNull<[T]>,
+        new_len: usize,
+        src: NonNull<[T]>,
+    ) -> Result<NonNull<[T]>, AllocError> {
+        self.grow_slice_copy_from_unchecked(slice, new_len, src)
+    }
+
+    /// Grows a slice to a new length and copies elements from `src` into the newly allocated
+    /// region.
+    ///
+    /// This method does not require `T: Copy`.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
+    ///
+    /// # Safety
+    ///
+    /// - `slice` must point to a slice allocated using this allocator.
+    /// - `src` must contain at least `new_len - slice.len()` readable elements.
+    #[track_caller]
+    unsafe fn grow_slice_copy_from_unchecked<T>(
+        &self,
+        slice: NonNull<[T]>,
+        new_len: usize,
+        src: NonNull<[T]>,
+    ) -> Result<NonNull<[T]>, AllocError> {
+        self.grow_raw_slice_copy_from_unchecked(
+            slice.cast::<T>(),
+            nonnull_slice_len(slice),
+            new_len,
+            src.cast::<T>(),
+            nonnull_slice_len(src),
+        )
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
+    }
+
+    /// Grows a slice to a new length given the pointer to its first element, current length, and
+    /// requested length, then copies elements from `src` into the newly allocated region.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
+    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
+    ///   `src_len < new_len - len`.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
+    /// - `src` must contain at least `new_len - len` readable elements.
+    #[track_caller]
+    unsafe fn grow_raw_slice_copy_from<T: Copy>(
+        &self,
+        ptr: NonNull<T>,
+        len: usize,
+        new_len: usize,
+
+        src: NonNull<T>,
+        src_len: usize,
+    ) -> Result<NonNull<T>, AllocError> {
+        self.grow_raw_slice_copy_from_unchecked(
+            ptr,
+            len,
+            new_len,
+            
+            src,
+            src_len,
+        )
+    }
+
+    /// Grows a slice to a new length given the pointer to its first element, current length, and
+    /// requested length, then copies elements from `src` into the newly allocated region.
+    /// 
+    /// This method does not require `T: Copy`.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
+    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
+    ///   `src_len < new_len - len`.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
+    /// - `src` must contain at least `new_len - len` readable elements.
+    #[track_caller]
+    unsafe fn grow_raw_slice_copy_from_unchecked<T>(
+        &self,
+        ptr: NonNull<T>,
+        len: usize,
+        new_len: usize,
+
+        src: NonNull<T>,
+        src_len: usize,
+    ) -> Result<NonNull<T>, AllocError> {
+        if new_len == len {
+            return Ok(ptr);
+        }
+
+        let to_add = new_len - len;
+        if src_len < to_add {
+            return Err(INSUF_GROW_SRC);
+        }
+
+        let new_ptr = tri!(self.grow_raw_slice(ptr, len, new_len));
+        ptr::copy_nonoverlapping(src.as_ptr(), new_ptr.as_ptr().add(len), to_add);
+        Ok(new_ptr)
+    }
+
     /// Shrinks a slice to a new length without dropping any removed elements.
     ///
     /// # Errors
@@ -738,7 +1033,7 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::Other("attempted to truncate a slice to a larger size")`] if
+    /// - [`AllocError::Other`]`("attempted to truncate a slice to a larger size")` if
     ///   `new_len > slice.len()`.
     ///
     /// # Safety
@@ -764,7 +1059,7 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::Other("attempted to truncate a slice to a larger size")`] if
+    /// - [`AllocError::Other`]`("attempted to truncate a slice to a larger size")` if
     ///   `new_len > len`.
     ///
     /// # Safety
@@ -772,7 +1067,7 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `init` must describe exactly the number of initialized elements of that slice.
     /// - `len` must describe exactly the total number of elements in that slice.
-    #[cfg_attr(miri, track_caller)]
+    #[track_caller]
     unsafe fn truncate_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
@@ -1077,45 +1372,171 @@ pub trait AllocSlice: Alloc {
         self.realloc_raw_slice_with(ptr, len, new_len, |_| T::default())
     }
 
-    /// Deallocates a previously allocated block.
+    /// Reallocates a slice to a new length and clones elements from `src` into any newly allocated
+    /// region.
+    ///
+    /// On grow, preserves existing elements and clones `new_len - slice.len()` elements from `src`
+    /// into the new tail.
+    /// On shrink, truncates to `new_len` elements without dropping removed elements.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
+    ///   `src_len < new_len - len`.
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `n` must be the exact number of `T` held in that block.
-    #[cfg_attr(miri, track_caller)]
-    unsafe fn dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        // Here, we assume the layout is valid as it was presumably used to allocate previously.
-        self.dealloc(
-            ptr.cast(),
-            Layout::from_size_align_unchecked(T::SZ * n, T::ALN),
-        );
+    /// - `slice` must point to a slice allocated using this allocator.
+    /// - `src` must contain at least `new_len - slice.len()` readable elements when growing.
+    #[track_caller]
+    unsafe fn realloc_slice_clone_from<T: Clone>(
+        &self,
+        slice: NonNull<[T]>,
+        new_len: usize,
+        src: NonNull<[T]>,
+    ) -> Result<NonNull<[T]>, AllocError> {
+        self.realloc_raw_slice_clone_from(
+            slice.cast::<T>(),
+            nonnull_slice_len(slice),
+            new_len,
+            src.cast::<T>(),
+            nonnull_slice_len(src),
+        )
+        .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
-    /// Zeroes and deallocates `n` elements at the given pointer.
+    /// Reallocates a slice to a new length given the pointer to its first element, current length,
+    /// and requested length, then clones elements from `src` into any newly allocated region.
+    ///
+    /// On grow, preserves existing elements and clones `new_len - len` elements from `src` into the
+    /// new tail.
+    /// On shrink, truncates to `new_len` without dropping removed elements.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
+    ///   `src_len < new_len - len`.
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
-    ///   and writes, aligned, and a valid `T`.
-    #[cfg_attr(miri, track_caller)]
-    unsafe fn zero_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        ptr::write_bytes(ptr.as_ptr(), 0, n);
-        self.dealloc_n(ptr, n);
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
+    /// - `src` must contain at least `new_len - len` readable elements when growing.
+    #[track_caller]
+    unsafe fn realloc_raw_slice_clone_from<T: Clone>(
+        &self,
+        ptr: NonNull<T>,
+        len: usize,
+        new_len: usize,
+
+        src: NonNull<T>,
+        src_len: usize,
+    ) -> Result<NonNull<T>, AllocError> {
+        let new_ptr = tri!(self.realloc_raw_slice(ptr, len, new_len));
+
+        if new_len > len {
+            let to_add = new_len - len;
+            if src_len < to_add {
+                return Err(INSUF_GROW_SRC);
+            }
+
+            let mut guard = SliceAllocGuard::new_with_init(new_ptr, self, len, new_len);
+
+            for i in 0..to_add {
+                guard.init_unchecked((&*src.as_ptr().add(i)).clone());
+            }
+
+            Ok(guard.release_first())
+        } else {
+            Ok(new_ptr)
+        }
     }
 
-    /// Drops the data at a pointer and deallocates its previously allocated block.
+    /// Reallocates a slice to a new length and copies elements from `src` into any newly allocated
+    /// region.
+    ///
+    /// On grow, preserves existing elements and copies `new_len - slice.len()` elements from `src`
+    /// into the new tail. On shrink, truncates to `new_len` elements without dropping removed
+    /// elements.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
+    ///   `src_len < new_len - len`.
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
-    ///   and writes, aligned, and contain `n` valid `T`.
-    /// - `n` must be the exact number of `T` held in that block.
-    #[cfg_attr(miri, track_caller)]
-    unsafe fn drop_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) {
-        ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr(), n));
-        self.dealloc_n(ptr, n);
+    /// - `slice` must point to a slice allocated using this allocator.
+    /// - `src` must contain at least `new_len - slice.len()` readable elements when growing.
+    #[track_caller]
+    unsafe fn realloc_slice_copy_from<T: Copy>(
+        &self,
+        slice: NonNull<[T]>,
+        new_len: usize,
+        src: NonNull<[T]>,
+    ) -> Result<NonNull<[T]>, AllocError> {
+        self.realloc_raw_slice_copy_from(
+            slice.cast::<T>(),
+            nonnull_slice_len(slice),
+            new_len,
+            src.cast::<T>(),
+            nonnull_slice_len(src),
+        )
+        .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
+
+    /// Reallocates a slice to a new length given the pointer to its first element, current length,
+    /// and requested length, then copies elements from `src` into any newly allocated region.
+    ///
+    /// On grow, preserves existing elements and copies `new_len - len` elements from `src`
+    /// into the new tail. On shrink, truncates to `new_len` without dropping removed elements.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
+    ///   `src_len < new_len - len`.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a slice allocated using this allocator.
+    /// - `len` must describe exactly the number of elements in that slice.
+    /// - `src` must contain at least `new_len - len` readable elements when growing.
+    #[track_caller]
+    unsafe fn realloc_raw_slice_copy_from<T: Copy>(
+        &self,
+        ptr: NonNull<T>,
+        len: usize,
+        new_len: usize,
+
+        src: NonNull<T>,
+        src_len: usize,
+    ) -> Result<NonNull<T>, AllocError> {
+        let new_ptr = tri!(self.realloc_raw_slice(ptr, len, new_len));
+
+        if new_len > len {
+            let to_add = new_len - len;
+            if src_len != to_add {
+                return Err(INSUF_GROW_SRC);
+            }
+
+            ptr::copy_nonoverlapping(src.as_ptr(), new_ptr.as_ptr().add(len), to_add);
+        }
+
+        Ok(new_ptr)
+    }
+
+    // TODO: realloc variants which drop removed elements using truncate
 }
 
 impl<A: Alloc + ?Sized> AllocSlice for A {}
@@ -1163,6 +1584,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
     /// # Safety
@@ -1211,6 +1633,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
     ///
     /// # Safety
@@ -1266,6 +1689,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///
@@ -1290,6 +1714,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///
@@ -1315,6 +1740,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///
@@ -1345,6 +1771,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
+    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     ///
     /// # Safety
     ///

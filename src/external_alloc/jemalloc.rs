@@ -1,7 +1,7 @@
 use crate::{
     error::AllocError,
     external_alloc::{ffi::jem as ffi, resize, REALLOC_DIFF_ALIGN},
-    helpers::{null_q, null_q_zsl_check},
+    helpers::{null_q_dyn, null_q_zsl_check},
     Alloc,
 };
 use core::{
@@ -9,7 +9,6 @@ use core::{
     ptr::NonNull,
 };
 use libc::c_void;
-use memapi_jemalloc_sys::{rallocx, realloc};
 
 macro_rules! assume {
     ($e:expr) => {
@@ -54,9 +53,9 @@ unsafe fn dealloc(ptr: *mut u8, layout: Layout) {
 unsafe fn raw_ralloc(ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -> *mut c_void {
     let flags = ffi::layout_to_flags(new_layout.size(), old_layout.align());
     if flags == 0 {
-        realloc(ptr.as_ptr().cast(), new_layout.size())
+        ffi::realloc(ptr.as_ptr().cast(), new_layout.size())
     } else {
-        rallocx(ptr.as_ptr().cast(), new_layout.size(), flags)
+        ffi::rallocx(ptr.as_ptr().cast(), new_layout.size(), flags)
     }
 }
 
@@ -82,15 +81,14 @@ unsafe impl GlobalAlloc for Jemalloc {
 
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
+        assume!(!ptr.is_null());
         assume!(layout.size() != 0);
         assume!(new_size != 0);
-        let flags = ffi::layout_to_flags(new_size, layout.align());
-        let p = ptr.cast::<c_void>();
-        (if flags == 0 {
-            realloc(p, new_size)
-        } else {
-            rallocx(p, new_size, flags)
-        })
+        raw_ralloc(
+            NonNull::new_unchecked(ptr),
+            layout,
+            Layout::from_size_align_unchecked(new_size, layout.align()),
+        )
         .cast::<u8>()
     }
 }
@@ -98,12 +96,12 @@ unsafe impl GlobalAlloc for Jemalloc {
 impl Alloc for Jemalloc {
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        null_q_zsl_check(layout, |layout: Layout| alloc(layout))
+        null_q_zsl_check(layout, |layout: Layout| alloc(layout), null_q_dyn)
     }
 
     #[inline]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        null_q_zsl_check(layout, |layout: Layout| alloc_zeroed(layout))
+        null_q_zsl_check(layout, |layout: Layout| alloc_zeroed(layout), null_q_dyn)
     }
 
     #[inline]
@@ -169,8 +167,8 @@ impl Alloc for Jemalloc {
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         if new_layout.align() != old_layout.align() {
-            return Err(AllocError::Other(REALLOC_DIFF_ALIGN));
+            return Err(REALLOC_DIFF_ALIGN);
         }
-        null_q(raw_ralloc(ptr, old_layout, new_layout), new_layout)
+        null_q_dyn(raw_ralloc(ptr, old_layout, new_layout), new_layout)
     }
 }

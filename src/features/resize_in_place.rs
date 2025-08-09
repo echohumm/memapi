@@ -72,7 +72,7 @@ pub trait ResizeInPlace: Alloc {
         new_size: usize,
         pattern: F,
     ) -> Result<(), AllocError> {
-        self.grow_in_place(ptr, old_layout, new_size)?;
+        tri!(self.grow_in_place(ptr, old_layout, new_size));
 
         let start_idx = old_layout.size();
         let mut start = SliceAllocGuard::new(
@@ -108,7 +108,7 @@ pub trait ResizeInPlace: Alloc {
         new_size: usize,
         n: u8,
     ) -> Result<(), AllocError> {
-        self.grow_in_place(ptr, old_layout, new_size)?;
+        tri!(self.grow_in_place(ptr, old_layout, new_size));
         ptr::write_bytes(
             ptr.as_ptr().add(old_layout.size()),
             n,
@@ -265,9 +265,9 @@ pub trait ResizeInPlace: Alloc {
 }
 
 #[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
-const RESIZE_IP_ZS: &str = "zero-sized resize in place was requested";
+const RESIZE_IP_ZS: AllocError = AllocError::Other("zero-sized resize in place was requested");
 #[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
-const CANNOT_RESIZE_IP: &str = "cannot resize in place";
+const CANNOT_RESIZE_IP: AllocError = AllocError::Other("cannot resize in place");
 
 #[cfg(feature = "jemalloc")]
 impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
@@ -278,7 +278,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
         new_size: usize,
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(AllocError::Other(RESIZE_IP_ZS))
+            Err(RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
             Err(AllocError::GrowSmallerNewLayout(
                 old_layout.size(),
@@ -295,7 +295,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
             {
                 Ok(())
             } else {
-                Err(AllocError::Other(CANNOT_RESIZE_IP))
+                Err(CANNOT_RESIZE_IP)
             }
         }
     }
@@ -307,7 +307,7 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
         new_size: usize,
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(AllocError::Other(RESIZE_IP_ZS))
+            Err(RESIZE_IP_ZS)
         } else if new_size > old_layout.size() {
             Err(AllocError::ShrinkBiggerNewLayout(
                 old_layout.size(),
@@ -336,14 +336,15 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
 
                 Ok(())
             } else {
-                Err(AllocError::Other(CANNOT_RESIZE_IP))
+                // is this even possible?
+                Err(CANNOT_RESIZE_IP)
             }
         }
     }
 }
 
 #[cfg(feature = "mimalloc")]
-pub(crate) const SHRINK_IP: &str = "unsupported operation: attempted to shrink in place";
+pub(crate) const SHRINK_IP: AllocError = AllocError::Other("unsupported operation: attempted to shrink in place");
 
 #[cfg(feature = "mimalloc")]
 impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
@@ -354,7 +355,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         new_size: usize,
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(AllocError::Other(RESIZE_IP_ZS))
+            Err(RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
             Err(AllocError::GrowSmallerNewLayout(
                 old_layout.size(),
@@ -368,7 +369,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
             )
             .is_null()
             {
-                Err(AllocError::Other(CANNOT_RESIZE_IP))
+                Err(CANNOT_RESIZE_IP)
             } else {
                 Ok(())
             }
@@ -391,7 +392,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
         _: Layout,
         _: usize,
     ) -> Result<(), AllocError> {
-        Err(AllocError::Other(SHRINK_IP))
+        Err(SHRINK_IP)
     }
 }
 

@@ -8,6 +8,8 @@ import os
 FEATURES = [
     "std",
 
+    "os_err_reporting",
+
     "alloc_ext",
     "alloc_slice",
     "resize_in_place",

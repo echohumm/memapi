@@ -26,8 +26,14 @@
 //!   - [`Stats`], an allocator wrapper that logs operations.
 //!   - [`AllocRes`], [`AllocStat`], [`MemoryRegion`], [`ResizeMemRegions`], [`AllocKind`] types.
 //!   - (With `std`) Several default logger implementations.
+// TODO: other file locking things in stats
+//!   - (With `stats_file_lock`) Safer file locking for `Mutex<File>`.
 //!
 //! - **`external_alloc`**: FFI helpers for external allocators.
+//!
+//! - **`os_err_reporting`**: Enables OS error reporting on failed allocation for supported
+//!   allocators.
+//!   - Supported allocators: Jemalloc
 //!
 //! - **`jemalloc`**: Provides [`Jemalloc`], a ZST `Alloc` implementation using `Jemallocator`.
 //!
@@ -49,8 +55,11 @@
 #![warn(clippy::all, clippy::pedantic)]
 // MAYBEDO: use this lint
 // #![warn(clippy::undocumented_unsafe_blocks)]
+#![allow(
+    unsafe_op_in_unsafe_fn,
+    rustdoc::broken_intra_doc_links,
+)]
 #![deny(missing_docs)]
-#![allow(unknown_lints, unsafe_op_in_unsafe_fn, internal_features, rustdoc::broken_intra_doc_links)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
@@ -59,7 +68,6 @@
 #![cfg_attr(feature = "specialization", feature(min_specialization))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
-// TODO: get rid of all placeholders (like in docs)
 // TODO: fix docs grammar
 // TODO: create fewer scopes (particularly with unsafe)
 
@@ -140,6 +148,16 @@ macro_rules! const_if {
     };
 }
 
+/// This macro is theoretically faster than `<fallible>?`.
+macro_rules! tri {
+    ($($fallible:tt)+) => {
+        match $($fallible)+ {
+            Ok(s) => s,
+            Err(e) => return Err(e),
+        }
+    }
+}
+
 extern crate alloc;
 extern crate core;
 
@@ -185,10 +203,7 @@ use core::{
     cmp::Ordering,
     ptr::{self, NonNull},
 };
-use {
-    error::AllocError,
-    helpers::{alloc_then, null_q_zsl_check},
-};
+use {error::AllocError, helpers::alloc_then};
 
 /// Default allocator, delegating to the global allocator.
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -201,14 +216,22 @@ macro_rules! default_alloc_impl {
             #[inline]
             fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
                 // SAFETY: we check the layout is non zero-sized before use.
-                null_q_zsl_check(layout, |layout| unsafe { raw_all(layout) })
+                $crate::helpers::null_q_zsl_check(
+                    layout,
+                    |layout| unsafe { raw_all(layout) },
+                    $crate::helpers::null_q_dyn,
+                )
             }
 
             #[cfg_attr(miri, track_caller)]
             #[inline]
             fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
                 // SAFETY: we check the layout is non zero-sized before use.
-                null_q_zsl_check(layout, |layout| unsafe { raw_allz(layout) })
+                $crate::helpers::null_q_zsl_check(
+                    layout,
+                    |layout| unsafe { raw_allz(layout) },
+                    $crate::helpers::null_q_dyn,
+                )
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -222,7 +245,7 @@ macro_rules! default_alloc_impl {
     };
 }
 
-// SAFETY: DefaultALloc doesn't unwind, and all layout operations are correct
+// SAFETY: DefaultAlloc doesn't unwind, and all layout operations are correct
 unsafe impl GlobalAlloc for DefaultAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -440,7 +463,7 @@ pub trait Alloc {
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use crate::{error::AllocError, helpers::null_q_zsl_check, Alloc, DefaultAlloc};
+    use crate::{error::AllocError, Alloc, DefaultAlloc};
     use alloc::alloc::{
         alloc as raw_all, alloc_zeroed as raw_allz, dealloc as de, Allocator, Global, Layout,
     };
@@ -504,7 +527,6 @@ pub(crate) mod nightly {
 
 #[allow(clippy::inline_always)]
 impl<A: Alloc + ?Sized> Alloc for &A {
-    // TODO: decide whether to keep these as inline always
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
@@ -615,7 +637,7 @@ pub(crate) unsafe fn shrink<A: Alloc + ?Sized>(
 /// # Safety
 ///
 /// This function doesn't check for layout validity.
-/// The caller must ensure `new_layout.size()` is greater than `old_layout.size()`.
+/// Callers must ensure `new_layout.size()` is greater than `old_layout.size()`.
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(miri, track_caller)]
 unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
@@ -626,12 +648,12 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
     pattern: AllocPattern<F>,
 ) -> Result<NonNull<u8>, AllocError> {
     let new_ptr = match pattern {
-        AllocPattern::None => a.alloc(new_layout)?.cast::<u8>(),
+        AllocPattern::None => tri!(a.alloc(new_layout)).cast::<u8>(),
         #[cfg(feature = "alloc_ext")]
-        AllocPattern::Fn(f) => a.alloc_patterned(new_layout, f)?,
-        AllocPattern::Zero => a.alloc_zeroed(new_layout)?.cast::<u8>(),
+        AllocPattern::Fn(f) => tri!(a.alloc_patterned(new_layout, f)),
+        AllocPattern::Zero => tri!(a.alloc_zeroed(new_layout)).cast::<u8>(),
         #[cfg(feature = "alloc_ext")]
-        AllocPattern::All(n) => a.alloc_filled(new_layout, n)?.cast::<u8>(),
+        AllocPattern::All(n) => tri!(a.alloc_filled(new_layout, n)).cast::<u8>(),
         #[cfg(not(feature = "alloc_ext"))]
         AllocPattern::PhantomFn(_) => core::hint::unreachable_unchecked(),
     };
@@ -648,7 +670,7 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized, F: Fn(usize) -> u8 + Clone>(
 /// # Safety
 ///
 /// This function doesn't check for layout validity.
-/// The caller must ensure `new_layout.size()` is greater than `old_layout.size()`.
+/// Callers must ensure `new_layout.size()` is greater than `old_layout.size()`.
 #[cfg_attr(miri, track_caller)]
 unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
     a: &A,
@@ -656,7 +678,7 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
     old_layout: Layout,
     new_layout: Layout,
 ) -> Result<NonNull<u8>, AllocError> {
-    let new_ptr = a.alloc(new_layout)?.cast::<u8>();
+    let new_ptr = tri!(a.alloc(new_layout)).cast::<u8>();
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
     a.dealloc(ptr, old_layout);

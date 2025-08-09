@@ -1,5 +1,5 @@
 use crate::{
-    error::{AllocError, ArithOp},
+    error::{AllocError, ArithOp, Cause, LayoutErr},
     type_props::{
         varsized_nonnull_from_raw_parts, varsized_pointer_from_raw_parts, PtrProps, SizedProps,
         USIZE_MAX_NO_HIGH_BIT,
@@ -39,6 +39,7 @@ pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, AllocE
 /// # Panics
 ///
 /// Panics with information about this function's arguments if the operation would overflow.
+#[must_use]
 pub fn checked_op_panic(l: usize, op: ArithOp, r: usize) -> usize {
     match checked_op(l, op, r) {
         Ok(v) => v,
@@ -46,16 +47,36 @@ pub fn checked_op_panic(l: usize, op: ArithOp, r: usize) -> usize {
     }
 }
 
-const_if! {
-    "extra_const",
-    "Performs a checked arithmetic operation on two `usize`s.\n\n# Panics\n\nPanics with a generic \
-    message if the operation would overflow.\n\nIf this function isn't const for you, you need to \
-    enable the `extra_const` feature. (Raises MSRV to 1.61.0)",
-    pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
-        match checked_op(l, op, r) {
-            Ok(v) => v,
-            Err(_) => panic!("An arithmetic operation overflowed"),
-        }
+#[cfg(all(feature = "extra_const", not(feature = "std")))]
+/// Performs a checked arithmetic operation on two `usize`s.
+///
+/// # Panics
+///
+/// Panics with a generic message if the operation would overflow.
+#[must_use]
+#[allow(unknown_lints)]
+#[allow(clippy::incompatible_msrv)]
+pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
+    match checked_op(l, op, r) {
+        Ok(v) => v,
+        Err(_) => panic!("An arithmetic operation overflowed"),
+    }
+}
+
+#[cfg(any(not(feature = "extra_const"), feature = "std"))]
+/// Performs a checked arithmetic operation on two `usize`s.
+///
+/// # Panics
+///
+/// Panics with a generic message if the operation would overflow.
+///
+/// If this function isn't const for you, you need to enable the `extra_const` feature.
+/// (Raises MSRV to 1.61.0)
+#[must_use]
+pub fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
+    match checked_op(l, op, r) {
+        Ok(v) => v,
+        Err(..) => panic!("An arithmetic operation overflowed"),
     }
 }
 
@@ -107,21 +128,52 @@ const_if! {
 pub(crate) fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F,
+    nq: fn(*mut T, Layout) -> Result<NonNull<u8>, AllocError>,
 ) -> Result<NonNull<u8>, AllocError> {
-    zsl_check(layout, |layout: Layout| {
-        null_q(f(layout).cast::<u8>(), layout)
-    })
+    zsl_check(layout, |layout: Layout| nq(f(layout), layout))
+}
+
+#[allow(dead_code)]
+#[cfg(feature = "os_err_reporting")]
+/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
+///
+/// Currently set to call `null_q_oserr`.
+pub(crate) fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    null_q_oserr(ptr, layout)
+}
+
+#[allow(dead_code)]
+#[cfg(not(feature = "os_err_reporting"))]
+/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
+///
+/// Currently set to call `null_q`.
+pub(crate) fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    null_q(ptr, layout)
+}
+
+#[cfg(feature = "os_err_reporting")]
+/// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
+fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    if ptr.is_null() {
+        Err(AllocError::AllocFailed(
+            layout,
+            Cause::OSErr(std::io::Error::last_os_error()),
+        ))
+    } else {
+        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
+    }
 }
 
 /// Converts a possibly null pointer into a [`NonNull`] result.
 pub(crate) fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     if ptr.is_null() {
-        Err(AllocError::AllocFailed(layout))
+        Err(AllocError::AllocFailed(layout, Cause::Unknown))
     } else {
-        Ok(unsafe { NonNull::new_unchecked(ptr.cast::<u8>()) })
+        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
     }
 }
 
+// TODO: maybe make zsl_check take an fn pointer
 /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
 /// result of `f(layout)`.
 pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
@@ -142,7 +194,11 @@ pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
 /// [`AllocError::InvalidLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`].
 pub const fn align_up(sz: usize, align: NonZeroUsize) -> Result<usize, AllocError> {
     if sz > USIZE_MAX_NO_HIGH_BIT || align.get() > USIZE_MAX_NO_HIGH_BIT {
-        return Err(AllocError::InvalidLayout(sz, align.get()));
+        return Err(AllocError::InvalidLayout(
+            sz,
+            align.get(),
+            LayoutErr::Overflow,
+        ));
     }
 
     Ok(unsafe { align_up_unchecked(sz, align.get()) })
@@ -171,7 +227,7 @@ pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
 ///
 /// # Safety
 ///
-/// The caller must ensure the `alignment` is a valid power of two.
+/// Callers must ensure the `alignment` is a valid power of two.
 #[must_use]
 #[inline]
 pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
@@ -185,7 +241,7 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
 pub(crate) const fn layout_or_err<T>(n: usize) -> Result<Layout, AllocError> {
     match layout_or_sz_align::<T>(n) {
         Ok(l) => Ok(l),
-        Err((sz, aln)) => Err(AllocError::InvalidLayout(sz, aln)),
+        Err((sz, aln, r)) => Err(AllocError::InvalidLayout(sz, aln, r)),
     }
 }
 
@@ -194,11 +250,11 @@ pub(crate) const fn layout_or_err<T>(n: usize) -> Result<Layout, AllocError> {
 /// # Errors
 ///
 /// Returns `Err(size, align)` if creation of a layout with the given size and alignment fails.
-pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
+pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, LayoutErr)> {
     let (sz, align) = (T::SZ, T::ALN);
 
-    if sz != 0 && n > (((USIZE_MAX_NO_HIGH_BIT) + 1) - align) / sz {
-        return Err((sz, align));
+    if sz != 0 && n > ((USIZE_MAX_NO_HIGH_BIT + 1) - align) / sz {
+        return Err((sz, align, LayoutErr::Overflow));
     }
 
     unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
@@ -219,7 +275,7 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize)> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// # use core::ptr::NonNull;
 /// # use memapi::{helpers::AllocGuard, Alloc, DefaultAlloc};
 /// # let alloc = DefaultAlloc;
@@ -309,7 +365,7 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 ///
 /// # Examples
 ///
-/// ```rust
+/// ```
 /// # use core::{ptr::NonNull, alloc::Layout};
 /// # use memapi::{
 /// #  helpers::SliceAllocGuard,
@@ -353,6 +409,23 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
                 ptr,
                 alloc,
                 init: 0,
+                full,
+            }
+        }
+    }
+
+    const_if! {
+        "extra_const",
+        "Creates a new slice guard for `full` elements at `ptr` in the given allocator.\n\n# \
+        Safety\n\nCallers must ensure that `init` is the number of existing initialized elements \
+        in the slice.",
+        #[inline]
+        pub const unsafe fn new_with_init(ptr: NonNull<T>, alloc: &'a A, init: usize, full: usize)
+        -> SliceAllocGuard<'a, T, A> {
+            SliceAllocGuard {
+                ptr,
+                alloc,
+                init,
                 full,
             }
         }
@@ -418,7 +491,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
 
     const_if! {
         "extra_extra_const",
-        "Sets the initialized element count.\n\n# Safety\n\nThe caller must ensure the new \
+        "Sets the initialized element count.\n\n# Safety\n\nCallers must ensure the new \
         count is correct.",
         #[inline]
         pub const unsafe fn set_init(&mut self, init: usize) {
@@ -444,7 +517,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
 
     const_if! {
         "extra_extra_const",
-        "Initializes the next element of the slice with `elem`.\n\n# Safety\n\nThe caller must \
+        "Initializes the next element of the slice with `elem`.\n\n# Safety\n\nCallers must \
         ensure that the slice is not at capacity. (`initialized() < full()`)",
         #[inline]
         pub const unsafe fn init_unchecked(&mut self, elem: T) {
@@ -551,6 +624,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
 }
 
 impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
+
     fn drop(&mut self) {
         unsafe {
             ptr::drop_in_place(slice_ptr_from_raw_parts(self.ptr.as_ptr(), self.init));

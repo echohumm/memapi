@@ -109,13 +109,20 @@ impl StatsLogger for AtomicUsize {
 #[allow(clippy::inline_always)]
 // file stat-only logger (no byte-count)
 impl StatsLogger for std::sync::Mutex<std::fs::File> {
+    #[allow(unknown_lints)]
+    #[allow(clippy::incompatible_msrv)]
     fn log(&self, stat: AllocRes) {
-        // TODO: use File::lock
+        let mut guard = self.lock().expect("`Mutex<File>` was poisoned");
+        #[cfg(feature = "stats_file_lock")]
+        guard.lock().expect("io error occurred while locking `File`");
         <std::fs::File as std::io::Write>::write_all(
-            &mut self.lock().expect("`Mutex<File>` was poisoned"),
+            &mut guard,
             format!("{}", stat).as_bytes(),
         )
         .expect("failed to write to `File`");
+        #[cfg(feature = "stats_file_lock")]
+        guard.unlock().expect("io error occurred while unlocking `File`");
+
     }
     #[inline(always)]
     fn inc_total_bytes_allocated(&self, _: usize) -> usize {
@@ -370,7 +377,7 @@ pub type StrLog<'s> = FmtLog<&'s str>;
 /// This requires that `Self` allows safe mutable access via an immutable reference, such as the
 /// std-only `IOLog` struct:
 ///
-/// ```rust,no_run
+/// ```rust
 /// # use std::{
 /// #    sync::{
 /// #        Mutex,

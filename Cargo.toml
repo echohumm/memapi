@@ -1,6 +1,6 @@
 [package]
 name = "memapi"
-version = "0.15.2"
+version = "0.16.0"
 edition = "2018"
 rust-version = "1.56.0"
 authors = ["echohumm"]
@@ -39,6 +39,7 @@ default = ["c_str", "extra_extra_const"]
 extra_const = []
 extra_extra_const = ["extra_const"]
 c_str = []
+stats_file_lock = ["stats"]
 
 # nightly support
 nightly = []
@@ -55,6 +56,9 @@ default_nightly = ["metadata", "clone_to_uninit", "specialization"]
 std = []
 std_with_libc = ["std", "libc/std"]
 
+# specific std features
+os_err_reporting = ["std"]
+
 # main extensions
 alloc_ext = []
 alloc_slice = []
@@ -65,19 +69,24 @@ stats = []
 
 # external allocators
 external_alloc = ["libc"]
+
 jemalloc = ["memapi-jemalloc-sys", "external_alloc"]
 jemalloc_in_place = ["jemalloc", "resize_in_place"]
+
 mimalloc = ["memapi-mimalloc-sys", "external_alloc"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
+
+# external lallocator bundles
 external_allocs = ["jemalloc", "mimalloc"]
 external_allocs_in_place = ["jemalloc_in_place", "mimalloc_in_place"]
 
 # bundles
 full_min = ["alloc_slice", "alloc_ext", "stats"]
-full_min_std = ["full_min", "std"]
+full_min_std = ["full_min", "os_err_reporting"]
 full_no_std_no_nightly = [
     "c_str",
     "extra_extra_const",
+    "stats_file_lock",
     "external_allocs_in_place",
     "full_min",
 ]
@@ -142,18 +151,18 @@ path = "tests/stats.rs"
 required-features = ["stats", "std"]
 
 # if this crate is ever built with a version above msrv, it will stop compiling because of this.
-#  darn you, Cargo.lock
-[dev-dependencies.criterion]
-version = "^0.4.0"
-default-features = false
-
-[[bench]]
-name = "bench"
-path = "benches/bench.rs"
-harness = false
-required-features = ["alloc_ext"]
+# if you want to use the benchmarks, uncomment this.
+#[dev-dependencies.criterion]
+#version = "^0.4.0"
+#default-features = false
+#
+#[[bench]]
+#name = "bench"
+#path = "benches/bench.rs"
+#harness = false
+#required-features = ["alloc_ext"]
 
 [dependencies]
 libc = { version = "^0.2.0", optional = true, default-features = false }
-memapi-jemalloc-sys = { version = "0.1.1", optional = true }
-memapi-mimalloc-sys = { version = "0.1.2", optional = true, features = ["extended"] }
+memapi-jemalloc-sys = { version = "0.1.1", optional = true, default-features = false }
+memapi-mimalloc-sys = { version = "0.1.2", optional = true, default-features = false, features = ["extended"] }

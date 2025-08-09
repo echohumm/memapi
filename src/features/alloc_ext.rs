@@ -26,7 +26,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_init<T, I: Fn(NonNull<T>)>(&self, init: I) -> Result<NonNull<T>, AllocError> {
-        let guard = self.alloc_guard()?;
+        let guard = tri!(self.alloc_guard());
         init(*guard);
         Ok(guard.release())
     }
@@ -69,7 +69,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_clone_to<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
-        let mut guard = self.alloc_guard()?;
+        let mut guard = tri!(self.alloc_guard());
         guard.init(data.clone());
         Ok(guard.release())
     }
@@ -106,8 +106,8 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that if the cloning operation panics, it will not be necessary to
-    /// drop the clone.
+    /// Callers must ensure that if the cloning operation panics, it will not be necessary to drop
+    /// the clone.
     ///
     /// This is because the `metadata` feature is not enabled, which is required to drop this
     /// unsized value.
@@ -170,7 +170,7 @@ pub trait AllocExt: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
-    #[cfg_attr(miri, track_caller)]
+    #[track_caller]
     #[inline]
     unsafe fn drop_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
         ptr::drop_in_place(ptr.as_ptr());
@@ -219,7 +219,7 @@ pub trait AllocExt: Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
     ///   and writes, aligned, and a valid `T`.
-    #[cfg_attr(miri, track_caller)]
+    #[track_caller]
     #[inline]
     unsafe fn drop_zero_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
         ptr::drop_in_place(ptr.as_ptr());
@@ -246,7 +246,7 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// - The caller must ensure `data` is a valid pointer to copy from.
+    /// - Callers must ensure `data` is a valid pointer to copy from.
     ///
     /// # Errors
     ///
@@ -266,7 +266,7 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// - The caller must ensure `data` is safe to copy.
+    /// - Callers must ensure `data` is safe to copy.
     ///
     /// # Errors
     ///
@@ -286,7 +286,7 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// - The caller must ensure `data` is safe to copy.
+    /// - Callers must ensure `data` is safe to copy.
     ///
     /// # Errors
     ///
@@ -303,7 +303,6 @@ pub trait AllocExt: Alloc {
         })
     }
 
-    // TODO: actually use this in places
     /// Allocates memory for an uninitialized `T` and returns an [`AllocGuard`] around it to ensure
     /// deallocation on panic.
     ///
@@ -329,7 +328,7 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// The caller must ensure `data` is a valid pointer.
+    /// Callers must ensure `data` is a valid pointer.
     #[cfg_attr(miri, track_caller)]
     unsafe fn alloc_guard_for<T: ?Sized>(
         &self,

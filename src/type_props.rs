@@ -10,7 +10,21 @@ use core::{
 /// The maximum value of a `usize` with no high bit.
 ///
 /// Equivalent to `usize::MAX >> 1` or `isize::MAX as usize`.
+///
+#[cfg_attr(target_pointer_width = "64", doc = "Exact value: `9_223_372_036_854_775_807`")]
+#[cfg_attr(target_pointer_width = "32", doc = "Exact value: `2_147_483_647`")]
+// no way this ever gets hit, but oh well
+#[cfg_attr(target_pointer_width = "16", doc = "Exact value: `32_767`")]
 pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
+
+/// A `usize` in which only the high bit is set.
+///
+/// Equivalent to `usize::MAX ^ (usize::MAX >> 1)` or `usize::MAX << usize::BITS - 1`.
+///
+#[cfg_attr(target_pointer_width = "64", doc = "Exact value: `9_223_372_036_854_775_807`")]
+#[cfg_attr(target_pointer_width = "32", doc = "Exact value: `2_147_483_647`")]
+#[cfg_attr(target_pointer_width = "16", doc = "Exact value: `32_767`")]
+pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (usize::MAX >> 1);
 
 /// A trait containing constants for sized types.
 pub trait SizedProps: Sized {
@@ -175,50 +189,67 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
 }
 
 #[cfg(not(feature = "metadata"))]
-/// Trait for unsized types whose metadata is `usize` (e.g., slices, `str`).
+/// Trait for unsized types that use `usize` metadata (for example, slices and `str`).
 ///
 /// # Safety
 ///
-/// The implementor guarantees that the `ALIGN` constant accurately represents the alignment
-/// requirement of the type in any safe context and that the type's pointee metadata is `usize`.
+/// Implementors must ensure that `Subtype` is the actual element type contained and that the `ALN`
+/// constant accurately reflects the type's alignment requirement in all safe contexts.
 pub unsafe trait VarSized {
+    /// The element type.
+    ///
+    /// [`VarSized`] types are either slices of another type or include a slice tail; this is that
+    /// element type.
+    type Subtype: Sized + SizedProps;
+
     /// The alignment of the type.
-    const ALN: usize;
+    ///
+    /// Override this if the type contains more than just a slice of its
+    /// [`Subtype`](VarSized::Subtype).
+    const ALN: usize = Self::Subtype::ALN;
 }
 
 #[cfg(feature = "metadata")]
-/// Trait for unsized types whose metadata is `usize` (e.g., slices, `str`).
+/// Trait for unsized types that use `usize` metadata (for example, slices and `str`).
 ///
 /// # Safety
 ///
-/// The implementor guarantees that the `ALIGN` constant accurately represents the
-/// alignment requirement of the type in any safe context.
-pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
+/// Implementors must ensure that `Subtype` is the actual element type contained and that the `ALN`
+/// constant accurately reflects the type's alignment requirement in all safe contexts.
+pub unsafe trait VarSized: crate::marker::SizeMeta {
+    /// The element type.
+    ///
+    /// [`VarSized`] types are either slices of another type or include a slice tail; this is that
+    /// element type.
+    type Subtype: Sized + SizedProps;
+
     /// The alignment of the type.
-    const ALN: usize;
+    ///
+    /// Override this if the type contains more than just a slice of its
+    /// [`Subtype`](VarSized::Subtype).
+    const ALN: usize = Self::Subtype::ALN;
 }
 
 unsafe impl<T> VarSized for [T] {
-    const ALN: usize = T::ALN;
+    type Subtype = T;
 }
 
 unsafe impl VarSized for str {
-    const ALN: usize = u8::ALN;
+    type Subtype = u8;
 }
 
 #[cfg(feature = "c_str")]
 unsafe impl VarSized for core::ffi::CStr {
-    const ALN: usize = u8::ALN;
+    type Subtype = u8;
 }
 #[cfg(feature = "std")]
-// `OsStr == [u8]` and `[u8]: VarSized`
 unsafe impl VarSized for std::ffi::OsStr {
-    const ALN: usize = u8::ALN;
+    type Subtype = u8;
 }
 
 #[cfg(feature = "std")]
 unsafe impl VarSized for std::path::Path {
-    const ALN: usize = u8::ALN;
+    type Subtype = u8;
 }
 
 // not associated to reduce clutter, and so they can be const

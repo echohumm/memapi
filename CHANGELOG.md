@@ -4,8 +4,10 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Table of Contents
 
-- [Version 0.16.0 Predicted](#version-0160-predicted)
-- [Version 0.15.0](#version-0150)
+- [Version 0.16.1 Predicted](#version-0161-predicted)
+- [Version 0.16.0](#version-0160-2025-8-08)
+- [Version 0.15.2](#version-0152-2025-8-07)
+- [Version 0.15.0](#version-0150-2025-8-07)
   - [Commit 9](#commit-9-2025-8-07)
   - [Commit 8](#commit-8-2025-8-07)
   - [Commit 7](#commit-7-2025-8-06)
@@ -28,18 +30,28 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - [Commit 1 (2025-7-26)](#commit-1-2025-7-26)
 - [Version 0.13.2](#version-0132-2025-7-25)
 
-## Version 0.16.0 [Predicted]
+## Version 0.16.1 [Predicted]
 
 - Debloat the primary surfaces
-- Implement TODOs
 - Proper tests for many untested methods and features (maybe)
-- Proper benchmarks (maybe)
-- Finish filling API holes in `AllocSlice`
 - Performance and binary size improvements
   - make as many sections as possible `const` [perf]
-  - reduce inlining [size]
   - use helpers for repetitive code [size]
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
+
+## Version 0.16.0 (2025-8-08)
+
+- Add os error reporting to `AllocError` with `os_error_reporting` feature (may or may not work)
+  - only works for jemalloc currently
+- Switch to `tri!` macro instead of `?` operator for slight performance improvement
+- Add file locking in `stats` with `stats_file_lock` feature (unfinished)
+- Reduce code repetition and general improvements
+- Add `marker::SizeMeta`
+- Add `Subtype` to `VarSized`
+  - also switch to using `SizeMeta` instead of `Pointee<Metadata = usize>`
+- Improve `AllocSlice` dropping and deallocate API
+- Add growth and realloc methods to `AllocSlice` which copy and clone from existing slices
+
 
 ## Version 0.15.2 (2025-8-07)
 

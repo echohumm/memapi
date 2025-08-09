@@ -3,6 +3,8 @@
     <words>
       <w>aarch</w>
       <w>allocs</w>
+      <w>allz</w>
+      <w>clippy</w>
       <w>criter</w>
       <w>dontfixme</w>
       <w>dptr</w>
@@ -19,6 +21,7 @@
       <w>mipsel</w>
       <w>msrv</w>
       <w>noalloc</w>
+      <w>oserr</w>
       <w>partialord</w>
       <w>preallocated</w>
       <w>ralloc</w>

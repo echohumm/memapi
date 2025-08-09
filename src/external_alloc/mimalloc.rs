@@ -6,6 +6,7 @@ use core::{
     ptr::NonNull,
 };
 use libc::c_void;
+use crate::helpers::null_q;
 
 /// Handle to the mimalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`](Alloc).
@@ -40,8 +41,8 @@ fn zsl_check_alloc(
     alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
 ) -> Result<NonNull<u8>, AllocError> {
     null_q_zsl_check(layout, |layout| unsafe {
-        alloc(layout.size(), layout.align()).cast::<u8>()
-    })
+        alloc(layout.size(), layout.align())
+    }, null_q)
 }
 
 impl Alloc for MiMalloc {
@@ -119,6 +120,6 @@ impl Alloc for MiMalloc {
                 new_layout.size(),
                 new_layout.align(),
             )
-        })
+        }, null_q)
     }
 }

@@ -9,6 +9,8 @@ FEATURES = [
     "nightly",
     "std",
 
+    "os_err_reporting",
+
     "extra_const",
     "extra_extra_const",
     "c_str",
@@ -23,6 +25,7 @@ FEATURES = [
     "resize_in_place",
 
     "stats",
+    "stats_file_lock",
 
     "external_alloc",
     "jemalloc",
@@ -77,10 +80,9 @@ def main():
         cargo_cmd = ["cargo", "miri", "test"] if args.miri else ["cargo", "test"]
         extra_args = []
 
-    # Prepare environment with RUSTFLAGS (only for tests; clippy ignores this)
+    # Prepare environment with RUSTFLAGS
     env = os.environ.copy()
-    if not args.clippy:
-        env["RUSTFLAGS"] = "-D warnings"
+    env["RUSTFLAGS"] = "-D warnings"
 
     for combo in all_feature_combinations(FEATURES):
         if args.no_nightly and any(f in NIGHTLY_FEATURES for f in combo):

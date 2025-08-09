@@ -1,3 +1,4 @@
+extern crate criterion;
 extern crate alloc;
 
 use alloc::alloc::Layout;
