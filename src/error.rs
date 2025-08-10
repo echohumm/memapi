@@ -15,7 +15,7 @@ pub enum AllocError {
     /// The contained cause may or may not be accurate depending on the environment.
     AllocFailed(Layout, Cause),
     /// The layout computed with the given size and alignment is invalid; see the contained reason.
-    InvalidLayout(usize, usize, LayoutErr),
+    InvalidLayout(InvLayout),
     /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
     /// the requested alignment.
     ///
@@ -28,12 +28,12 @@ pub enum AllocError {
     /// An arithmetic operation would overflow.
     ///
     /// This error contains both sides of the operation and the operation itself.
-    ArithmeticOverflow(usize, ArithOp, usize),
+    ArithmeticOverflow(ArithOverflow),
     /// Any other kind of error, in the form of a string.
     Other(&'static str),
 }
 
-// manual implementations because of Cause, which can't be PEq
+// manual implementations because of Cause, which can't be PEq if os_err_reporting is enabled
 impl PartialEq for AllocError {
     #[inline]
     fn eq(&self, other: &AllocError) -> bool {
@@ -49,18 +49,16 @@ impl PartialEq for AllocError {
             // compiler is stupid and thinks this is unreachable (or i am and it is)
             #[allow(unreachable_patterns)]
             (AllocFailed(l1, _), AllocFailed(l2, _)) => l1 == l2,
-            (InvalidLayout(sz1, aln1, _), InvalidLayout(sz2, aln2, _)) => {
-                sz1 == sz2 && aln1 == aln2
-            }
+            (InvalidLayout(il1), InvalidLayout(il2)) => il1 == il2,
+
             (ZeroSizedLayout(a), ZeroSizedLayout(b)) => a == b,
             (GrowSmallerNewLayout(old1, new1), GrowSmallerNewLayout(old2, new2))
             | (ShrinkBiggerNewLayout(old1, new1), ShrinkBiggerNewLayout(old2, new2)) => {
                 old1 == old2 && new1 == new2
             }
-            (ArithmeticOverflow(lhs1, op1, rhs1), ArithmeticOverflow(lhs2, op2, rhs2)) => {
-                lhs1 == lhs2 && op1 == op2 && rhs1 == rhs2
-            }
+            (ArithmeticOverflow(e1), ArithmeticOverflow(e2)) => e1 == e2,
             (Other(a), Other(b)) => a == b,
+
             _ => false,
         }
     }
@@ -72,14 +70,14 @@ impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             AllocError::AllocFailed(l, cause) => {
-                write!(f, "allocation failed for layout:\n\t{:?}\ncause: {}", l, cause)
-            }
-            AllocError::InvalidLayout(sz, align, reason) => {
                 write!(
                     f,
-                    "computed invalid layout:\n\tsize: {},\n\talign: {}\nreason: {}",
-                    sz, align, reason
+                    "allocation failed for layout:\n\t{:?}\ncause: {}",
+                    l, cause
                 )
+            }
+            AllocError::InvalidLayout(inv_layout) => {
+                write!(f, "{}", inv_layout)
             }
             AllocError::ZeroSizedLayout(_) => {
                 write!(f, "zero-sized layout was given")
@@ -94,12 +92,8 @@ impl Display for AllocError {
                 "attempted to shrink from a size of {} to a larger size of {}",
                 old, new
             ),
-            AllocError::ArithmeticOverflow(lhs, op, rhs) => {
-                write!(
-                    f,
-                    "arithmetic operation would overflow: {} {} {}",
-                    lhs, op, rhs
-                )
+            AllocError::ArithmeticOverflow(overflow) => {
+                write!(f, "{}", overflow)
             }
             AllocError::Other(other) => write!(f, "{}", other),
         }
@@ -108,6 +102,64 @@ impl Display for AllocError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for AllocError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// An error that can occur when creating a layout for repeated instances of a type.
+#[allow(clippy::module_name_repetitions)]
+pub enum RepeatLayoutError {
+    /// The computed layout is invalid.
+    InvalidLayout(InvLayout),
+    /// An arithmetic operation would overflow.
+    ArithmeticOverflow(ArithOverflow),
+}
+
+impl RepeatLayoutError {
+    /// Converts this error into an [`AllocError`].
+    #[must_use]
+    pub const fn into_alloc_err(self) -> AllocError {
+        match self {
+            RepeatLayoutError::InvalidLayout(inv_layout) => AllocError::InvalidLayout(inv_layout),
+            RepeatLayoutError::ArithmeticOverflow(overflow) => {
+                AllocError::ArithmeticOverflow(overflow)
+            }
+        }
+    }
+}
+
+impl Display for RepeatLayoutError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            RepeatLayoutError::InvalidLayout(inv_layout) => {
+                write!(f, "{}", inv_layout)
+            }
+            RepeatLayoutError::ArithmeticOverflow(overflow) => {
+                write!(f, "{}", overflow)
+            }
+        }
+    }
+}
+
+/// An invalid layout and the reason for it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvLayout(pub usize, pub usize, pub LayoutErr);
+
+impl InvLayout {
+    /// Converts this error into an [`AllocError`].
+    #[must_use]
+    pub const fn into_alloc_err(self) -> AllocError {
+        AllocError::InvalidLayout(self)
+    }
+}
+
+impl Display for InvLayout {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "computed invalid layout:\n\tsize: {},\n\talign: {}\nreason: {}",
+            self.0, self.1, self.2
+        )
+    }
+}
 
 /// An error that can occur when computing a layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -135,6 +187,33 @@ impl Display for LayoutErr {
 
 #[cfg(feature = "std")]
 impl std::error::Error for LayoutErr {}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+/// An arithmetic operation that would overflow.
+///
+/// Contains both sides of the operation and the operation itself.
+pub struct ArithOverflow(pub usize, pub ArithOp, pub usize);
+
+impl ArithOverflow {
+    /// Converts this error into an [`AllocError`].
+    #[must_use]
+    pub const fn into_alloc_err(self) -> AllocError {
+        AllocError::ArithmeticOverflow(self)
+    }
+}
+
+impl Display for ArithOverflow {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(
+            f,
+            "arithmetic operation would overflow: {} {} {}",
+            self.0, self.1, self.2
+        )
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ArithOverflow {}
 
 /// An arithmetic operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

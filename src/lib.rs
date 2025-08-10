@@ -26,18 +26,24 @@
 //!   - [`Stats`], an allocator wrapper that logs operations.
 //!   - [`AllocRes`], [`AllocStat`], [`MemoryRegion`], [`ResizeMemRegions`], [`AllocKind`] types.
 //!   - (With `std`) Several default logger implementations.
-// TODO: other file locking things in stats
-//!   - (With `stats_file_lock`) Safer file locking for `Mutex<File>`.
+//!   - (With `stats_file_lock`) Safer file locking for `FileLog`. (MSRV ≥ 1.89.0).
+//!   - (With `stats_parking_lot`) Usage of [`parking_lot::Mutex`] instead of [`std::sync::Mutex`].
+//!     (MSRV ≥ 1.64.0).
 //!
 //! - **`external_alloc`**: FFI helpers for external allocators.
 //!
 //! - **`os_err_reporting`**: Enables OS error reporting on failed allocation for supported
 //!   allocators.
-//!   - Supported allocators: Jemalloc
+//!   - Supported allocators: Jemalloc, Rust's default, MiMalloc if `mimalloc_err_reporting` is
+//!     enabled.
 //!
 //! - **`jemalloc`**: Provides [`Jemalloc`], a ZST `Alloc` implementation using `Jemallocator`.
 //!
 //! - **`mimalloc`**: Provides [`MiMalloc`], a ZST `Alloc` implementation using `MiMalloc`.
+//!   - **`mimalloc_err_reporting`**: Enables OS error reporting on failed allocation for
+//!     `MiMalloc`. (MSRV ≥ 1.64.0).
+//!   - **`mimalloc_error_output`**: Enables OS error reporting AND printing to stderr on failed
+//!     allocation for `MiMalloc`. (MSRV ≥ 1.64.0).
 //!
 //! - **`nightly`**: Enables using the unstable `allocator_api`.
 //!
@@ -52,14 +58,14 @@
 //!
 //! All other features are supersets of existing ones.
 
+#![allow(unknown_lints)]
+
 #![warn(clippy::all, clippy::pedantic)]
-// MAYBEDO: use this lint
-// #![warn(clippy::undocumented_unsafe_blocks)]
-#![allow(
-    unsafe_op_in_unsafe_fn,
-    rustdoc::broken_intra_doc_links,
-)]
+// clippy::undocumented_unsafe_blocks
+#![allow(unsafe_op_in_unsafe_fn, rustdoc::broken_intra_doc_links, clippy::doc_markdown)]
 #![deny(missing_docs)]
+
+#![warn(unknown_lints)]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
@@ -68,7 +74,6 @@
 #![cfg_attr(feature = "specialization", feature(min_specialization))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
-// TODO: fix docs grammar
 // TODO: create fewer scopes (particularly with unsafe)
 
 // TODO: generally add more helpers and dedup to reduce bin size
@@ -131,7 +136,7 @@ macro_rules! const_if {
         $(#[$attr:meta])*
         //                                kinda poorly done, but it makes a type param work, which
         //                                is all i need.
-        pub const unsafe fn $name:ident $(<$generic_ty:ident : $req:ident>)? ( $($args:tt)* )
+        pub const unsafe fn $name:ident $(<$generic_ty:ident $(: $req:ident)?>)? ( $($args:tt)* )
         $(-> $ret:ty)?
         $body:block
     ) => {
@@ -139,23 +144,29 @@ macro_rules! const_if {
         #[doc = $docs]
         #[allow(clippy::incompatible_msrv)]
         $(#[$attr])*
-        pub const unsafe fn $name$(<$generic_ty: $req>)?($($args)*) $(-> $ret)? $body
+        pub const unsafe fn $name$(<$generic_ty $(: $req)?>)?($($args)*) $(-> $ret)? $body
 
         #[cfg(not(feature = $feature))]
         #[doc = $docs]
         $(#[$attr])*
-        pub unsafe fn $name$(<$generic_ty: $req>)?($($args)*) $(-> $ret)? $body
+        pub unsafe fn $name$(<$generic_ty $(: $req)?>)?($($args)*) $(-> $ret)? $body
     };
 }
 
 /// This macro is theoretically faster than `<fallible>?`.
 macro_rules! tri {
-    ($($fallible:tt)+) => {
+    ($($fallible:expr)+) => {
         match $($fallible)+ {
             Ok(s) => s,
             Err(e) => return Err(e),
         }
-    }
+    };
+    (il, $($fallible:expr)+) => {
+        match $($fallible)+ {
+            Ok(s) => s,
+            Err(e) => return Err(AllocError::InvalidLayout(e)),
+        }
+    };
 }
 
 extern crate alloc;

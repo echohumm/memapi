@@ -1,6 +1,6 @@
 [package]
 name = "memapi"
-version = "0.16.0"
+version = "0.17.0"
 edition = "2018"
 rust-version = "1.56.0"
 authors = ["echohumm"]
@@ -18,6 +18,8 @@ include = [
 ]
 build = "build.rs"
 
+
+
 [package.metadata.docs.rs]
 features = ["full"]
 
@@ -25,21 +27,34 @@ features = ["full"]
 docsrs = { status = "passing" }
 maintenance = { status = "actively-developed" }
 
+
+
 [profile.bench]
 opt-level = 3
 lto = true
 codegen-units = 1
 debug = false
 overflow-checks = false
+incremental = false
+
+[profile.dev]
+incremental = false
+
+
+
 
 [features]
-default = ["c_str", "extra_extra_const"]
+default = ["c_str", "const_max"]
 
 # msrv-changing features
-extra_const = []
-extra_extra_const = ["extra_const"]
+## that make small changes
+const_extras = []
+const_max = ["const_extras"]
 c_str = []
-stats_file_lock = ["stats"]
+
+## that make large changes
+# todo: doc this and parking_lot
+stats_file_lock = ["stats", "std"]
 
 # nightly support
 nightly = []
@@ -54,7 +69,7 @@ default_nightly = ["metadata", "clone_to_uninit", "specialization"]
 
 # std support
 std = []
-std_with_libc = ["std", "libc/std"]
+std_libc = ["std", "libc/std"]
 
 # specific std features
 os_err_reporting = ["std"]
@@ -66,6 +81,7 @@ resize_in_place = []
 
 # stats
 stats = []
+stats_parking_lot = ["stats", "parking_lot"]
 
 # external allocators
 external_alloc = ["libc"]
@@ -75,26 +91,38 @@ jemalloc_in_place = ["jemalloc", "resize_in_place"]
 
 mimalloc = ["memapi-mimalloc-sys", "external_alloc"]
 mimalloc_in_place = ["mimalloc", "resize_in_place"]
+mimalloc_err_reporting = ["mimalloc", "mimalloc_debug", "os_err_reporting", "parking_lot"]
+mimalloc_err_output = ["mimalloc_err_reporting"]
 
 # external lallocator bundles
 external_allocs = ["jemalloc", "mimalloc"]
 external_allocs_in_place = ["jemalloc_in_place", "mimalloc_in_place"]
 
 # bundles
-full_min = ["alloc_slice", "alloc_ext", "stats"]
-full_min_std = ["full_min", "os_err_reporting"]
-full_no_std_no_nightly = [
+core = ["alloc_slice", "alloc_ext", "stats"]
+std_core = ["core", "os_err_reporting"]
+full_no_std_stable = [
     "c_str",
-    "extra_extra_const",
+    "const_max",
     "stats_file_lock",
+    "stats_parking_lot",
     "external_allocs_in_place",
-    "full_min",
+    "core",
 ]
-full_no_nightly = ["std", "full_no_std_no_nightly"]
-full_no_std = ["all_nightly", "full_no_std_no_nightly"]
-full = ["full_no_nightly", "full_no_std"]
+full_no_std_nightly = ["all_nightly", "full_no_std_stable"]
+full_std_stable = ["std", "full_no_std_stable"]
+full_std_nightly = ["std", "all_nightly", "full_no_std_stable"]
 
-# jemalloc feature tweaks
+full_extern = [
+    "external_allocs_in_place",
+    "mimalloc_err_reporting",
+]
+full_extern_mimdebug = ["full_extern", "mimalloc_err_output"]
+
+full = ["full_std_stable", "full_std_nightly", "full_extern"]
+full_mimdebug = ["full", "full_extern_mimdebug"]
+
+# jemalloc feature bindings
 jemalloc_background_threads_runtime_support = ["memapi-jemalloc-sys/background_threads_runtime_support"]
 jemalloc_background_threads = [
     "jemalloc_background_threads_runtime_support",
@@ -108,7 +136,7 @@ jemalloc_profiling = ["memapi-jemalloc-sys/profiling"]
 jemalloc_stats = ["memapi-jemalloc-sys/stats"]
 jemalloc_unprefixed_malloc_on_supported_platforms = ["memapi-jemalloc-sys/unprefixed_malloc_on_supported_platforms"]
 
-# mimalloc variants
+# mimalloc feature bindings
 mimalloc_arena = ["memapi-mimalloc-sys/arena"]
 mimalloc_debug = ["memapi-mimalloc-sys/debug"]
 mimalloc_debug_in_debug = ["memapi-mimalloc-sys/debug_in_debug"]
@@ -116,6 +144,8 @@ mimalloc_local_dynamic_tls = ["memapi-mimalloc-sys/local_dynamic_tls"]
 mimalloc_no_thp = ["memapi-mimalloc-sys/no_thp"]
 mimalloc_override = ["memapi-mimalloc-sys/override"]
 mimalloc_secure = ["memapi-mimalloc-sys/secure"]
+
+
 
 [[test]]
 name = "base"
@@ -150,6 +180,8 @@ name = "stats"
 path = "tests/stats.rs"
 required-features = ["stats", "std"]
 
+
+
 # if this crate is ever built with a version above msrv, it will stop compiling because of this.
 # if you want to use the benchmarks, uncomment this.
 #[dev-dependencies.criterion]
@@ -162,7 +194,30 @@ required-features = ["stats", "std"]
 #harness = false
 #required-features = ["alloc_ext"]
 
-[dependencies]
-libc = { version = "^0.2.0", optional = true, default-features = false }
-memapi-jemalloc-sys = { version = "0.1.1", optional = true, default-features = false }
-memapi-mimalloc-sys = { version = "0.1.2", optional = true, default-features = false, features = ["extended"] }
+
+
+[dependencies.lock_api]
+version = "=0.4.12"
+optional = true
+
+[dependencies.libc]
+version = "^0.2.0"
+optional = true
+default-features = false
+
+[dependencies.memapi-jemalloc-sys]
+version = "0.1.1"
+optional = true
+default-features = false
+
+[dependencies.memapi-mimalloc-sys]
+version = "0.1.2"
+optional = true
+default-features = false
+features = ["extended"]
+
+[dependencies.parking_lot]
+# :) i hate cargo.lock so much. if i set this to be ^*, the msrv breaks :D
+version = "^0.12.3"
+optional = true
+default-features = false

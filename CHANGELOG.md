@@ -4,7 +4,9 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Table of Contents
 
-- [Version 0.16.1 Predicted](#version-0161-predicted)
+- [Current low-priority to-dos](#current-low-priority-to-dos)
+- [Version 0.17.0](#version-0170)
+  - [Commit 1](#commit-1-2025-8-09)
 - [Version 0.16.0](#version-0160-2025-8-08)
 - [Version 0.15.2](#version-0152-2025-8-07)
 - [Version 0.15.0](#version-0150-2025-8-07)
@@ -30,33 +32,47 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - [Commit 1 (2025-7-26)](#commit-1-2025-7-26)
 - [Version 0.13.2](#version-0132-2025-7-25)
 
-## Version 0.16.1 [Predicted]
+## Current low-priority to-dos
 
 - Debloat the primary surfaces
-- Proper tests for many untested methods and features (maybe)
 - Performance and binary size improvements
   - make as many sections as possible `const` [perf]
   - use helpers for repetitive code [size]
+- Proper tests for many untested methods and features (maybe)
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
+
+## Version 0.17.0
+
+### Commit 1 (2025-8-09)
+
+- Improve main error system
+  - Some functions that were `const` but couldn't really be used as such due to returning types that weren't `Destruct`
+    (`AllocError`) now return `Destruct` subtypes of those to allow for `const` use
+- `MiMalloc` now supports `os_err_reporting` with the `mimalloc_err_reporting` feature
+  - `mimalloc::init_error_handler` must be called first
+  - if `mimalloc_err_output` is enabled, errors will automatically be printed to stderr
+- Add dedicated `FileLog` to `stats` when `stats_file_lock` is enabled
+- Rename features for clarity
+- Small bug fixes and doc improvements
+- Sort this file's bullets to group by relation
 
 ## Version 0.16.0 (2025-8-08)
 
-- Add os error reporting to `AllocError` with `os_error_reporting` feature (may or may not work)
-  - only works for jemalloc currently
-- Switch to `tri!` macro instead of `?` operator for slight performance improvement
-- Add file locking in `stats` with `stats_file_lock` feature (unfinished)
-- Reduce code repetition and general improvements
 - Add `marker::SizeMeta`
 - Add `Subtype` to `VarSized`
   - also switch to using `SizeMeta` instead of `Pointee<Metadata = usize>`
 - Improve `AllocSlice` dropping and deallocate API
 - Add growth and realloc methods to `AllocSlice` which copy and clone from existing slices
-
+- Add os error reporting to `AllocError` with `os_error_reporting` feature (may or may not work)
+  - only works for jemalloc currently
+- Add file locking in `stats` with `stats_file_lock` feature (unfinished)
+- Reduce code repetition and general improvements
+- Switch to `tri!` macro instead of `?` operator for slight performance improvement
 
 ## Version 0.15.2 (2025-8-07)
 
-- Fix docs and some of the README
 - Fix `checked_op_panic_const` issue with MSRV
+- Fix docs and some of the README
 
 ## Version 0.15.0 (2025-8-07)
 
@@ -64,18 +80,19 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - Inline alloc_slice.rs
 - Improve lib.rs inlining
-- Fix formatting
-- Add some benchmarks
-- Use a build.rs to verify no UB before compiling
-- Separate `std` and `libc_std` to allow using `std` on lower versions of rust (and thus libc)
-- Comment out outdated portions of the readme
-- Add `AllocExt::alloc_guard_for`
+- Slightly improve inlining in lib.rs and helpers.rs
 - Switch to manual overflow checks where necessary (using `helpers::checked_op[_panic[_const]]`)
+- Use a build.rs to verify no UB before compiling
+- Add some benchmarks
+- Separate `std` and `libc_std` to allow using `std` on lower versions of rust (and thus libc)
+- Add `AllocExt::alloc_guard_for`
+- Comment out outdated portions of the readme
+- Fix formatting
 
 ### Commit 8 (2025-8-07)
 
-- Inline stats.rs
 - Slightly improve inlining in lib.rs and helpers.rs
+- Inline stats.rs
 
 ### Commit 7 (2025-8-06)
 
@@ -111,13 +128,13 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - Remove `owned` module entirely
   - it became impossible to maintain, had many bugs and other flaws, was basically the same as stdlib's Vec, and,
-    honestly, it only existed because of scope creep.
+    honestly, it only existed because of scope creep
 - Fix and improve `AllocSlice`/`AllocExt` methods
 - Add `extend_slice_from_ref`, `extend_slice` and `extend_raw_slice` to `AllocSlice`
-- Make `libc` only use `std` if `std` feature is enabled
-- Rename `AllocError::LayoutError` to `InvalidLayout`
-- Switch to `<*mut T>::cast` instead of `as` where reasonable
 - Try to deduplicate code
+- Switch to `<*mut T>::cast` instead of `as` where reasonable
+- Rename `AllocError::LayoutError` to `InvalidLayout`
+- Make `libc` only use `std` if `std` feature is enabled
 - Fix `stats` MSRV to match crate
 - Finish some docs (crate and `SliceAllocGuard`'s)
 
@@ -134,7 +151,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 ### Commit 1 (2025-8-04)
 Mostly just to transfer work done on one computer to another, minimal work done.
 
-- Switched `OwnedBuf` methods that took another owned buffer as a "slice" to take an actual slice (and for some, an 
+- Switched `OwnedBuf` methods that took another owned buffer as a "slice" to take an actual slice (and for some, an
   allocator)
 - Start adding `try_init_next_slice[_grow]`/`init_next_slice_unchecked` methods to `OwnedBuf` (parallel to
   `Vec::extend_from_slice`)
@@ -145,11 +162,11 @@ Mostly just to transfer work done on one computer to another, minimal work done.
 
 ### Commit 2 (2025-8-03)
 
-- Switch to `libc` for c types to reduce dependencies
 - Switch to fork of jemalloc and mimalloc which fixes some issues
   - now Jemalloc has a lower MSRV
   - now jemalloc can be in the Cargo.toml without breaking everything on rust versions older than 1.61
 - Finish lowering MSRV to 1.56 using `const_if!` macro
+- Switch to `libc` for c types to reduce dependencies
 - Add features which bind to jemalloc and mimalloc's features
 - Pray I didn't break anything
 
@@ -162,10 +179,9 @@ Mostly just to transfer work done on one computer to another, minimal work done.
 ### Version 0.14.1 (2025-8-01)
 
 - Fix MSRV as best as I can (1.63.0 → 1.61.0)
-  - some stuff may unnecessarily support older versions
-- Add remaining docs to AllocSlice
-- Add `extra_const` feature which makes some more methods `const` at the cost of raising the MSRV (1.61.0 -→ 1.83.0)
 - Remove `v1_61` feature
+- Add `extra_const` feature which makes some more methods `const` at the cost of raising the MSRV (1.61.0 -→ 1.83.0)
+- Add remaining docs to AllocSlice
 - Generally improve feature configuration
 
 ## Version 0.14.0 [Not published to crates.io, skipping to 0.14.1 for users]
@@ -175,9 +191,9 @@ Mostly just to transfer work done on one computer to another, minimal work done.
 - Add missing docs for most `AllocSlice` methods (two left)
 - Fix README mistake
 - Fix MSRV a bit (1.36 → 1.63?)
-    - requires the v1_63 feature to be enabled, which makes a few helpers non-const
-    - it's not my fault, okay? cargo is inconsistent. clippy says the msrv is fine, but then you go to compile with the
-      actual msrv, and it fails
+  - requires the v1_63 feature to be enabled, which makes a few helpers non-const
+  - it's not my fault, okay? cargo is inconsistent. clippy says the msrv is fine, but then you go to compile with the
+    actual msrv, and it fails
 
 ### Commit 2 (2025-7-26)
 
@@ -196,5 +212,5 @@ Mostly just to transfer work done on one computer to another, minimal work done.
 
 ## Version 0.13.2 (2025-7-25)
 
-- Started changelog
 - Lowered MSRV from 1.56 to 1.40
+- Started changelog

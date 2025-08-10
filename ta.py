@@ -9,10 +9,12 @@ FEATURES = [
     "nightly",
     "std",
 
+    "libc",
+
     "os_err_reporting",
 
-    "extra_const",
-    "extra_extra_const",
+    "const_extras",
+    "const_max",
     "c_str",
 
     "metadata",
@@ -26,10 +28,12 @@ FEATURES = [
 
     "stats",
     "stats_file_lock",
+    "stats_parking_lot",
 
     "external_alloc",
     "jemalloc",
     "mimalloc",
+    "mimalloc_err_reporting",
 ]
 
 NIGHTLY_FEATURES = {

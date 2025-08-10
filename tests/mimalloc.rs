@@ -1,6 +1,13 @@
 #![cfg(not(miri))]
 use core::{alloc::Layout, ptr};
-use memapi::{ffi::mim::mi_usable_size, mimalloc::MiMalloc, Alloc};
+use memapi::{
+    ffi::mim::mi_usable_size,
+    mimalloc::MiMalloc,
+    Alloc,
+    error::AllocError,
+    type_props::{USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT}
+};
+use memapi::mimalloc::init_error_handler;
 
 #[test]
 fn alloc_and_dealloc_basic() {
@@ -91,5 +98,42 @@ fn allocations_are_properly_aligned() {
         unsafe {
             alloc.dealloc(ptr, layout);
         }
+    }
+}
+
+#[cfg(feature = "mimalloc_err_reporting")]
+#[test]
+fn error_reporting_works() {
+    let alloc = MiMalloc;
+
+    init_error_handler();
+
+    // creation will succeed, but this amount of memory is far too large for anything to allocate.
+    let layout = unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };
+
+    let err = alloc.alloc(layout).expect_err("allocation should fail");
+
+    match err {
+        AllocError::AllocFailed(_, ref c) => {
+            match c {
+                memapi::error::Cause::Unknown => panic!("unexpected cause: {}", c),
+                memapi::error::Cause::OSErr(e) => println!("{:?}", e)
+            }
+        }
+        _ => panic!("unexpected error: {}", err),
+    }
+
+    let layout2 = unsafe { Layout::from_size_align_unchecked(1, USIZE_HIGH_BIT >> 1) };
+
+    let err2 = alloc.alloc(layout2).expect_err("allocation should fail");
+
+    match err2 {
+        AllocError::AllocFailed(_, ref c) => {
+            match c {
+                memapi::error::Cause::Unknown => panic!("unexpected cause: {}", c),
+                memapi::error::Cause::OSErr(e) => println!("{:?}", e)
+            }
+        }
+        _ => panic!("unexpected error: {}", err2),
     }
 }

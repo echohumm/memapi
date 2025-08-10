@@ -1,6 +1,6 @@
 use crate::{
-    error::{AllocError, ArithOp, LayoutErr},
-    helpers::align_up_unchecked,
+    error::{ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
+    helpers::{align_up_unchecked, checked_op},
     type_props::USIZE_MAX_NO_HIGH_BIT,
 };
 use alloc::alloc::Layout;
@@ -28,6 +28,7 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
     }
 
     let sz = layout.size();
+    // SAFETY: we just checked that the alignment was valid
     unsafe { align_up_unchecked(sz, align) - sz }
 }
 
@@ -38,6 +39,7 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
 #[inline]
 pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
     if !align.is_power_of_two() {
+        // SAFETY: any num up to an align of 1 is itself, UMNHB is the maximum valid value for a layout.
         return unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };
     }
 
@@ -46,23 +48,22 @@ pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
     }
 }
 
-// TODO: make these const
-
-#[cfg(not(feature = "os_err_reporting"))]
-/// Creates a layout describing the record for `n` instances of `self`, with a suitable amount of
-/// padding between each to ensure that each instance is given its requested size and alignment.
-/// On success, returns `(k, offs)` where `k` is the layout of the array and `offs` is the distance
-/// between the start of each element in the array.
+/// Creates a layout for `n` instances of the value described by `layout`, with padding between each
+/// to ensure that each instance is given its requested size and alignment.
 ///
-/// (That distance between elements is sometimes known as "stride".)
+/// On success, returns `(l, offs)` where `l` is the layout of the array and `offs` is the distance
+/// between the start of each element in the array (stride).
 ///
 /// # Errors
 ///
-/// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
-/// - [`AllocError::Other`]`("arithmetic operation overflowed")` if an arithmetic operation
-///   overflows.
+/// - [`RepeatLayoutError::InvalidLayout`] if the computed layout is invalid.
+/// - [`RepeatLayoutError::ArithmeticOverflow`] if an arithmetic operation
+///   would overflow.
 #[inline]
-pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usize), AllocError> {
+pub const fn repeat_layout(
+    layout: Layout,
+    count: usize,
+) -> Result<(Layout, usize), RepeatLayoutError> {
     let padded = pad_layout_to_align(layout, layout.align());
     match repeat_layout_packed(padded, count) {
         Ok(repeated) => Ok((repeated, padded.size())),
@@ -70,69 +71,46 @@ pub const fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usiz
     }
 }
 
-#[cfg(feature = "os_err_reporting")]
-/// Creates a layout describing the record for `n` instances of `self`, with a suitable amount of
-/// padding between each to ensure that each instance is given its requested size and alignment.
-/// On success, returns `(k, offs)` where `k` is the layout of the array and `offs` is the distance
-/// between the start of each element in the array.
+/// Creates a layout for `n` instances of the value described by `layout`, with no padding between.
 ///
-/// (That distance between elements is sometimes known as "stride".)
+/// Note that, unlike [`repeat_layout`], `repeat_packed` doesn't guarantee that repeated
+/// instances of the value described by `layout` will be properly aligned, even if `layout` is
+/// properly aligned.
 ///
-/// # Errors
-///
-/// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
-/// - [`AllocError::Other`]`("arithmetic operation overflowed")` if an arithmetic operation
-///   overflows.
-///
-/// This method is not `const` as `os_err_reporting` is enabled.
-#[inline]
-pub fn repeat_layout(layout: Layout, count: usize) -> Result<(Layout, usize), AllocError> {
-    let padded = pad_layout_to_align(layout, layout.align());
-    match repeat_layout_packed(padded, count) {
-        Ok(repeated) => Ok((repeated, padded.size())),
-        Err(e) => Err(e),
-    }
-}
-
-/// Creates a layout describing the record for `n` instances of
-/// `self`, with no padding between each instance.
-///
-/// Note that, unlike [`repeat_layout`], `repeat_packed` doesn't guarantee that the repeated
-/// instances of `self` will be properly aligned, even if a given instance of `self` is properly
-/// aligned. In other words, if the layout returned by`repeat_packed` is used to allocate an array,
-/// it isn't guaranteed that all elements in the array will be properly aligned.
+/// In other words, if the layout returned by`repeat_packed` is used to allocate an array, it isn't
+/// guaranteed that all elements in the array will be properly aligned.
 ///
 /// # Errors
 ///
 /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
-/// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation overflows.
+/// - [`AllocError::ArithmeticOverflow`] if an arithmetic operation would overflow.
 #[inline]
-pub const fn repeat_layout_packed(layout: Layout, count: usize) -> Result<Layout, AllocError> {
+pub const fn repeat_layout_packed(
+    layout: Layout,
+    count: usize,
+) -> Result<Layout, RepeatLayoutError> {
     #[allow(clippy::option_if_let_else)]
-    // TODO: use checked_op function
-    if let Some(size) = { layout.size().checked_mul(count) } {
-        let align = layout.align();
-        match layout_from_size_align(size, align) {
-            Ok(layout) => Ok(layout),
-            Err(r) => Err(AllocError::InvalidLayout(layout.size(), layout.align(), r)),
-        }
-    } else {
-        Err(AllocError::ArithmeticOverflow(
-            layout.size(),
-            ArithOp::Mul,
-            count,
-        ))
+    let size = match checked_op(layout.size(), ArithOp::Mul, count) {
+        Ok(s) => s,
+        Err(e) => return Err(RepeatLayoutError::ArithmeticOverflow(e)),
+    };
+    let align = layout.align();
+    match layout_from_size_align(size, align) {
+        Ok(layout) => Ok(layout),
+        Err(r) => Err(RepeatLayoutError::InvalidLayout(InvLayout(size, align, r))),
     }
 }
 
-const fn layout_from_size_align(sz: usize, aln: usize) -> Result<Layout, LayoutErr> {
-    if aln == 0 {
+#[inline]
+const fn layout_from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
+    if align == 0 {
         return Err(LayoutErr::ZeroAlign);
-    } else if !aln.is_power_of_two() {
+    } else if !align.is_power_of_two() {
         return Err(LayoutErr::NonPowerOfTwoAlign);
-    } else if sz > USIZE_MAX_NO_HIGH_BIT + 1 - aln {
+    } else if size > USIZE_MAX_NO_HIGH_BIT + 1 - align {
         return Err(LayoutErr::Overflow);
     }
 
-    Ok(unsafe { Layout::from_size_align_unchecked(sz, aln) })
+    // SAFETY: we just checked all of the invariants.
+    Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
 }

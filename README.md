@@ -10,9 +10,11 @@ MSRV with `extra_const` feature: 1.61
 
 Mimalloc/Jemalloc MSRV: 1.63
 
-MSRV with `c_str` feature: 1.64
+MSRV with `c_str`/`stats_parking_lot` feature: 1.64
 
 MSRV with `extra_extra_const` feature: 1.83
+
+MSRV with `stats_file_lock` feature: 1.89
 
 ---
 

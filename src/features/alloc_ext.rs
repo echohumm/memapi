@@ -1,3 +1,4 @@
+use crate::helpers::SliceAllocGuard;
 use crate::{
     error::AllocError,
     grow,
@@ -154,13 +155,15 @@ pub trait AllocExt: Alloc {
         pat: F,
     ) -> Result<NonNull<u8>, AllocError> {
         alloc_then::<NonNull<u8>, Self, F, _>(self, layout, pat, |p, pat| {
-            let guard = AllocGuard::new(p.cast::<u8>(), self);
+            // SAFETY: we just allocated the memory using `self` with space for at least
+            //  `layout.size()` bytes
+            let mut guard = unsafe { SliceAllocGuard::new(p, self, layout.size()) };
             for i in 0..layout.size() {
                 unsafe {
-                    ptr::write(guard.as_ptr().add(i), pat(i));
+                    guard.init_unchecked(pat(i));
                 }
             }
-            guard.release()
+            guard.release_first()
         })
     }
 
@@ -313,7 +316,8 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     fn alloc_guard<T>(&'_ self) -> Result<AllocGuard<'_, T, Self>, AllocError> {
         alloc_then(self, T::LAYOUT, (), |p, ()| {
-            AllocGuard::new(p.cast::<T>(), self)
+            // SAFETY: we just allocated the memory using `self`
+            unsafe { AllocGuard::new(p.cast::<T>(), self) }
         })
     }
 

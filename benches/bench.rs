@@ -1,5 +1,5 @@
-extern crate criterion;
 extern crate alloc;
+extern crate criterion;
 
 use alloc::alloc::Layout;
 use core::{hint::black_box, time::Duration};

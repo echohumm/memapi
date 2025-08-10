@@ -1,5 +1,3 @@
-#![allow(unused_qualifications, missing_docs)]
-
 use crate::helpers::dangling_nonnull;
 use alloc::alloc::Layout;
 use core::{
@@ -11,7 +9,10 @@ use core::{
 ///
 /// Equivalent to `usize::MAX >> 1` or `isize::MAX as usize`.
 ///
-#[cfg_attr(target_pointer_width = "64", doc = "Exact value: `9_223_372_036_854_775_807`")]
+#[cfg_attr(
+    target_pointer_width = "64",
+    doc = "Exact value: `9_223_372_036_854_775_807`"
+)]
 #[cfg_attr(target_pointer_width = "32", doc = "Exact value: `2_147_483_647`")]
 // no way this ever gets hit, but oh well
 #[cfg_attr(target_pointer_width = "16", doc = "Exact value: `32_767`")]
@@ -21,7 +22,10 @@ pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
 ///
 /// Equivalent to `usize::MAX ^ (usize::MAX >> 1)` or `usize::MAX << usize::BITS - 1`.
 ///
-#[cfg_attr(target_pointer_width = "64", doc = "Exact value: `9_223_372_036_854_775_807`")]
+#[cfg_attr(
+    target_pointer_width = "64",
+    doc = "Exact value: `9_223_372_036_854_775_807`"
+)]
 #[cfg_attr(target_pointer_width = "32", doc = "Exact value: `2_147_483_647`")]
 #[cfg_attr(target_pointer_width = "16", doc = "Exact value: `32_767`")]
 pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (usize::MAX >> 1);
@@ -33,6 +37,7 @@ pub trait SizedProps: Sized {
     /// The alignment of the type.
     const ALN: usize = align_of::<Self>();
     /// The memory layout for the type.
+    // SAFETY: this is the same as Layout::new::<T>().
     const LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(Self::SZ, Self::ALN) };
 
     /// Whether the type is zero-sized.
@@ -256,35 +261,37 @@ unsafe impl VarSized for std::path::Path {
 
 // TODO: use const_if! (cant rn because it doesnt support relaxed bounds or multiple bounds
 
-#[cfg(feature = "extra_const")]
+// SAFETY of below: the implementor of VarSized guarantees the ALN is valid.
+
+#[cfg(feature = "const_extras")]
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
     varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
 }
 
-#[cfg(not(feature = "extra_const"))]
+#[cfg(not(feature = "const_extras"))]
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
     varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
 }
 
-#[cfg(feature = "extra_const")]
+#[cfg(feature = "const_extras")]
 /// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub const fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
     varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
 }
 
-#[cfg(not(feature = "extra_const"))]
+#[cfg(not(feature = "const_extras"))]
 /// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
 #[must_use]
 pub fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
     varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
 }
 
-#[cfg(feature = "extra_const")]
+#[cfg(feature = "const_extras")]
 /// Creates a `NonNull<T>` from a pointer and a `usize` size metadata.
 #[must_use]
 #[inline]
@@ -295,7 +302,7 @@ pub const fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
     unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
 }
 
-#[cfg(not(feature = "extra_const"))]
+#[cfg(not(feature = "const_extras"))]
 /// Creates a `NonNull<T>` from a pointer and a `usize` size metadata.
 #[must_use]
 #[inline]
@@ -306,7 +313,7 @@ pub fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
     unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
 }
 
-#[cfg(feature = "extra_const")]
+#[cfg(feature = "const_extras")]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 #[must_use]
 #[inline]
@@ -321,7 +328,7 @@ pub const fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
     }
 }
 
-#[cfg(not(feature = "extra_const"))]
+#[cfg(not(feature = "const_extras"))]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 #[must_use]
 #[inline]

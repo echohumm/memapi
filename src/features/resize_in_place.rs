@@ -344,7 +344,8 @@ impl ResizeInPlace for crate::external_alloc::jemalloc::Jemalloc {
 }
 
 #[cfg(feature = "mimalloc")]
-pub(crate) const SHRINK_IP: AllocError = AllocError::Other("unsupported operation: attempted to shrink in place");
+pub(crate) const SHRINK_IP: AllocError =
+    AllocError::Other("unsupported operation: attempted to shrink in place");
 
 #[cfg(feature = "mimalloc")]
 impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {

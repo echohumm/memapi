@@ -65,7 +65,7 @@ pub unsafe trait Thin {}
 ///     assert_eq!(<&T>::SZ, usize::SZ)
 /// }
 /// ```
-pub unsafe  trait Thin: core::ptr::Pointee<Metadata = ()> {}
+pub unsafe trait Thin: core::ptr::Pointee<Metadata = ()> {}
 
 #[cfg(all(feature = "metadata", feature = "sized_hierarchy"))]
 /// Trait indicating that a type has no metadata and may or may not have a size.
@@ -85,7 +85,10 @@ pub unsafe  trait Thin: core::ptr::Pointee<Metadata = ()> {}
 ///     assert_eq!(<&T>::SZ, usize::SZ)
 /// }
 /// ```
-pub unsafe trait Thin: core::ptr::Pointee<Metadata = ()> + core::marker::PointeeSized {}
+pub unsafe trait Thin:
+    core::ptr::Pointee<Metadata = ()> + core::marker::PointeeSized
+{
+}
 
 #[cfg(all(not(feature = "metadata"), not(feature = "sized_hierarchy")))]
 /// Trait indicating that a type has `usize` metadata.
@@ -143,7 +146,10 @@ pub unsafe trait SizeMeta: core::ptr::Pointee<Metadata = usize> {}
 ///     assert_eq!(<&T>::SZ, usize::SZ * 2)
 /// }
 /// ```
-pub unsafe trait SizeMeta: core::ptr::Pointee<Metadata = usize> + core::marker::MetaSized {}
+pub unsafe trait SizeMeta:
+    core::ptr::Pointee<Metadata = usize> + core::marker::MetaSized
+{
+}
 
 #[cfg(feature = "metadata")]
 unsafe impl<P: core::ptr::Pointee<Metadata = ()> + ?Sized> Thin for P {}
