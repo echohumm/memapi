@@ -22,6 +22,7 @@ FEATURES = [
     "specialization",
     "sized_hierarchy",
 
+    "fallible_dealloc",
     "alloc_ext",
     "alloc_slice",
     "resize_in_place",
@@ -30,10 +31,11 @@ FEATURES = [
     "stats_file_lock",
     "stats_parking_lot",
 
-    "external_alloc",
+    "extern_alloc",
     "jemalloc",
     "mimalloc",
     "mimalloc_err_reporting",
+    "mimalloc_err_output",
 ]
 
 NIGHTLY_FEATURES = {

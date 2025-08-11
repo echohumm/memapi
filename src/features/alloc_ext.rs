@@ -53,6 +53,8 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_write<T>(&self, data: T) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: we just allocated the pointer using `T`'s layout, so it's safe to write `data` to
+        // it
         alloc_then::<NonNull<T>, Self, T, _>(self, T::LAYOUT, data, |p, data| unsafe {
             let ptr: NonNull<T> = p.cast();
             ptr::write(ptr.as_ptr(), data);
@@ -81,12 +83,15 @@ pub trait AllocExt: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[track_caller]
     fn alloc_clone_to<T: core::clone::CloneToUninit + ?Sized>(
         &self,
         data: &T,
     ) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: `data` is a reference which immediately fulfills `layout()`'s invariants
+        // SAFETY: the pointer was just allocated by this allocator, is valid for for writes of at
+        // least `data`'s size, and aligned.
         alloc_then(self, unsafe { data.layout() }, data, |p, data| unsafe {
             let guard = AllocGuard::new(
                 NonNull::new_unchecked(crate::unstable_util::with_meta(p.as_ptr(), data)),
@@ -118,7 +123,7 @@ pub trait AllocExt: Alloc {
         data: &T,
     ) -> Result<NonNull<u8>, AllocError> {
         alloc_then::<NonNull<u8>, Self, &T, _>(self, data.layout(), data, |p, data| {
-            let guard = crate::helpers::SliceAllocGuard::new(p, self, data.size());
+            let guard = crate::helpers::SliceAllocGuard::new(p, self, data.sz());
             data.clone_to_uninit(guard.as_ptr());
             guard.release_first()
         })
@@ -133,10 +138,10 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[cfg_attr(miri, track_caller)]
     fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
-        alloc_then::<NonNull<u8>, Self, u8, _>(self, layout, n, |p, n| {
-            unsafe {
-                ptr::write_bytes(p.as_ptr(), n, layout.size());
-            }
+        // SAFETY: allocation returns at least `layout.size()` bytes
+        alloc_then::<NonNull<u8>, Self, u8, _>(self, layout, n, |p, n| unsafe {
+            ptr::write_bytes(p.as_ptr(), n, layout.size());
+
             p
         })
     }
@@ -154,14 +159,12 @@ pub trait AllocExt: Alloc {
         layout: Layout,
         pat: F,
     ) -> Result<NonNull<u8>, AllocError> {
-        alloc_then::<NonNull<u8>, Self, F, _>(self, layout, pat, |p, pat| {
-            // SAFETY: we just allocated the memory using `self` with space for at least
-            //  `layout.size()` bytes
-            let mut guard = unsafe { SliceAllocGuard::new(p, self, layout.size()) };
+        // SAFETY: we just allocated the memory using `self` with space for at least
+        //  `layout.size()` bytes
+        alloc_then::<NonNull<u8>, Self, F, _>(self, layout, pat, |p, pat| unsafe {
+            let mut guard = SliceAllocGuard::new(p, self, layout.size());
             for i in 0..layout.size() {
-                unsafe {
-                    guard.init_unchecked(pat(i));
-                }
+                guard.init_unchecked(pat(i));
             }
             guard.release_first()
         })
@@ -212,7 +215,7 @@ pub trait AllocExt: Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
-        ptr::write_bytes(ptr.as_ptr().cast::<u8>(), 0, ptr.size());
+        ptr::write_bytes(ptr.as_ptr().cast::<u8>(), 0, ptr.sz());
         self.dealloc_typed(ptr);
     }
 
@@ -235,12 +238,13 @@ pub trait AllocExt: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[cfg_attr(miri, track_caller)]
     fn alloc_copy_ref_to<T: ?Sized + crate::marker::UnsizedCopy>(
         &self,
         data: &T,
     ) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: `T: Copy`
         unsafe { self.alloc_copy_ref_to_unchecked(data) }
     }
 
@@ -254,12 +258,13 @@ pub trait AllocExt: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[cfg_attr(miri, track_caller)]
     unsafe fn alloc_copy_ptr_to<T: ?Sized + crate::marker::UnsizedCopy>(
         &self,
         data: *const T,
     ) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: `T: Copy`
         unsafe { self.alloc_copy_ptr_to_unchecked(data) }
     }
 
@@ -274,7 +279,7 @@ pub trait AllocExt: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[cfg_attr(miri, track_caller)]
     unsafe fn alloc_copy_ref_to_unchecked<T: ?Sized>(
         &self,
@@ -294,14 +299,15 @@ pub trait AllocExt: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `data.size() == 0`.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[cfg_attr(miri, track_caller)]
     unsafe fn alloc_copy_ptr_to_unchecked<T: ?Sized>(
         &self,
         data: *const T,
     ) -> Result<NonNull<T>, AllocError> {
-        alloc_then(self, unsafe { data.layout() }, data, |p, data| {
-            ptr::copy_nonoverlapping(data.cast::<u8>(), p.as_ptr(), data.size());
+        // SAFETY: the caller guarantees `data` is valid.
+        alloc_then(self, data.layout(), data, |p, data| {
+            ptr::copy_nonoverlapping(data.cast::<u8>(), p.as_ptr(), data.sz());
             NonNull::from_raw_parts(p, data.metadata())
         })
     }
@@ -338,7 +344,8 @@ pub trait AllocExt: Alloc {
         &self,
         data: *const T,
     ) -> Result<AllocGuard<'_, T, Self>, AllocError> {
-        alloc_then(self, unsafe { data.layout() }, data, |p, data| unsafe {
+        // SAFETY: we just allocated the memory using `self`, the caller guarantees `data` is valid
+        alloc_then(self, data.layout(), data, |p, data| {
             AllocGuard::new(
                 NonNull::new_unchecked(crate::unstable_util::with_meta(p.as_ptr(), data)),
                 self,

@@ -22,7 +22,7 @@ pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U
 /// Alternative to [`Layout::padding_needed_for`], because it's unstable.
 #[must_use]
 #[inline]
-pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
+pub const fn layout_padding_for(layout: Layout, align: usize) -> usize {
     if !align.is_power_of_two() {
         return usize::MAX;
     }
@@ -34,17 +34,16 @@ pub const fn pad_layout_for(layout: Layout, align: usize) -> usize {
 
 /// Creates a layout by rounding the size of this layout up to a multiple of the layout's alignment.
 ///
-/// This is equivalent to adding the result of [`pad_layout_for`] to the layout's current size.
+/// This is equivalent to adding the result of [`layout_padding_for`] to the layout's current size.
 #[must_use]
 #[inline]
-pub const fn pad_layout_to_align(layout: Layout, align: usize) -> Layout {
-    if !align.is_power_of_two() {
-        // SAFETY: any num up to an align of 1 is itself, UMNHB is the maximum valid value for a layout.
-        return unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };
-    }
-
+pub const fn pad_layout_to_align(layout: Layout) -> Layout {
+    // SAFETY: layout's requirements guarantee that the rounded up size is valid.
     unsafe {
-        Layout::from_size_align_unchecked(align_up_unchecked(layout.size(), align), layout.align())
+        Layout::from_size_align_unchecked(
+            align_up_unchecked(layout.size(), layout.align()),
+            layout.align(),
+        )
     }
 }
 
@@ -64,7 +63,7 @@ pub const fn repeat_layout(
     layout: Layout,
     count: usize,
 ) -> Result<(Layout, usize), RepeatLayoutError> {
-    let padded = pad_layout_to_align(layout, layout.align());
+    let padded = pad_layout_to_align(layout);
     match repeat_layout_packed(padded, count) {
         Ok(repeated) => Ok((repeated, padded.size())),
         Err(e) => Err(e),

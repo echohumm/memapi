@@ -1,3 +1,4 @@
+//#![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
 use core::{
     alloc::Layout,
@@ -87,5 +88,46 @@ fn realloc_preserves_initial_contents() {
         // cleanup
         let new_layout = Layout::from_size_align(new_size, old_layout.align()).unwrap();
         alloc.dealloc(new_ptr.cast(), new_layout);
+    }
+}
+
+#[cfg(feature = "os_err_reporting")]
+#[test]
+fn error_reporting_works() {
+    use memapi::{
+        error::{AllocError, Cause},
+        type_props::{usize_bit, USIZE_MAX_NO_HIGH_BIT},
+    };
+
+    let alloc = Jemalloc;
+
+    let layout = unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };
+
+    let err = alloc.alloc(layout).expect_err("allocation should fail");
+
+    match err {
+        AllocError::AllocFailed(_, ref c) => match c {
+            Cause::Unknown => panic!("unexpected cause: {}", c),
+            Cause::OutOfMemory => panic!("how..?"),
+            #[cfg(feature = "fallible_dealloc")]
+            Cause::InvalidBlockStatus(_) => panic!("what"),
+            Cause::OSErr(e) => println!("{:?}", e),
+        },
+        _ => panic!("unexpected error: {}", err),
+    }
+
+    let layout2 = unsafe { Layout::from_size_align_unchecked(1, usize_bit(1)) };
+
+    let err2 = alloc.alloc(layout2).expect_err("allocation should fail");
+
+    match err2 {
+        AllocError::AllocFailed(_, ref c) => match c {
+            Cause::Unknown => panic!("unexpected cause: {}", c),
+            Cause::OutOfMemory => panic!("how..?"),
+            #[cfg(feature = "fallible_dealloc")]
+            Cause::InvalidBlockStatus(_) => panic!("what"),
+            Cause::OSErr(e) => println!("{:?}", e),
+        },
+        _ => panic!("unexpected error: {}", err),
     }
 }

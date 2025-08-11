@@ -28,22 +28,21 @@
 //!   - (With `std`) Several default logger implementations.
 //!   - (With `stats_file_lock`) Safer file locking for `FileLog`. (MSRV ≥ 1.89.0).
 //!   - (With `stats_parking_lot`) Usage of [`parking_lot::Mutex`] instead of [`std::sync::Mutex`].
-//!     (MSRV ≥ 1.64.0).
 //!
 //! - **`external_alloc`**: FFI helpers for external allocators.
 //!
 //! - **`os_err_reporting`**: Enables OS error reporting on failed allocation for supported
 //!   allocators.
-//!   - Supported allocators: Jemalloc, Rust's default, MiMalloc if `mimalloc_err_reporting` is
+//!   - Supported allocators: Jemalloc, Rust's default, `MiMalloc` if `mimalloc_err_reporting` is
 //!     enabled.
 //!
 //! - **`jemalloc`**: Provides [`Jemalloc`], a ZST `Alloc` implementation using `Jemallocator`.
 //!
 //! - **`mimalloc`**: Provides [`MiMalloc`], a ZST `Alloc` implementation using `MiMalloc`.
 //!   - **`mimalloc_err_reporting`**: Enables OS error reporting on failed allocation for
-//!     `MiMalloc`. (MSRV ≥ 1.64.0).
+//!     `MiMalloc`.
 //!   - **`mimalloc_error_output`**: Enables OS error reporting AND printing to stderr on failed
-//!     allocation for `MiMalloc`. (MSRV ≥ 1.64.0).
+//!     allocation for `MiMalloc`.
 //!
 //! - **`nightly`**: Enables using the unstable `allocator_api`.
 //!
@@ -56,17 +55,19 @@
 //!
 //! - **`extra_extra_const`**: Further expands `const` support (MSRV ≥ 1.83.0).
 //!
-//! All other features are supersets of existing ones.
+//! All other features are either bundles of others or bindings to `MiMalloc`/`Jemalloc`'s features.
 
 #![allow(unknown_lints)]
-
-#![warn(clippy::all, clippy::pedantic)]
-// clippy::undocumented_unsafe_blocks
-#![allow(unsafe_op_in_unsafe_fn, rustdoc::broken_intra_doc_links, clippy::doc_markdown)]
-#![deny(missing_docs)]
-
+#![warn(clippy::all, clippy::pedantic, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
-
+#![allow(
+    unsafe_op_in_unsafe_fn,
+    rustdoc::broken_intra_doc_links,
+    // :) because patch doesn't work for overriding crates.io packages and i have to include my
+    // dependencies' dependencies versions to make this compile on msrv
+    unused_crate_dependencies
+)]
+#![deny(missing_docs, unused_unsafe)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
@@ -172,19 +173,17 @@ macro_rules! tri {
 extern crate alloc;
 extern crate core;
 
-#[cfg(feature = "external_alloc")]
+#[cfg(feature = "extern_alloc")]
 pub(crate) mod external_alloc;
 
 #[cfg(any(
+    feature = "fallible_dealloc",
     feature = "alloc_ext",
     feature = "alloc_slice",
     feature = "resize_in_place",
     feature = "stats"
 ))]
 mod features;
-
-#[cfg(feature = "stats")]
-pub use features::*;
 
 #[cfg(feature = "alloc_ext")]
 pub use features::alloc_ext::*;
@@ -193,7 +192,10 @@ pub use features::alloc_slice::*;
 #[cfg(feature = "resize_in_place")]
 pub use features::resize_in_place::*;
 
-#[cfg(feature = "external_alloc")]
+#[cfg(any(feature = "stats", feature = "fallible_dealloc"))]
+pub use features::*;
+
+#[cfg(feature = "extern_alloc")]
 pub use external_alloc::*;
 
 /// Marker traits.
@@ -226,9 +228,9 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline]
             fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-                // SAFETY: we check the layout is non zero-sized before use.
                 $crate::helpers::null_q_zsl_check(
                     layout,
+                    // SAFETY: we check the layout is non zero-sized before use.
                     |layout| unsafe { raw_all(layout) },
                     $crate::helpers::null_q_dyn,
                 )
@@ -237,9 +239,9 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline]
             fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-                // SAFETY: we check the layout is non zero-sized before use.
                 $crate::helpers::null_q_zsl_check(
                     layout,
+                    // SAFETY: we check the layout is non zero-sized before use.
                     |layout| unsafe { raw_allz(layout) },
                     $crate::helpers::null_q_dyn,
                 )
@@ -306,6 +308,7 @@ pub trait Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        // SAFETY: alloc_zeroed returns at least layout.size() allocated bytes
         alloc_then(self, layout, (), |p, ()| unsafe {
             // SAFETY: alloc returns at least layout.size() allocated bytes
             ptr::write_bytes(p.as_ptr(), 0, layout.size());
@@ -480,6 +483,9 @@ pub(crate) mod nightly {
     };
     use core::{alloc::AllocError as AllocatorError, ptr::NonNull};
 
+    // SAFETY: DefaultAlloc's allocated memory isn't deallocated until a deallocation method is
+    //  called. as a ZST allocator, copying/cloning it doesn't change behavior or invalidate
+    //  allocations.
     unsafe impl Allocator for DefaultAlloc {
         #[cfg_attr(miri, track_caller)]
         #[inline]

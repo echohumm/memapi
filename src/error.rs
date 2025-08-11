@@ -12,8 +12,12 @@ use core::{
 pub enum AllocError {
     /// The underlying allocator failed to allocate using the given layout; see the contained cause.
     ///
-    /// The contained cause may or may not be accurate depending on the environment.
+    /// The cause may or may not be accurate depending on the type and environment.
     AllocFailed(Layout, Cause),
+    #[cfg(feature = "fallible_dealloc")]
+    /// The underlying allocator failed to deallocate the given pointer using the given layout; see
+    /// the contained cause.
+    DeallocFailed(NonNull<u8>, Layout, Cause),
     /// The layout computed with the given size and alignment is invalid; see the contained reason.
     InvalidLayout(InvLayout),
     /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
@@ -43,14 +47,12 @@ impl PartialEq for AllocError {
         };
 
         match (self, other) {
-            #[cfg(not(feature = "os_err_reporting"))]
             (AllocFailed(l1, c1), AllocFailed(l2, c2)) => l1 == l2 && c1 == c2,
-            #[cfg(feature = "os_err_reporting")]
-            // compiler is stupid and thinks this is unreachable (or i am and it is)
-            #[allow(unreachable_patterns)]
-            (AllocFailed(l1, _), AllocFailed(l2, _)) => l1 == l2,
+            #[cfg(feature = "fallible_dealloc")]
+            (AllocError::DeallocFailed(p1, l1, c1), AllocError::DeallocFailed(p2, l2, c2)) => {
+                p1 == p2 && l1 == l2 && c1 == c2
+            }
             (InvalidLayout(il1), InvalidLayout(il2)) => il1 == il2,
-
             (ZeroSizedLayout(a), ZeroSizedLayout(b)) => a == b,
             (GrowSmallerNewLayout(old1, new1), GrowSmallerNewLayout(old2, new2))
             | (ShrinkBiggerNewLayout(old1, new1), ShrinkBiggerNewLayout(old2, new2)) => {
@@ -72,15 +74,50 @@ impl Display for AllocError {
             AllocError::AllocFailed(l, cause) => {
                 write!(
                     f,
-                    "allocation failed for layout:\n\t{:?}\ncause: {}",
-                    l, cause
+                    "allocation failed:\n\tlayout:\n\t\tsize: {}\n\t\talign: {}\n\tcause: {}",
+                    l.size(),
+                    l.align(),
+                    cause
                 )
+            }
+            #[cfg(feature = "fallible_dealloc")]
+            AllocError::DeallocFailed(ptr, l, cause) => {
+                use crate::fallible_dealloc::BlockStatus;
+
+                // i hate this
+                match cause {
+                    Cause::InvalidBlockStatus(BlockStatus::OwnedIncomplete(Some(l))) => {
+                        write!(
+                            f,
+                            "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: {}\n\t\t\
+                        align: {}\n\tcause: ",
+                            *ptr,
+                            l.size(),
+                            l.align()
+                        )?;
+                        write!(
+                            f,
+                            "owned (incomplete): full layout:\n\t\t\tsize: {}\n\t\t\talign: {}",
+                            l.size(),
+                            l.align()
+                        )
+                    }
+                    _ => write!(
+                        f,
+                        "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: {}\n\t\
+                    \talign: {}\n\tcause: {}",
+                        *ptr,
+                        l.size(),
+                        l.align(),
+                        cause
+                    ),
+                }
             }
             AllocError::InvalidLayout(inv_layout) => {
                 write!(f, "{}", inv_layout)
             }
             AllocError::ZeroSizedLayout(_) => {
-                write!(f, "zero-sized layout was given")
+                write!(f, "received a zero-sized layout")
             }
             AllocError::GrowSmallerNewLayout(old, new) => write!(
                 f,
@@ -102,6 +139,54 @@ impl Display for AllocError {
 
 #[cfg(feature = "std")]
 impl std::error::Error for AllocError {}
+
+/// The cause of an error.
+#[derive(Debug)]
+#[cfg_attr(not(feature = "os_err_reporting"), derive(Clone, Copy, PartialEq, Eq))]
+#[repr(u8)]
+pub enum Cause {
+    /// The cause is unknown.
+    Unknown,
+    /// The allocator ran out of memory.
+    ///
+    /// This should only be used when the __allocator__ runs out of memory and doesn't grow. Use
+    /// [`OSErr`](Cause::OSErr) if the system runs out of memory.
+    OutOfMemory,
+    #[cfg(feature = "fallible_dealloc")]
+    /// The block status is invalid.
+    InvalidBlockStatus(crate::fallible_dealloc::BlockStatus),
+    #[cfg(feature = "os_err_reporting")]
+    /// The cause is described in the contained OS error.
+    ///
+    /// The error may or may not be accurate depending on the environment.
+    OSErr(std::io::Error),
+}
+
+#[cfg(feature = "os_err_reporting")]
+impl PartialEq for Cause {
+    fn eq(&self, other: &Cause) -> bool {
+        match (self, other) {
+            (Cause::Unknown, Cause::Unknown) | (Cause::OutOfMemory, Cause::OutOfMemory) => true,
+            #[cfg(feature = "fallible_dealloc")]
+            (Cause::InvalidBlockStatus(s1), Cause::InvalidBlockStatus(s2)) => s1 == s2,
+            (Cause::OSErr(e1), Cause::OSErr(e2)) => e1.kind() == e2.kind(),
+            _ => false,
+        }
+    }
+}
+
+impl Display for Cause {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Cause::Unknown => write!(f, "unknown"),
+            Cause::OutOfMemory => write!(f, "out of memory"),
+            #[cfg(feature = "fallible_dealloc")]
+            Cause::InvalidBlockStatus(s) => write!(f, "invalid block status: {}", s),
+            #[cfg(feature = "os_err_reporting")]
+            Cause::OSErr(e) => write!(f, "os error:\n\t{}", e),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur when creating a layout for repeated instances of a type.
@@ -155,7 +240,7 @@ impl Display for InvLayout {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(
             f,
-            "computed invalid layout:\n\tsize: {},\n\talign: {}\nreason: {}",
+            "computed invalid layout:\n\tsize: {},\n\talign: {}\n\treason: {}",
             self.0, self.1, self.2
         )
     }
@@ -239,31 +324,6 @@ impl Display for ArithOp {
             ArithOp::Mul => write!(f, "*"),
             ArithOp::Div => write!(f, "/"),
             ArithOp::Rem => write!(f, "%"),
-        }
-    }
-}
-
-/// The cause of an [`AllocError::AllocFailed`] error.
-#[derive(Debug)]
-#[cfg_attr(not(feature = "os_err_reporting"), derive(Clone, Copy, PartialEq, Eq))]
-#[repr(u8)]
-pub enum Cause {
-    /// The cause is unknown.
-    Unknown,
-    #[cfg(feature = "os_err_reporting")]
-    /// The cause is described in the contained OS error.
-    ///
-    /// The error may or may not be accurate depending on the environment.
-    OSErr(std::io::Error),
-}
-
-impl Display for Cause {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        match self {
-            Cause::Unknown => write!(f, "unknown"),
-            #[cfg(feature = "os_err_reporting")]
-            #[allow(clippy::used_underscore_binding)]
-            Cause::OSErr(e) => write!(f, "os error: {}", e),
         }
     }
 }

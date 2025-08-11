@@ -1,12 +1,9 @@
+#![allow(clippy::undocumented_unsafe_blocks)]
 use crate::{
-    helpers::{
-        null_q,
-        null_q_zsl_check
-    },
     external_alloc::resize,
     ffi::mim as ffi,
-    Alloc,
-    AllocError
+    helpers::{null_q, null_q_zsl_check},
+    Alloc, AllocError,
 };
 use core::{
     alloc::{GlobalAlloc, Layout},
@@ -25,7 +22,7 @@ pub struct MiMalloc;
 static LAST_ERR: core::sync::atomic::AtomicI32 = core::sync::atomic::AtomicI32::new(0);
 
 #[cfg(feature = "mimalloc_err_reporting")]
-/// Initializes the MiMalloc error/output handler.
+/// Initializes the `MiMalloc` error/output handler.
 ///
 /// This should only be called once, before any allocations.
 pub fn init_error_handler() {
@@ -39,7 +36,7 @@ pub fn init_error_handler() {
 #[cfg(feature = "mimalloc_err_reporting")]
 #[no_mangle]
 unsafe extern "C" fn error_handler(e: libc::c_int, _: *mut c_void) {
-    #[cfg(feature = "mimalloc_secure")]
+    #[cfg(feature = "mim_secure")]
     if e == libc::EFAULT {
         libc::abort();
     }

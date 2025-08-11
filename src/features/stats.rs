@@ -482,6 +482,7 @@ impl Display for AllocRes {
                             AllocKind::Zeroed => "zeroed".to_string(),
                             AllocKind::Filled(n) => format!("filled with the byte {}", n),
                             AllocKind::Patterned => "filled with a pattern".to_string(),
+                            // SAFETY: Only a reallocation can be a shrink, not an allocation.
                             AllocKind::Shrink => unsafe { core::hint::unreachable_unchecked() },
                         },
                         total
@@ -537,7 +538,7 @@ impl Display for AllocRes {
                         info.old.size, info.new.size, info.old.align, info.new.align, info.old.ptr
                     )
                 }
-                // free is "infallible"
+                // SAFETY: free is "infallible"
                 AllocStat::Free { .. } => unsafe { core::hint::unreachable_unchecked() },
             },
         }

@@ -1,3 +1,4 @@
+//#![allow(clippy::undocumented_unsafe_blocks)]
 use core::{alloc::Layout, ptr};
 use memapi::{type_props::SizedProps, Alloc, AllocExt, DefaultAlloc};
 

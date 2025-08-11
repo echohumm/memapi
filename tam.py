@@ -10,6 +10,7 @@ FEATURES = [
 
     "os_err_reporting",
 
+    "fallible_dealloc",
     "alloc_ext",
     "alloc_slice",
     "resize_in_place",

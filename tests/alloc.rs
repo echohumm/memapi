@@ -1,7 +1,8 @@
+//#![allow(clippy::undocumented_unsafe_blocks)]
 use core::{alloc::Layout, ptr};
 use memapi::{
     error::AllocError,
-    unstable_util::{pad_layout_for, pad_layout_to_align, repeat_layout, repeat_layout_packed},
+    unstable_util::{layout_padding_for, pad_layout_to_align, repeat_layout, repeat_layout_packed},
     Alloc, DefaultAlloc,
 };
 
@@ -74,13 +75,12 @@ fn test_shrink_and_error_cases() {
 #[test]
 fn test_pad_layout_functions() {
     let layout = Layout::from_size_align(10, 4).unwrap();
-    let padding_size = pad_layout_for(layout, 8);
-    assert_eq!(padding_size, 6);
+    let padding_size = layout_padding_for(layout, 4);
+    assert_eq!(padding_size, 2);
 
-    let aligned_layout = pad_layout_to_align(layout, 8);
+    let aligned_layout = pad_layout_to_align(layout);
     assert_eq!(aligned_layout.align(), 4);
-    assert!(aligned_layout.size() >= layout.size());
-    assert_eq!(aligned_layout.size(), 16);
+    assert_eq!(aligned_layout.size(), 12);
 }
 
 #[test]

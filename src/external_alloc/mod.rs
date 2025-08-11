@@ -47,7 +47,7 @@ pub mod ffi {
     #[cfg(feature = "jemalloc")]
     /// Bindings from `tikv-jemalloc-sys` and relevant helpers and constants.
     pub mod jem {
-        #![allow(unexpected_cfgs)]
+        #![allow(unknown_lints, unexpected_cfgs)]
 
         #[cfg(any(
             target_arch = "arm",

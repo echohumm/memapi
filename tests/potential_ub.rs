@@ -1,3 +1,4 @@
+//#![allow(clippy::undocumented_unsafe_blocks)]
 // these tests are tests which check for potential UB, such as manually constructing a pointer with
 //  metadata via transmutation.
 use core::ptr::NonNull;
@@ -49,7 +50,7 @@ fn sp_frp_inner() -> usize {
             ))
         {
             return 4;
-        };
+        }
     }
 
     for (i, elem) in slice.iter().enumerate() {

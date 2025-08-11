@@ -156,6 +156,9 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if the slice is zero-sized.
     #[track_caller]
     fn alloc_clone_slice_to<T: Clone>(&self, data: &[T]) -> Result<NonNull<[T]>, AllocError> {
+        // SAFETY: `data` is a reference, which immediately fulfills the invariants of layout()
+        // SAFETY: we just allocated the slice using `self` with space for at least `data.len()`
+        //  elements
         alloc_then(self, unsafe { data.layout() }, data, |p, data| unsafe {
             let mut guard = SliceAllocGuard::new(p.cast(), self, data.len());
             for elem in data {
@@ -174,6 +177,7 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if the slice is zero-sized.
     #[cfg_attr(miri, track_caller)]
     fn alloc_copy_slice_to<T: Copy>(&self, data: &[T]) -> Result<NonNull<[T]>, AllocError> {
+        // SAFETY: `T: Copy`
         unsafe { self.alloc_copy_slice_to_unchecked(data) }
     }
 
@@ -217,6 +221,7 @@ pub trait AllocSlice: Alloc {
         len: usize,
         f: F,
     ) -> Result<NonNull<[T]>, AllocError> {
+        // SAFETY: we just allocated the slice using `self` with space for at least `len` elements
         alloc_then(self, tri!(il, layout_or_err::<T>(len)), f, |p, f| unsafe {
             let mut guard = SliceAllocGuard::new(p.cast(), self, len);
             for i in 0..len {
@@ -481,6 +486,9 @@ pub trait AllocSlice: Alloc {
                     ) {
                         let slf = slf.as_ptr();
 
+                        // SAFETY: we just allocated the slice using `a` with space for at least
+                        //  `len + extra_len` elements, and the caller guarantees that `init` is
+                        //  the number of initialized elements in `slf`.
                         unsafe {
                             let mut guard = SliceAllocGuard::new_with_init(
                                 dst,
@@ -516,6 +524,9 @@ pub trait AllocSlice: Alloc {
                 extra_len: usize,
                 dst: NonNull<T>,
             ) {
+                // SAFETY: we just allocated the slice using `a` with space for at least
+                //  'len + extra_len' elements, and the caller guarantees that 'init' is the number
+                //  of initialized elements in 'slf'. grow_raw_slice guarantees alignment.
                 unsafe {
                     ptr::copy(slf.as_ptr(), dst.as_ptr().add(init), extra_len);
                 }
@@ -747,7 +758,7 @@ pub trait AllocSlice: Alloc {
             ptr,
             len,
             new_len,
-            |a, p, len, new| unsafe { a.grow_raw_slice(p, len, new) },
+            |a, p, len, new| a.grow_raw_slice(p, len, new),
             init,
         )
     }
@@ -1351,7 +1362,7 @@ pub trait AllocSlice: Alloc {
             ptr,
             len,
             new_len,
-            |a, p, len, new| unsafe { a.realloc_raw_slice(p, len, new) },
+            |a, p, len, new| a.realloc_raw_slice(p, len, new),
             init,
         )
     }

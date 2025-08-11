@@ -1,13 +1,7 @@
+//#![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
 use core::{alloc::Layout, ptr};
-use memapi::{
-    ffi::mim::mi_usable_size,
-    mimalloc::MiMalloc,
-    Alloc,
-    error::AllocError,
-    type_props::{USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT}
-};
-use memapi::mimalloc::init_error_handler;
+use memapi::{ffi::mim::mi_usable_size, mimalloc::MiMalloc, Alloc};
 
 #[test]
 fn alloc_and_dealloc_basic() {
@@ -104,9 +98,14 @@ fn allocations_are_properly_aligned() {
 #[cfg(feature = "mimalloc_err_reporting")]
 #[test]
 fn error_reporting_works() {
+    use memapi::{
+        error::{AllocError, Cause},
+        type_props::{usize_bit, USIZE_MAX_NO_HIGH_BIT},
+    };
+
     let alloc = MiMalloc;
 
-    init_error_handler();
+    memapi::mimalloc::init_error_handler();
 
     // creation will succeed, but this amount of memory is far too large for anything to allocate.
     let layout = unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };
@@ -114,26 +113,28 @@ fn error_reporting_works() {
     let err = alloc.alloc(layout).expect_err("allocation should fail");
 
     match err {
-        AllocError::AllocFailed(_, ref c) => {
-            match c {
-                memapi::error::Cause::Unknown => panic!("unexpected cause: {}", c),
-                memapi::error::Cause::OSErr(e) => println!("{:?}", e)
-            }
-        }
+        AllocError::AllocFailed(_, ref c) => match c {
+            Cause::Unknown => panic!("unexpected cause: {}", c),
+            Cause::OutOfMemory => panic!("how..?"),
+            #[cfg(feature = "fallible_dealloc")]
+            Cause::InvalidBlockStatus(_) => panic!("what"),
+            Cause::OSErr(e) => println!("{:?}", e),
+        },
         _ => panic!("unexpected error: {}", err),
     }
 
-    let layout2 = unsafe { Layout::from_size_align_unchecked(1, USIZE_HIGH_BIT >> 1) };
+    let layout2 = unsafe { Layout::from_size_align_unchecked(1, usize_bit(1)) };
 
     let err2 = alloc.alloc(layout2).expect_err("allocation should fail");
 
     match err2 {
-        AllocError::AllocFailed(_, ref c) => {
-            match c {
-                memapi::error::Cause::Unknown => panic!("unexpected cause: {}", c),
-                memapi::error::Cause::OSErr(e) => println!("{:?}", e)
-            }
-        }
-        _ => panic!("unexpected error: {}", err2),
+        AllocError::AllocFailed(_, ref c) => match c {
+            Cause::Unknown => panic!("unexpected cause: {}", c),
+            Cause::OutOfMemory => panic!("how..?"),
+            #[cfg(feature = "fallible_dealloc")]
+            Cause::InvalidBlockStatus(_) => panic!("what"),
+            Cause::OSErr(e) => println!("{:?}", e),
+        },
+        _ => panic!("unexpected error: {}", err),
     }
 }

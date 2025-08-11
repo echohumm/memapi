@@ -1,3 +1,5 @@
+// genuinely no clue how to doc these unsafe blocks
+#![allow(clippy::undocumented_unsafe_blocks)]
 use crate::{
     error::AllocError,
     external_alloc::{ffi::jem as ffi, resize, REALLOC_DIFF_ALIGN},

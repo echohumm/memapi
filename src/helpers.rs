@@ -619,6 +619,8 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
             let lim = self.full - self.init;
             let to_copy = if slice.len() < lim { slice.len() } else { lim };
 
+            // SAFETY: `self.init` and `to_copy` will disallow oob access unless there was improper
+            //  usage of unsafe setter methods
             unsafe {
                 ptr::copy(
                     slice.as_ptr(),

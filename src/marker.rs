@@ -6,20 +6,20 @@
 /// violating soundness or causing double frees.
 pub unsafe trait UnsizedCopy {}
 
-// Any `T` which is `Copy` is also `UnsizedCopy`.
+// SAFETY: Any `T` which is `Copy` is also `UnsizedCopy`.
 unsafe impl<T: Copy> UnsizedCopy for T {}
-// And so are slices containing copyable T.
+// SAFETY: And so are slices containing copyable T.
 unsafe impl<T: Copy> UnsizedCopy for [T] {}
-// `str == [u8]` and `u8: Copy`.
+// SAFETY: `str == [u8]` and `u8: Copy`.
 unsafe impl UnsizedCopy for str {}
 #[cfg(feature = "c_str")]
-// `CStr == [u8]` and `u8: Copy`
+// SAFETY: `CStr == [u8]`
 unsafe impl UnsizedCopy for core::ffi::CStr {}
 #[cfg(feature = "std")]
-// `OsStr == [u8]` and `[u8]: UnsizedCopy`
+// SAFETY: `OsStr == [u8]`
 unsafe impl UnsizedCopy for std::ffi::OsStr {}
 #[cfg(feature = "std")]
-// `Path == OsStr` and `OsStr: UnsizedCopy`.
+// SAFETY: `Path == OsStr == [u8]`
 unsafe impl UnsizedCopy for std::path::Path {}
 
 // TODO: add derive macros or smth for these
@@ -152,7 +152,9 @@ pub unsafe trait SizeMeta:
 }
 
 #[cfg(feature = "metadata")]
+// SAFETY: `P: Pointee<Metadata = ()>`
 unsafe impl<P: core::ptr::Pointee<Metadata = ()> + ?Sized> Thin for P {}
 
 #[cfg(feature = "metadata")]
+// SAFETY: `P: Pointee<Metadata = usize>`
 unsafe impl<P: core::ptr::Pointee<Metadata = usize> + ?Sized> SizeMeta for P {}

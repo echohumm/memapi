@@ -1,3 +1,4 @@
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 fn main() {
     let failures = run_checks();
     if failures.is_empty() {

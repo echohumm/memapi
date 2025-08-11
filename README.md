@@ -8,9 +8,7 @@ MSRV: 1.56
 
 MSRV with `extra_const` feature: 1.61
 
-Mimalloc/Jemalloc MSRV: 1.63
-
-MSRV with `c_str`/`stats_parking_lot` feature: 1.64
+MSRV with `c_str` feature:
 
 MSRV with `extra_extra_const` feature: 1.83
 
@@ -70,17 +68,17 @@ memapi = "0.15.0"
 
 ## Benchmarks
 
-| Benchmark                     | Base (ns) | Crate (ns) | Ratio  | Δ vs base    |
-|------------------------------|----------:|-----------:|:------:|-------------:|
-| alloc                        |    4.2217 |     4.3979 | 1.0417× |   4.17% slower |
-| alloc_default<u64>           |    3.9590 |     4.4648 | 1.1277× |  12.77% slower |
-| alloc_write<u128>            |    7.5617 |     4.2021 | 0.5557× |  44.43% faster |
-| alloc_filled_1k              |   23.2630 |    28.5900 | 1.2288× |  22.88% slower |
-| alloc_patterned_2k           |  840.0900 |   836.9500 | 0.9963× |   0.37% faster |
-| grow_filled_1k_to_4k         |  104.9400 |    93.9140 | 0.8950× |  10.50% faster |
-| realloc_filled_4k_to_1k      |   81.0100 |    72.2300 | 0.8918× |  10.82% faster |
-| dealloc_typed<usize>         |    4.1694 |     4.5512 | 1.0916× |   9.16% slower |
-| zero_and_dealloc_8k          |  102.8900 |   151.5100 | 1.4727× |  47.27% slower |
+| Benchmark               | Base (ns) | Crate (ns) |  Ratio  |     Δ vs base |
+|-------------------------|----------:|-----------:|:-------:|--------------:|
+| alloc                   |    4.2217 |     4.3979 | 1.0417× |  4.17% slower |
+| alloc_default<u64>      |    3.9590 |     4.4648 | 1.1277× | 12.77% slower |
+| alloc_write<u128>       |    7.5617 |     4.2021 | 0.5557× | 44.43% faster |
+| alloc_filled_1k         |   23.2630 |    28.5900 | 1.2288× | 22.88% slower |
+| alloc_patterned_2k      |  840.0900 |   836.9500 | 0.9963× |  0.37% faster |
+| grow_filled_1k_to_4k    |  104.9400 |    93.9140 | 0.8950× | 10.50% faster |
+| realloc_filled_4k_to_1k |   81.0100 |    72.2300 | 0.8918× | 10.82% faster |
+| dealloc_typed<usize>    |    4.1694 |     4.5512 | 1.0916× |  9.16% slower |
+| zero_and_dealloc_8k     |  102.8900 |   151.5100 | 1.4727× | 47.27% slower |
 
 ### Notes
 

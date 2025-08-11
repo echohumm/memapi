@@ -6,6 +6,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Current low-priority to-dos](#current-low-priority-to-dos)
 - [Version 0.17.0](#version-0170)
+  - [Commit 2](#commit-2-2025-8-10)
   - [Commit 1](#commit-1-2025-8-09)
 - [Version 0.16.0](#version-0160-2025-8-08)
 - [Version 0.15.2](#version-0152-2025-8-07)
@@ -41,7 +42,21 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Proper tests for many untested methods and features (maybe)
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
-## Version 0.17.0
+## Version 0.17.0 (2025-8-10)
+
+### Commit 2 (2025-8-10)
+
+- Add `FallibleDealloc` trait under `fallible_dealloc` feature
+- Add `usize_bit` helper to `type_props`
+- Make `unstable_util`'s `pad_layout_to_align` better match `Layout::pad_to_align`
+- Improve error formatting
+  - Add `err_fmt_vw` bin to view error formatting
+- Safety docs
+- Rename external allocation features
+  - bindings to the originals are now prefixed with `mim`/`jem`
+  - actual features remain prefixed with `mimalloc`/`jemalloc`
+- Remove useless featuresets
+- Formatting
 
 ### Commit 1 (2025-8-09)
 
