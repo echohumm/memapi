@@ -75,6 +75,7 @@ os_err_reporting = ["std"]
 
 # main extensions
 fallible_dealloc = []
+alloc_aligned_at = []
 
 alloc_ext = []
 alloc_slice = []
@@ -100,11 +101,15 @@ extern_allocs = ["jemalloc", "mimalloc"]
 extern_allocs_in_place = ["jemalloc_in_place", "mimalloc_in_place"]
 
 # bundles
-core = ["alloc_slice", "alloc_ext", "stats_parking_lot"]
-core_std = ["core", "os_err_reporting"]
+utils = ["alloc_slice", "alloc_ext", "fallible_dealloc"]
+extra = ["utils", "stats_parking_lot"]
+std_utils = ["utils", "os_err_reporting"]
+std_extra = ["extra", "os_err_reporting"]
 
-full = ["core_std", "extern_allocs_in_place", "mimalloc_err_reporting"]
+full = ["std_extra", "std_utils", "extern_allocs_in_place", "mimalloc_err_reporting", "std_libc"]
 full_nightly = ["full", "all_nightly"]
+
+dev = []
 
 # jemalloc feature bindings
 jem_bg_threads_rt = ["memapi-jemalloc-sys/background_threads_runtime_support"]
@@ -171,6 +176,7 @@ required-features = ["stats", "std"]
 name = "err_fmt_vw"
 path = "devbin/err_fmt.rs"
 required-features = ["std"]
+
 
 
 [dev-dependencies.criterion]

@@ -18,7 +18,7 @@ fn alloc_zeroed_is_really_zeroed() {
     let alloc = MiMalloc;
     let size = 64;
     let layout = Layout::from_size_align(size, 8).unwrap();
-    let ptr = alloc.alloc_zeroed(layout).unwrap();
+    let ptr = alloc.zalloc(layout).unwrap();
     unsafe {
         let slice = core::slice::from_raw_parts(ptr.as_ptr(), size);
         assert!(slice.iter().all(|&b| b == 0), "all bytes must be zero");

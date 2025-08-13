@@ -12,6 +12,7 @@
       <w>echohumm</w>
       <w>featureset</w>
       <w>featuresets</w>
+      <w>fgrow</w>
       <w>fromiterator</w>
       <w>hewwo</w>
       <w>jemallocator</w>
@@ -26,6 +27,8 @@
       <w>partialord</w>
       <w>preallocated</w>
       <w>ralloc</w>
+      <w>refalloc</w>
+      <w>rezalloc</w>
       <w>rustflags</w>
       <w>sptr</w>
       <w>superlint</w>
@@ -36,6 +39,7 @@
       <w>weaks</w>
       <w>wptr</w>
       <w>zalloc</w>
+      <w>zgrow</w>
       <w>zootopia</w>
     </words>
   </dictionary>

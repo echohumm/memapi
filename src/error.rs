@@ -20,6 +20,8 @@ pub enum AllocError {
     DeallocFailed(NonNull<u8>, Layout, Cause),
     /// The layout computed with the given size and alignment is invalid; see the contained reason.
     InvalidLayout(InvLayout),
+    /// The given alignment was invalid; see the contained information.
+    InvalidAlign(AlignErr),
     /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
     /// the requested alignment.
     ///
@@ -116,6 +118,9 @@ impl Display for AllocError {
             AllocError::InvalidLayout(inv_layout) => {
                 write!(f, "{}", inv_layout)
             }
+            AllocError::InvalidAlign(inv_align) => {
+                write!(f, "{}", inv_align)
+            }
             AllocError::ZeroSizedLayout(_) => {
                 write!(f, "received a zero-sized layout")
             }
@@ -188,6 +193,9 @@ impl Display for Cause {
     }
 }
 
+#[cfg(feature = "std")]
+impl std::error::Error for Cause {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur when creating a layout for repeated instances of a type.
 #[allow(clippy::module_name_repetitions)]
@@ -224,6 +232,9 @@ impl Display for RepeatLayoutError {
     }
 }
 
+#[cfg(feature = "std")]
+impl std::error::Error for RepeatLayoutError {}
+
 /// An invalid layout and the reason for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvLayout(pub usize, pub usize, pub LayoutErr);
@@ -246,14 +257,15 @@ impl Display for InvLayout {
     }
 }
 
+#[cfg(feature = "std")]
+impl std::error::Error for InvLayout {}
+
 /// An error that can occur when computing a layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LayoutErr {
-    /// The alignment is zero.
-    ZeroAlign,
-    /// The alignment is not a power of two.
-    NonPowerOfTwoAlign,
+    /// The alignment was invalid.
+    Align(AlignErr),
     /// The requested size was greater than
     /// [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT) when rounded up to the
     /// nearest multiple of the requested alignment.
@@ -263,8 +275,7 @@ pub enum LayoutErr {
 impl Display for LayoutErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            LayoutErr::ZeroAlign => write!(f, "alignment is zero"),
-            LayoutErr::NonPowerOfTwoAlign => write!(f, "alignment is not a power of two"),
+            LayoutErr::Align(inv_align) => write!(f, "{}", inv_align),
             LayoutErr::Overflow => write!(f, "size would overflow"),
         }
     }
@@ -272,6 +283,28 @@ impl Display for LayoutErr {
 
 #[cfg(feature = "std")]
 impl std::error::Error for LayoutErr {}
+
+/// The reason for an invalid alignment.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum AlignErr {
+    /// The alignment is zero.
+    ZeroAlign,
+    /// The alignment is not a power of two.
+    NonPowerOfTwoAlign(usize),
+}
+
+impl Display for AlignErr {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            AlignErr::ZeroAlign => write!(f, "alignment is zero"),
+            AlignErr::NonPowerOfTwoAlign(align) => write!(f, "alignment {} is not a power of two", align),
+        }
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for AlignErr {}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// An arithmetic operation that would overflow.

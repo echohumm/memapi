@@ -18,10 +18,11 @@ MSRV with `stats_file_lock` feature: 1.89
 
 ## Features
 
-## Features
-
 - Allocation primitives: allocation, deallocation, grow/shrink, and realloc operations
-- Allocation statistics (feature: `stats`)
+- Allocation statistics gathering (feature: `stats`)
+  - Default logging types with `std` feature
+  - No-std-compatible logging types with `stats_parking_lot` feature
+  - Safer file logging with `stats_file_lock` feature
 - Allocator API support on nightly (feature: `nightly`)
   - Clone/Copy specialization for performance and ease of use (feature: `specialization`)
   - CloneToUninit usage in some functions (feature: `clone_to_uninit`)
@@ -31,17 +32,23 @@ MSRV with `stats_file_lock` feature: 1.89
 - Constants: extra (feature: `extra_const`) (MSRV: 1.61)
 - Constants: even more (feature: `extra_extra_const`) (MSRV: 1.83)
 - Error reporting via `AllocError`
+- OS error reporting with supported allocators (feature: `os_err_reporting`)
+  - Supports Jemalloc and Rust's default allocator
+  - Supports MiMalloc (feature: `mimalloc_err_reporting`)
 - External allocator support (MSRV: 1.63)
-  - jemalloc (feature: `jemalloc`)
-  - mimalloc (feature: `mimalloc`)
+  - Jemalloc (feature: `jemalloc`)
+  - MiMalloc (feature: `mimalloc`)
 - Fallback implementation for stable Rust
 - Low-cost wrapper over the global allocator
 - `no_std` compatible
+- Fallible deallocation extension methods (feature: `fallible_dealloc`)
+- Offset-aligned allocation extension methods (feature: `alloc_aligned_at`)
 - Resize-in-place extension methods (feature: `resize_in_place`)
 - Basic extension methods (feature: `alloc_ext`)
 - Slice-focused extension methods (feature: `alloc_slice`)
 - `std` support (feature: `std`)
 - Unstable utilities (feature: `unstable_util`)
+- Exposed implementation details for implementing `Alloc` yourself (feature: `dev`)
 
 ---
 
@@ -74,7 +81,6 @@ memapi = "0.15.0"
 | alloc_default<u64>      |    3.9590 |     4.4648 | 1.1277× | 12.77% slower |
 | alloc_write<u128>       |    7.5617 |     4.2021 | 0.5557× | 44.43% faster |
 | alloc_filled_1k         |   23.2630 |    28.5900 | 1.2288× | 22.88% slower |
-| alloc_patterned_2k      |  840.0900 |   836.9500 | 0.9963× |  0.37% faster |
 | grow_filled_1k_to_4k    |  104.9400 |    93.9140 | 0.8950× | 10.50% faster |
 | realloc_filled_4k_to_1k |   81.0100 |    72.2300 | 0.8918× | 10.82% faster |
 | dealloc_typed<usize>    |    4.1694 |     4.5512 | 1.0916× |  9.16% slower |

@@ -15,7 +15,8 @@ fn slice_pointer_from_raw_parts_works() {
         4 => panic!("slice_ptr_from_raw_parts() test 4 failed: result as nonnull doesn't have the same length"),
         5 => panic!("slice_ptr_from_raw_parts() test 5 failed: result doesn't have the same values"),
         6 => panic!("slice_ptr_from_raw_parts() test 6 failed: result doesn't have the correct values"),
-        _ => unreachable!(),
+        // SAFETY: sp_frp_inner returns at most 6.
+        _ => unsafe { core::hint::unreachable_unchecked() },
     }
 }
 

@@ -7,6 +7,9 @@ pub(crate) mod alloc_slice;
 #[cfg(feature = "resize_in_place")]
 /// Reallocation in-place.
 pub(crate) mod resize_in_place;
+#[cfg(feature = "alloc_aligned_at")]
+/// Allocation where the memory is only aligned after a given offset.
+pub(crate) mod alloc_aligned_at;
 
 #[cfg(feature = "stats")]
 /// Allocation statistic gathering and reporting.

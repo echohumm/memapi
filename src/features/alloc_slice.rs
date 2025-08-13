@@ -10,10 +10,10 @@ use crate::{
     Alloc, AllocPattern,
 };
 use core::{
-    alloc::Layout,
     mem::{forget, MaybeUninit},
     ptr::{self, NonNull},
 };
+use alloc::alloc::Layout;
 
 // TODO: review usage and make small semantic adjustments, like making functions take
 //  [MaybeUninit<T>] and an extra `init` count instead of just [T] for ease of use.
@@ -54,8 +54,8 @@ macro_rules! realloc {
             $self,
             $ptr.cast(),
             Layout::from_size_align_unchecked($len * <$ty>::SZ, <$ty>::ALN),
-            tri!(il, layout_or_err::<$ty>($new_len)),
-            $(AllocPattern::<$f>::$pat$(($val))?)?
+            tri!(AllocError::InvalidLayout(layout_or_err::<$ty>($new_len))),
+            $(AllocPattern::$pat$(($val))?)?
         )
         .map(NonNull::cast)
     }
@@ -114,7 +114,7 @@ pub(crate) fn alloc_slice<
     len: usize,
     alloc: F,
 ) -> Result<NonNull<[T]>, AllocError> {
-    alloc(a, tri!(il, layout_or_err::<T>(len)))
+    alloc(a, tri!(AllocError::InvalidLayout(layout_or_err::<T>(len))))
         .map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
 }
 
@@ -143,8 +143,8 @@ pub trait AllocSlice: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc_slice_zeroed<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
-        alloc_slice(self, len, Self::alloc_zeroed)
+    fn zalloc_slice<T>(&self, len: usize) -> Result<NonNull<[T]>, AllocError> {
+        alloc_slice(self, len, Self::zalloc)
     }
 
     /// Allocates uninitialized memory for a slice of `T` and clones each element from `data` into
@@ -222,7 +222,7 @@ pub trait AllocSlice: Alloc {
         f: F,
     ) -> Result<NonNull<[T]>, AllocError> {
         // SAFETY: we just allocated the slice using `self` with space for at least `len` elements
-        alloc_then(self, tri!(il, layout_or_err::<T>(len)), f, |p, f| unsafe {
+        alloc_then(self, tri!(AllocError::InvalidLayout(layout_or_err::<T>(len))), f, |p, f| unsafe {
             let mut guard = SliceAllocGuard::new(p.cast(), self, len);
             for i in 0..len {
                 guard.init_unchecked(f(i));
@@ -254,7 +254,7 @@ pub trait AllocSlice: Alloc {
         len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         let mut guard =
-            SliceAllocGuard::new(tri!(self.alloc_slice::<T>(len)).cast::<T>(), self, len);
+            SliceAllocGuard::new(tri!(do self.alloc_slice::<T>(len)).cast::<T>(), self, len);
         init(guard.get_full(), &mut guard.init);
         Ok(guard.release())
     }
@@ -537,7 +537,7 @@ pub trait AllocSlice: Alloc {
             return Ok(ptr);
         }
 
-        let new_ptr = tri!(self.grow_raw_slice(ptr, len, len + extra_len));
+        let new_ptr = tri!(do self.grow_raw_slice(ptr, len, len + extra_len));
         <[T] as SpecExtendSlice<T, Self>>::dupe_into(
             self, extra_ptr, init, len, extra_len, new_ptr,
         );
@@ -593,7 +593,7 @@ pub trait AllocSlice: Alloc {
         len: usize,
         new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
-        realloc!(grow, self, ptr, len, new_len, T, None)
+        realloc!(grow, self, ptr, len, new_len, T, Uninitialized)
     }
 
     /// Grows a slice to a new length, zeroing any newly allocated bytes.
@@ -609,12 +609,12 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn grow_slice_zeroed<T>(
+    unsafe fn zgrow_slice<T>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice_zeroed(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
+        self.zgrow_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
@@ -633,13 +633,13 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn grow_raw_slice_zeroed<T>(
+    unsafe fn zgrow_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
-        realloc!(grow, self, ptr, len, new_len, T, Zero)
+        realloc!(grow, self, ptr, len, new_len, T, Zeroed)
     }
 
     /// Grows a slice to a new length and fills each new element with the result of `f(elem_idx)`
@@ -839,8 +839,7 @@ pub trait AllocSlice: Alloc {
         )
         .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
-
-    // TODO: make stuff in this helpers to reduce rep
+    
     /// Grows a slice to a new length given the pointer to its first element, current length,
     /// and requested length, then clones elements from `src` into the newly allocated region.
     ///
@@ -879,7 +878,7 @@ pub trait AllocSlice: Alloc {
         }
 
         let mut guard = SliceAllocGuard::new_with_init(
-            tri!(self.grow_raw_slice(ptr, len, new_len)),
+            tri!(do self.grow_raw_slice(ptr, len, new_len)),
             self,
             len,
             new_len,
@@ -1017,7 +1016,7 @@ pub trait AllocSlice: Alloc {
             return Err(INSUF_GROW_SRC);
         }
 
-        let new_ptr = tri!(self.grow_raw_slice(ptr, len, new_len));
+        let new_ptr = tri!(do self.grow_raw_slice(ptr, len, new_len));
         ptr::copy_nonoverlapping(src.as_ptr(), new_ptr.as_ptr().add(len), to_add);
         Ok(new_ptr)
     }
@@ -1177,7 +1176,7 @@ pub trait AllocSlice: Alloc {
         len: usize,
         new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
-        realloc!(ralloc, self, ptr, len, new_len, T, None)
+        realloc!(ralloc, self, ptr, len, new_len, T, Uninitialized)
     }
 
     /// Reallocates a slice to a new length without dropping any removed elements.
@@ -1196,12 +1195,12 @@ pub trait AllocSlice: Alloc {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn realloc_slice_zeroed<T>(
+    unsafe fn rezalloc_slice<T>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.realloc_raw_slice_zeroed(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
+        self.rezalloc_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
@@ -1224,13 +1223,13 @@ pub trait AllocSlice: Alloc {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn realloc_raw_slice_zeroed<T>(
+    unsafe fn rezalloc_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
-        realloc!(ralloc, self, ptr, len, new_len, T, Zero)
+        realloc!(ralloc, self, ptr, len, new_len, T, Zeroed)
     }
 
     /// Reallocates a slice to a new length and fills each new element with the result of
@@ -1480,7 +1479,7 @@ pub trait AllocSlice: Alloc {
         src: NonNull<T>,
         src_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
-        let new_ptr = tri!(self.realloc_raw_slice(ptr, len, new_len));
+        let new_ptr = tri!(do self.realloc_raw_slice(ptr, len, new_len));
 
         if new_len > len {
             let to_add = new_len - len;
@@ -1564,7 +1563,7 @@ pub trait AllocSlice: Alloc {
         src: NonNull<T>,
         src_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
-        let new_ptr = tri!(self.realloc_raw_slice(ptr, len, new_len));
+        let new_ptr = tri!(do self.realloc_raw_slice(ptr, len, new_len));
 
         if new_len > len {
             let to_add = new_len - len;
@@ -1597,27 +1596,8 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     #[cfg_attr(miri, track_caller)]
-    fn alloc_slice_filled<T>(&self, len: usize, n: u8) -> Result<NonNull<[T]>, AllocError> {
-        alloc_slice(self, len, |a, layout| a.alloc_filled(layout, n))
-    }
-
-    /// Attempts to allocate a block of memory for `len` instances of `T` and
-    /// fill it by calling `pattern(i)` for each byte index `i`.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
-    /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
-    #[track_caller]
-    fn alloc_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
-        &self,
-        len: usize,
-        pattern: F,
-    ) -> Result<NonNull<[T]>, AllocError> {
-        alloc_slice(self, len, move |a, layout| {
-            a.alloc_patterned(layout, pattern.clone())
-        })
+    fn falloc_slice<T>(&self, len: usize, n: u8) -> Result<NonNull<[T]>, AllocError> {
+        alloc_slice(self, len, |a, layout| a.falloc(layout, n))
     }
 
     /// Grows a slice to a new length, filling any newly allocated bytes with `n`.
@@ -1633,13 +1613,13 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn grow_slice_filled<T>(
+    unsafe fn fgrow_slice<T>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
         n: u8,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice_filled(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
+        self.fgrow_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
@@ -1658,69 +1638,14 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn grow_raw_slice_filled<T>(
+    unsafe fn fgrow_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
         n: u8,
     ) -> Result<NonNull<T>, AllocError> {
-        realloc!(grow, self, ptr, len, new_len, T, All(n))
-    }
-
-    /// Grows a slice to a new length, filling any newly allocated bytes by calling `pattern(i)`
-    /// for each new byte index `i`.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
-    ///
-    /// # Safety
-    ///
-    /// - `slice` must point to a slice allocated using this allocator.
-    #[track_caller]
-    unsafe fn grow_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
-        &self,
-        slice: NonNull<[T]>,
-        new_len: usize,
-        pattern: F,
-    ) -> Result<NonNull<[T]>, AllocError> {
-        self.grow_raw_slice_patterned(
-            slice.cast::<T>(),
-            nonnull_slice_len(slice),
-            new_len,
-            pattern,
-        )
-        .map(|p| nonnull_slice_from_raw_parts(p, new_len))
-    }
-
-    /// Grows a slice to a new length given the pointer to its first element, current length, and
-    /// requested length, filling any newly allocated bytes by calling `pattern(i)` for each new
-    /// byte index `i`.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
-    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a slice allocated using this allocator.
-    /// - `len` must describe exactly the number of elements in that slice.
-    #[track_caller]
-    unsafe fn grow_raw_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
-        &self,
-        ptr: NonNull<T>,
-        len: usize,
-        new_len: usize,
-        pattern: F,
-    ) -> Result<NonNull<T>, AllocError> {
-        realloc!(F, grow, self, ptr, len, new_len, T, Fn(pattern))
+        realloc!(grow, self, ptr, len, new_len, T, Filled(n))
     }
 
     /// Reallocates a slice to a new length, filling any newly allocated bytes with `n`.
@@ -1737,13 +1662,13 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     ///
     /// - `slice` must point to a slice allocated using this allocator.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn realloc_slice_filled<T>(
+    unsafe fn refalloc_slice<T>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
         n: u8,
     ) -> Result<NonNull<[T]>, AllocError> {
-        self.realloc_raw_slice_filled(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
+        self.refalloc_raw_slice(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
@@ -1763,71 +1688,14 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - `ptr` must point to a slice allocated using this allocator.
     /// - `len` must describe exactly the number of elements in that slice.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn realloc_raw_slice_filled<T>(
+    unsafe fn refalloc_raw_slice<T>(
         &self,
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
         n: u8,
     ) -> Result<NonNull<T>, AllocError> {
-        realloc!(ralloc, self, ptr, len, new_len, T, All(n))
-    }
-
-    /// Reallocates a slice to a new length, filling any newly allocated bytes by calling
-    /// `pattern(i)` for each new byte index `i`.
-    ///
-    /// On grow, preserves all existing elements and truncates to `new_len` elements on shrink.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    ///
-    /// # Safety
-    ///
-    /// - `slice` must point to a slice allocated using this allocator.
-    #[track_caller]
-    unsafe fn realloc_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
-        &self,
-        slice: NonNull<[T]>,
-        new_len: usize,
-        pattern: F,
-    ) -> Result<NonNull<[T]>, AllocError> {
-        self.realloc_raw_slice_patterned(
-            slice.cast::<T>(),
-            nonnull_slice_len(slice),
-            new_len,
-            pattern,
-        )
-        .map(|p| nonnull_slice_from_raw_parts(p, new_len))
-    }
-
-    /// Reallocates a slice to a new length given the pointer to its first element, current length,
-    /// and requested length, filling any newly allocated bytes by calling `pattern(i)` for each new
-    /// byte index `i`.
-    ///
-    /// On grow, preserves all existing elements and truncates to `new_len` elements on shrink.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::InvalidLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a slice allocated using this allocator.
-    /// - `len` must describe exactly the number of elements in that slice.
-    #[track_caller]
-    unsafe fn realloc_raw_slice_patterned<T, F: Fn(usize) -> u8 + Clone>(
-        &self,
-        ptr: NonNull<T>,
-        len: usize,
-        new_len: usize,
-        pattern: F,
-    ) -> Result<NonNull<T>, AllocError> {
-        realloc!(F, ralloc, self, ptr, len, new_len, T, Fn(pattern))
+        realloc!(ralloc, self, ptr, len, new_len, T, Filled(n))
     }
 }
 

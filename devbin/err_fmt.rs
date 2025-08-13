@@ -1,15 +1,17 @@
 #![allow(clippy::vec_init_then_push)]
 
-use core::alloc::Layout;
-use core::ptr::NonNull;
-use memapi::error::{AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr};
+use core::{
+    alloc::Layout,
+    ptr::NonNull
+};
+use memapi::error::{AlignErr, AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr};
 
 fn main() {
     let l1 = Layout::from_size_align(8, 8).expect("layout ok");
     let l2 = Layout::from_size_align(16, 8).expect("layout ok");
     let dangling = NonNull::<u8>::dangling();
 
-    let inv_layout = InvLayout(1, 0, LayoutErr::ZeroAlign);
+    let inv_layout = InvLayout(1, 0, LayoutErr::Align(AlignErr::ZeroAlign));
     let arith = ArithOverflow(usize::MAX, ArithOp::Add, 1);
 
     let mut items: Vec<AllocError> = Vec::new();
@@ -38,7 +40,7 @@ fn main() {
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::Misaligned(Some(1))),
+            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::OwnedMisaligned(Some(1))),
         ));
     }
 

@@ -1,8 +1,8 @@
 use crate::{error::AllocError, helpers::SliceAllocGuard, Alloc};
 use core::{
-    alloc::Layout,
     ptr::{self, NonNull},
 };
+use alloc::alloc::Layout;
 
 /// Extension trait for [`Alloc`](Alloc) which provides interfaces to reallocate in-place.
 pub trait ResizeInPlace: Alloc {
@@ -41,13 +41,13 @@ pub trait ResizeInPlace: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn grow_in_place_zeroed(
+    unsafe fn zgrow_in_place(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
     ) -> Result<(), AllocError> {
-        self.grow_in_place_filled(ptr, old_layout, new_size, 0)
+        self.fgrow_in_place(ptr, old_layout, new_size, 0)
     }
 
     /// Grow the given block to a new, larger layout, filling any newly allocated bytes by calling
@@ -72,7 +72,7 @@ pub trait ResizeInPlace: Alloc {
         new_size: usize,
         pattern: F,
     ) -> Result<(), AllocError> {
-        tri!(self.grow_in_place(ptr, old_layout, new_size));
+        tri!(do self.grow_in_place(ptr, old_layout, new_size));
 
         let start_idx = old_layout.size();
         let mut start = SliceAllocGuard::new(
@@ -101,14 +101,14 @@ pub trait ResizeInPlace: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn grow_in_place_filled(
+    unsafe fn fgrow_in_place(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
         n: u8,
     ) -> Result<(), AllocError> {
-        tri!(self.grow_in_place(ptr, old_layout, new_size));
+        tri!(do self.grow_in_place(ptr, old_layout, new_size));
         ptr::write_bytes(
             ptr.as_ptr().add(old_layout.size()),
             n,
@@ -186,14 +186,14 @@ pub trait ResizeInPlace: Alloc {
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn realloc_in_place_zeroed(
+    unsafe fn rezalloc_in_place(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
     ) -> Result<(), AllocError> {
         if new_size > old_layout.size() {
-            self.grow_in_place_zeroed(ptr, old_layout, new_size)
+            self.zgrow_in_place(ptr, old_layout, new_size)
         } else {
             self.shrink_in_place(ptr, old_layout, new_size)
         }
@@ -249,7 +249,7 @@ pub trait ResizeInPlace: Alloc {
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn realloc_in_place_filled(
+    unsafe fn refalloc_in_place(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
@@ -257,7 +257,7 @@ pub trait ResizeInPlace: Alloc {
         n: u8,
     ) -> Result<(), AllocError> {
         if new_size > old_layout.size() {
-            self.grow_in_place_filled(ptr, old_layout, new_size, n)
+            self.fgrow_in_place(ptr, old_layout, new_size, n)
         } else {
             self.shrink_in_place(ptr, old_layout, new_size)
         }
@@ -379,7 +379,7 @@ impl ResizeInPlace for crate::external_alloc::mimalloc::MiMalloc {
 
     /// Shrinking in-place is not supported by mimalloc.
     ///
-    /// This is a no-op and always returns an error.
+    /// This is a noop and always returns an error.
     ///
     /// # Errors
     ///

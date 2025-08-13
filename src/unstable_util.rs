@@ -1,7 +1,13 @@
 use crate::{
-    error::{ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
+    error::{
+        ArithOp,
+        InvLayout,
+        LayoutErr,
+        RepeatLayoutError,
+        AlignErr
+    },
     helpers::{align_up_unchecked, checked_op},
-    type_props::USIZE_MAX_NO_HIGH_BIT,
+    type_props::USIZE_HIGH_BIT
 };
 use alloc::alloc::Layout;
 
@@ -100,13 +106,16 @@ pub const fn repeat_layout_packed(
     }
 }
 
+/// Internal helper to check for a valid layout's size and alignment, returning a layout
+/// using the provided size and alignment if they are valid, or the appropriate [`LayoutErr`].
 #[inline]
-const fn layout_from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub const fn layout_from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
     if align == 0 {
-        return Err(LayoutErr::ZeroAlign);
+        return Err(LayoutErr::Align(AlignErr::ZeroAlign));
     } else if !align.is_power_of_two() {
-        return Err(LayoutErr::NonPowerOfTwoAlign);
-    } else if size > USIZE_MAX_NO_HIGH_BIT + 1 - align {
+        return Err(LayoutErr::Align(AlignErr::NonPowerOfTwoAlign(align)));
+    } else if size > USIZE_HIGH_BIT - align {
         return Err(LayoutErr::Overflow);
     }
 

@@ -27,7 +27,7 @@ fn alloc_zeroed_is_really_zeroed() {
     let layout = Layout::from_size_align(size, 8).unwrap();
 
     unsafe {
-        let ptr = alloc.alloc_zeroed(layout).unwrap();
+        let ptr = alloc.zalloc(layout).unwrap();
         // treat as byte slice
         let buf = slice::from_raw_parts(ptr.as_ptr(), size);
         assert!(

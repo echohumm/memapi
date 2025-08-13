@@ -44,6 +44,19 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.17.0 (2025-8-10)
 
+### Commit 3 (2025-8-13)
+
+- Add `AllocAlignedAt` trait under `alloc_aligned_at` feature
+- Add `dev` feature which unhides several internal functions used in implementations.
+- Rename `FallibleDealloc` to `DeallocChecked`
+- Rename and improve feature bundles
+- Further improve error system
+- Rename methods to their shorthands (e.g., `alloc_zeroed` -> zalloc)
+- Remove bloated, niche `patterned` methods
+- Reduce code duplication
+- Improve MiMalloc error handling
+- Update README.md
+
 ### Commit 2 (2025-8-10)
 
 - Add `FallibleDealloc` trait under `fallible_dealloc` feature

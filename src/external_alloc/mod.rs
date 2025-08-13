@@ -11,37 +11,6 @@ pub(crate) const REALLOC_DIFF_ALIGN: crate::error::AllocError = crate::error::Al
     "unsupported operation: attempted to reallocate with a different alignment",
 );
 
-#[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
-pub(crate) unsafe fn resize<F: Fn() -> *mut libc::c_void>(
-    ralloc: F,
-    ptr: core::ptr::NonNull<u8>,
-    old_layout: alloc::alloc::Layout,
-    new_layout: alloc::alloc::Layout,
-    need_same_align: bool,
-    is_grow: bool,
-) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
-    use crate::{error::AllocError, helpers::null_q};
-
-    if need_same_align && new_layout.align() != old_layout.align() {
-        return Err(REALLOC_DIFF_ALIGN);
-    }
-
-    let old_size = old_layout.size();
-    let new_size = new_layout.size();
-
-    if new_size == old_size {
-        return Ok(ptr);
-    } else if is_grow {
-        if new_size < old_size {
-            return Err(AllocError::GrowSmallerNewLayout(old_size, new_size));
-        }
-    } else if new_size > old_size {
-        return Err(AllocError::ShrinkBiggerNewLayout(old_size, new_size));
-    }
-
-    null_q(ralloc(), new_layout)
-}
-
 /// FFI bindings to allocation libraries.
 pub mod ffi {
     #[cfg(feature = "jemalloc")]

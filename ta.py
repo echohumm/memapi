@@ -23,6 +23,7 @@ FEATURES = [
     "sized_hierarchy",
 
     "fallible_dealloc",
+    "alloc_aligned_at",
     "alloc_ext",
     "alloc_slice",
     "resize_in_place",

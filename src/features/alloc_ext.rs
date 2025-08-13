@@ -1,4 +1,3 @@
-use crate::helpers::SliceAllocGuard;
 use crate::{
     error::AllocError,
     grow,
@@ -7,10 +6,8 @@ use crate::{
     type_props::{PtrProps, SizedProps},
     Alloc, AllocPattern,
 };
-use core::{
-    alloc::Layout,
-    ptr::{self, NonNull},
-};
+use alloc::alloc::Layout;
+use core::ptr::{self, NonNull};
 
 /// Extension methods for the core [`Alloc`] trait, providing convenient routines to allocate,
 /// initialize, clone, copy, and deallocate sized and unsized types.
@@ -27,7 +24,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_init<T, I: Fn(NonNull<T>)>(&self, init: I) -> Result<NonNull<T>, AllocError> {
-        let guard = tri!(self.alloc_guard());
+        let guard = tri!(do self.alloc_guard());
         init(*guard);
         Ok(guard.release())
     }
@@ -41,7 +38,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_default<T: Default>(&self) -> Result<NonNull<T>, AllocError> {
-        self.alloc_write(T::default())
+        self.walloc(T::default())
     }
 
     /// Allocates uninitialized memory for a single `T` and writes `data` into it.
@@ -52,7 +49,7 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc_write<T>(&self, data: T) -> Result<NonNull<T>, AllocError> {
+    fn walloc<T>(&self, data: T) -> Result<NonNull<T>, AllocError> {
         // SAFETY: we just allocated the pointer using `T`'s layout, so it's safe to write `data` to
         // it
         alloc_then::<NonNull<T>, Self, T, _>(self, T::LAYOUT, data, |p, data| unsafe {
@@ -72,7 +69,7 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_clone_to<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
-        let mut guard = tri!(self.alloc_guard());
+        let mut guard = tri!(do self.alloc_guard());
         guard.init(data.clone());
         Ok(guard.release())
     }
@@ -137,36 +134,12 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     #[cfg_attr(miri, track_caller)]
-    fn alloc_filled(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
+    fn falloc(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
         // SAFETY: allocation returns at least `layout.size()` bytes
         alloc_then::<NonNull<u8>, Self, u8, _>(self, layout, n, |p, n| unsafe {
             ptr::write_bytes(p.as_ptr(), n, layout.size());
 
             p
-        })
-    }
-
-    /// Attempts to allocate a block of memory fitting the given [`Layout`] and
-    /// fill it by calling `pattern(i)` for each byte index `i`.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
-    #[track_caller]
-    fn alloc_patterned<F: Fn(usize) -> u8 + Clone>(
-        &self,
-        layout: Layout,
-        pat: F,
-    ) -> Result<NonNull<u8>, AllocError> {
-        // SAFETY: we just allocated the memory using `self` with space for at least
-        //  `layout.size()` bytes
-        alloc_then::<NonNull<u8>, Self, F, _>(self, layout, pat, |p, pat| unsafe {
-            let mut guard = SliceAllocGuard::new(p, self, layout.size());
-            for i in 0..layout.size() {
-                guard.init_unchecked(pat(i));
-            }
-            guard.release_first()
         })
     }
 
@@ -353,30 +326,6 @@ pub trait AllocExt: Alloc {
         })
     }
 
-    /// Grow the given block to a new, larger layout, filling any newly allocated bytes by calling
-    /// `pattern(i)` for each new byte index `i`.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
-    /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block previously allocated with this allocator.
-    /// - `old_layout` must describe exactly that block.
-    #[track_caller]
-    unsafe fn grow_patterned<F: Fn(usize) -> u8 + Clone>(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-        pattern: F,
-    ) -> Result<NonNull<u8>, AllocError> {
-        grow(self, ptr, old_layout, new_layout, AllocPattern::Fn(pattern))
-    }
-
     /// Grows the given block to a new, larger layout, filling any newly allocated bytes with `n`.
     ///
     /// Returns the new pointer, possibly reallocated elsewhere.
@@ -391,43 +340,14 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn grow_filled(
+    unsafe fn fgrow(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
         n: u8,
     ) -> Result<NonNull<u8>, AllocError> {
-        grow(
-            self,
-            ptr,
-            old_layout,
-            new_layout,
-            AllocPattern::<fn(usize) -> u8>::All(n),
-        )
-    }
-
-    /// Reallocate a block, growing or shrinking as needed, filling any new bytes by calling
-    /// `pattern(i)` for each new byte index `i`.
-    ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block previously allocated with this allocator.
-    /// - `old_layout` must describe exactly that block.
-    #[track_caller]
-    unsafe fn realloc_patterned<F: Fn(usize) -> u8 + Clone>(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout,
-        pattern: F,
-    ) -> Result<NonNull<u8>, AllocError> {
-        ralloc(self, ptr, old_layout, new_layout, AllocPattern::Fn(pattern))
+        grow(self, ptr, old_layout, new_layout, AllocPattern::Filled(n))
     }
 
     /// Reallocate a block, growing or shrinking as needed, filling any newly
@@ -443,20 +363,14 @@ pub trait AllocExt: Alloc {
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn realloc_filled(
+    unsafe fn refalloc(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
         n: u8,
     ) -> Result<NonNull<u8>, AllocError> {
-        ralloc(
-            self,
-            ptr,
-            old_layout,
-            new_layout,
-            AllocPattern::<fn(usize) -> u8>::All(n),
-        )
+        ralloc(self, ptr, old_layout, new_layout, AllocPattern::Filled(n))
     }
 }
 

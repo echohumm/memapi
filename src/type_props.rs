@@ -8,26 +8,11 @@ use core::{
 /// The maximum value of a `usize` with no high bit.
 ///
 /// Equivalent to `usize::MAX >> 1` or `isize::MAX as usize`.
-///
-#[cfg_attr(
-    target_pointer_width = "64",
-    doc = "Exact value: `9_223_372_036_854_775_807`"
-)]
-#[cfg_attr(target_pointer_width = "32", doc = "Exact value: `2_147_483_647`")]
-// no way this ever gets hit, but oh well
-#[cfg_attr(target_pointer_width = "16", doc = "Exact value: `32_767`")]
 pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
 
 /// A `usize` in which only the high bit is set.
 ///
 /// Equivalent to `usize::MAX ^ (usize::MAX >> 1)` or `usize::MAX << usize::BITS - 1`.
-///
-#[cfg_attr(
-    target_pointer_width = "64",
-    doc = "Exact value: `9_223_372_036_854_775_807`"
-)]
-#[cfg_attr(target_pointer_width = "32", doc = "Exact value: `2_147_483_647`")]
-#[cfg_attr(target_pointer_width = "16", doc = "Exact value: `32_767`")]
 pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (usize::MAX >> 1);
 
 /// A small helper to generate a `usize` in which only the bit at the given index is set.
@@ -272,8 +257,6 @@ unsafe impl VarSized for std::path::Path {
 // not associated to reduce clutter, and so they can be const
 
 // TODO: use const_if! (cant rn because it doesnt support relaxed bounds or multiple bounds
-
-// SAFETY of below: the implementor of VarSized guarantees the ALN is valid.
 
 #[cfg(feature = "const_extras")]
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.

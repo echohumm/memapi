@@ -1,5 +1,3 @@
-[//]: # (TODO: make the project's code actually obey the rules defined here)
-
 # Contributing to memapi
 
 Thanks for your interest in contributing! This crate provides a no_std‑friendly memory allocation interface with

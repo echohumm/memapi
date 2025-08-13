@@ -1,19 +1,33 @@
-use crate::error::InvLayout;
 use crate::{
-    error::{AllocError, ArithOp, ArithOverflow, Cause, LayoutErr},
+    error::{
+        InvLayout,
+        AllocError,
+        ArithOp,
+        ArithOverflow,
+        Cause,
+        LayoutErr
+    },
     type_props::{
         varsized_nonnull_from_raw_parts, varsized_pointer_from_raw_parts, PtrProps, SizedProps,
         USIZE_MAX_NO_HIGH_BIT,
     },
-    Alloc,
+    Alloc
 };
 use core::{
-    alloc::Layout,
     mem::{forget, transmute},
     num::NonZeroUsize,
     ops::Deref,
     ptr::{self, NonNull},
 };
+use alloc::alloc::Layout;
+
+#[cfg(feature = "extern_alloc")]
+/// Helper to convert a NonNull<u8> to a *mut c_void.
+#[allow(dead_code)]
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub const fn nonnull_to_void(ptr: NonNull<u8>) -> *mut libc::c_void {
+    ptr.as_ptr().cast::<libc::c_void>()
+}
 
 /// Performs a checked arithmetic operation on two `usize`s.
 ///
@@ -82,7 +96,10 @@ pub fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
 }
 
 /// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
-pub(crate) fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
+/// 
+/// This is intended for initializing the memory and/or mapping the success value to another.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
     a: &A,
     layout: Layout,
     e: E,
@@ -126,9 +143,10 @@ const_if! {
     }
 }
 
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
 /// Checks layout for being zero-sized, returning an error if it is, otherwise attempting
 /// allocation using `f(layout)`.
-pub(crate) fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
+pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F,
     nq: fn(*mut T, Layout) -> Result<NonNull<u8>, AllocError>,
@@ -136,27 +154,31 @@ pub(crate) fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
     zsl_check(layout, |layout: Layout| nq(f(layout), layout))
 }
 
-#[allow(dead_code)]
+
 #[cfg(feature = "os_err_reporting")]
 /// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
 ///
 /// Currently set to call `null_q_oserr`.
-pub(crate) fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(dead_code)]
+pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     null_q_oserr(ptr, layout)
 }
 
-#[allow(dead_code)]
 #[cfg(not(feature = "os_err_reporting"))]
 /// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
 ///
 /// Currently set to call `null_q`.
-pub(crate) fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+#[allow(dead_code)]
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     null_q(ptr, layout)
 }
 
 #[cfg(feature = "os_err_reporting")]
 /// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
-fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     if ptr.is_null() {
         Err(AllocError::AllocFailed(
             layout,
@@ -169,7 +191,8 @@ fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocErro
 }
 
 /// Converts a possibly null pointer into a [`NonNull`] result.
-pub(crate) fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     if ptr.is_null() {
         Err(AllocError::AllocFailed(layout, Cause::Unknown))
     } else {
@@ -180,7 +203,8 @@ pub(crate) fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Allo
 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
 /// result of `f(layout)`.
-pub(crate) fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
     layout: Layout,
     f: F,
 ) -> Result<Ret, AllocError> {
@@ -241,7 +265,8 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
 #[cfg(feature = "alloc_slice")]
 /// Gets either a valid layout with space for `n` count of `T`, or an
 /// `AllocError::LayoutError(sz, aln)`.
-pub(crate) const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
     match layout_or_sz_align::<T>(n) {
         Ok(l) => Ok(l),
         Err((sz, aln, r)) => Err(InvLayout(sz, aln, r)),
@@ -376,7 +401,9 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// # Examples
 ///
 /// ```
-/// # use core::{ptr::NonNull, alloc::Layout};
+/// # extern crate alloc;
+/// # use core::ptr::NonNull;
+/// # use alloc::alloc::Layout;
 /// # use memapi::{
 /// #  helpers::SliceAllocGuard,
 /// #  Alloc,

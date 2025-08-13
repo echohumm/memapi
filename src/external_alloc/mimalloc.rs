@@ -1,14 +1,11 @@
 #![allow(clippy::undocumented_unsafe_blocks)]
 use crate::{
-    external_alloc::resize,
     ffi::mim as ffi,
-    helpers::{null_q, null_q_zsl_check},
+    helpers::{nonnull_to_void, null_q, null_q_zsl_check},
     Alloc, AllocError,
 };
-use core::{
-    alloc::{GlobalAlloc, Layout},
-    ptr::NonNull,
-};
+use alloc::alloc::{GlobalAlloc, Layout};
+use core::ptr::NonNull;
 use libc::c_void;
 
 /// Handle to the mimalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
@@ -73,15 +70,15 @@ unsafe impl GlobalAlloc for MiMalloc {
 }
 
 #[inline]
-fn zsl_check_alloc(
+fn zsl_check_alloc<F: Fn(usize, usize) -> *mut c_void>(
     layout: Layout,
-    alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void,
+    alloc: F,
 ) -> Result<NonNull<u8>, AllocError> {
     #[cfg(feature = "mimalloc_err_reporting")]
     {
         match null_q_zsl_check(
             layout,
-            |layout| unsafe { alloc(layout.size(), layout.align()) },
+            |layout| alloc(layout.size(), layout.align()),
             null_q,
         ) {
             Err(AllocError::AllocFailed(l, _)) => {
@@ -111,7 +108,7 @@ fn zsl_check_alloc(
     {
         null_q_zsl_check(
             layout,
-            |layout| unsafe { alloc(layout.size(), layout.align()) },
+            |layout| alloc(layout.size(), layout.align()),
             null_q,
         )
     }
@@ -120,21 +117,22 @@ fn zsl_check_alloc(
 impl Alloc for MiMalloc {
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        zsl_check_alloc(layout, ffi::mi_malloc_aligned)
+        zsl_check_alloc(layout, |s, a| unsafe { ffi::mi_malloc_aligned(s, a) })
     }
 
     #[inline]
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        zsl_check_alloc(layout, ffi::mi_zalloc_aligned)
+    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        zsl_check_alloc(layout, |s, a| unsafe { ffi::mi_zalloc_aligned(s, a) })
     }
 
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        // TODO: make this able to return an error if the pointer is not allocated by this allocator
         if layout.size() != 0 {
-            ffi::mi_free_size_aligned(ptr.as_ptr().cast::<c_void>(), layout.size(), layout.align());
+            ffi::mi_free_size_aligned(nonnull_to_void(ptr), layout.size(), layout.align());
         }
     }
+
+    // TODO: dedup these
 
     unsafe fn grow(
         &self,
@@ -142,20 +140,20 @@ impl Alloc for MiMalloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        resize(
-            || {
-                ffi::mi_realloc_aligned(
-                    ptr.as_ptr().cast::<c_void>(),
-                    new_layout.size(),
-                    new_layout.align(),
-                )
-            },
-            ptr,
-            old_layout,
-            new_layout,
-            false,
-            true,
-        )
+        let old_size = old_layout.size();
+        let new_size = new_layout.size();
+
+        let new_align = new_layout.align();
+
+        if new_size == old_size && new_align == old_layout.align() {
+            return Ok(ptr);
+        } else if new_size < old_size {
+            return Err(AllocError::GrowSmallerNewLayout(old_size, new_size));
+        }
+
+        zsl_check_alloc(new_layout, |_, _| {
+            ffi::mi_realloc_aligned(nonnull_to_void(ptr), new_size, new_align)
+        })
     }
 
     unsafe fn shrink(
@@ -164,20 +162,20 @@ impl Alloc for MiMalloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        resize(
-            || {
-                ffi::mi_realloc_aligned(
-                    ptr.as_ptr().cast::<c_void>(),
-                    new_layout.size(),
-                    new_layout.align(),
-                )
-            },
-            ptr,
-            old_layout,
-            new_layout,
-            false,
-            false,
-        )
+        let old_size = old_layout.size();
+        let new_size = new_layout.size();
+
+        let new_align = new_layout.align();
+
+        if new_size == old_size && new_align == old_layout.align() {
+            return Ok(ptr);
+        } else if new_size > old_size {
+            return Err(AllocError::ShrinkBiggerNewLayout(old_size, new_size));
+        }
+
+        zsl_check_alloc(new_layout, |_, _| {
+            ffi::mi_realloc_aligned(nonnull_to_void(ptr), new_size, new_align)
+        })
     }
 
     #[inline]
@@ -187,16 +185,69 @@ impl Alloc for MiMalloc {
         _: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        null_q_zsl_check(
-            new_layout,
-            |new_layout| {
-                ffi::mi_realloc_aligned(
-                    ptr.as_ptr().cast::<c_void>(),
-                    new_layout.size(),
-                    new_layout.align(),
-                )
-            },
-            null_q,
-        )
+        zsl_check_alloc(new_layout, |s, a| unsafe {
+            ffi::mi_realloc_aligned(nonnull_to_void(ptr), s, a)
+        })
+    }
+}
+
+#[cfg(feature = "alloc_aligned_at")]
+impl crate::features::alloc_aligned_at::AllocAlignedAt for MiMalloc {
+    fn alloc_at(&self, layout: Layout, offset: usize) -> Result<(NonNull<u8>, Layout), AllocError> {
+        zsl_check_alloc(layout, |s, a| unsafe {
+            ffi::mi_malloc_aligned_at(s, a, offset)
+        })
+        .map(|ptr| (ptr, layout))
+    }
+
+    fn zalloc_at(
+        &self,
+        layout: Layout,
+        offset: usize,
+    ) -> Result<(NonNull<u8>, Layout), AllocError> {
+        zsl_check_alloc(layout, |s, a| unsafe {
+            ffi::mi_zalloc_aligned_at(s, a, offset)
+        })
+        .map(|ptr| (ptr, layout))
+    }
+}
+
+#[cfg(feature = "fallible_dealloc")]
+impl crate::features::fallible_dealloc::DeallocUnchecked for MiMalloc {
+    unsafe fn dealloc_unchecked(&self, ptr: NonNull<u8>, layout: Layout) {
+        ffi::mi_free_size_aligned(nonnull_to_void(ptr), layout.size(), layout.align());
+    }
+}
+
+#[cfg(feature = "fallible_dealloc")]
+impl crate::features::fallible_dealloc::DeallocChecked for MiMalloc {
+    fn status(
+        &self,
+        ptr: NonNull<u8>,
+        layout: Layout,
+    ) -> crate::features::fallible_dealloc::BlockStatus {
+        use crate::features::fallible_dealloc::BlockStatus;
+
+        let align = crate::features::fallible_dealloc::ptr_max_align(ptr);
+
+        if self.owns(ptr) {
+            if unsafe {
+                ffi::mi_good_size(layout.size()) != ffi::mi_usable_size(nonnull_to_void(ptr))
+            } {
+                BlockStatus::OwnedIncomplete(None)
+            } else if align < layout.align() {
+                BlockStatus::OwnedMisaligned(Some(align))
+            } else {
+                BlockStatus::Owned
+            }
+        } else if align < layout.align() {
+            BlockStatus::NotOwnedMisaligned(Some(align))
+        } else {
+            BlockStatus::NotOwned
+        }
+    }
+
+    fn owns(&self, ptr: NonNull<u8>) -> bool {
+        unsafe { ffi::mi_is_in_heap_region(nonnull_to_void(ptr)) }
     }
 }

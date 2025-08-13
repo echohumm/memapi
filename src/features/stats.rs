@@ -1,9 +1,4 @@
-use crate::{
-    error::{AllocError, ArithOp},
-    helpers::checked_op_panic,
-    stats::AllocRes::{Fail, Succ},
-    Alloc, DefaultAlloc,
-};
+use crate::{error::{AllocError, ArithOp}, helpers::checked_op_panic, stats::AllocRes::{Fail, Succ}, Alloc, AllocPattern, DefaultAlloc};
 use alloc::{alloc::Layout, format, string::ToString};
 use core::{
     fmt::{self, Display, Formatter},
@@ -63,7 +58,7 @@ impl<A, L: StatsLogger> Stats<A, L> {
     }
 }
 
-// no-op logger
+// noop logger
 #[allow(clippy::inline_always)]
 impl StatsLogger for () {
     // none of these do anything, so we just inline them.
@@ -367,7 +362,7 @@ impl FileLog {
         path: P,
     ) -> Result<Self, std::io::Error> {
         Ok(FileLog {
-            file: Mutex::new(tri!(opt.open(path))),
+            file: Mutex::new(tri!(do opt.open(path))),
             total: AtomicUsize::new(0),
         })
     }
@@ -478,12 +473,11 @@ impl Display for AllocRes {
                         region.align,
                         region.ptr,
                         match kind {
-                            AllocKind::Uninitialized => "uninitialized".to_string(),
-                            AllocKind::Zeroed => "zeroed".to_string(),
-                            AllocKind::Filled(n) => format!("filled with the byte {}", n),
-                            AllocKind::Patterned => "filled with a pattern".to_string(),
+                            AllocPattern::Uninitialized => "uninitialized".to_string(),
+                            AllocPattern::Zeroed => "zeroed".to_string(),
+                            AllocPattern::Filled(n) => format!("filled with the byte {}", n),
                             // SAFETY: Only a reallocation can be a shrink, not an allocation.
-                            AllocKind::Shrink => unsafe { core::hint::unreachable_unchecked() },
+                            AllocPattern::Shrink => unsafe { core::hint::unreachable_unchecked() },
                         },
                         total
                     )
@@ -500,14 +494,12 @@ impl Display for AllocRes {
                         info.old.ptr,
                         info.new.ptr,
                         match kind {
-                            AllocKind::Uninitialized =>
+                            AllocPattern::Uninitialized =>
                                 "newly allocated bytes were uninitialized".to_string(),
-                            AllocKind::Zeroed => "newly allocated bytes were zeroed".to_string(),
-                            AllocKind::Filled(n) =>
+                            AllocPattern::Zeroed => "newly allocated bytes were zeroed".to_string(),
+                            AllocPattern::Filled(n) =>
                                 format!("newly allocated bytes were filled with the byte {}", n),
-                            AllocKind::Patterned =>
-                                "newly allocated bytes were filled with a pattern".to_string(),
-                            AllocKind::Shrink => "there were no newly allocated bytes".to_string(),
+                            AllocPattern::Shrink => "there were no newly allocated bytes".to_string(),
                         },
                         total
                     )
@@ -553,7 +545,7 @@ pub enum AllocStat {
         /// The memory region that was allocated.
         region: MemoryRegion,
         /// The kind of allocation.
-        kind: AllocKind,
+        kind: AllocPattern,
         /// The total number of bytes allocated after this call.
         total: usize,
     },
@@ -562,7 +554,7 @@ pub enum AllocStat {
         /// The old and new memory regions' information.
         info: ResizeMemRegions,
         /// The kind of allocation.       
-        kind: AllocKind,
+        kind: AllocPattern,
         /// The total number of bytes allocated after this call.
         total: usize,
     },
@@ -581,7 +573,7 @@ impl AllocStat {
         new_ptr: *mut u8,
         old_layout: Layout,
         new_layout: Layout,
-        kind: AllocKind,
+        kind: AllocPattern,
         total: usize,
     ) -> AllocStat {
         AllocStat::Realloc {
@@ -623,30 +615,12 @@ pub struct ResizeMemRegions {
     pub new: MemoryRegion,
 }
 
-/// What kind of allocation operation happened.
-#[derive(Debug)]
-pub enum AllocKind {
-    /// New bytes were not filled and are uninitialized.
-    Uninitialized,
-    /// New bytes were zeroed.
-    Zeroed,
-    /// New bytes were filled with a constant value.
-    Filled(u8),
-    /// New bytes were filled with a pattern.
-    // dontfixme: contain the pattern
-    // why though, me? why the hell would we contain the pattern??
-    // for anyone reading this, yes i am going insane.
-    Patterned,
-    /// There were no new bytes.
-    Shrink,
-}
-
 #[track_caller]
 fn allocate<A: Alloc, L: StatsLogger, F: Fn(&A, Layout) -> Result<NonNull<u8>, AllocError>>(
     slf: &Stats<A, L>,
     allocate: F,
     layout: Layout,
-    kind: AllocKind,
+    kind: AllocPattern,
 ) -> Result<NonNull<u8>, AllocError> {
     let size = layout.size();
     match allocate(&slf.0, layout) {
@@ -689,7 +663,7 @@ fn grow<
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    kind: AllocKind,
+    kind: AllocPattern,
 ) -> Result<NonNull<u8>, AllocError> {
     match grow(&slf.0, ptr, old_layout, new_layout) {
         Ok(new_ptr) => {
@@ -724,13 +698,13 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
     #[track_caller]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        allocate(self, A::alloc, layout, AllocKind::Uninitialized)
+        allocate(self, A::alloc, layout, AllocPattern::Uninitialized)
     }
 
     #[track_caller]
     #[inline]
-    fn alloc_zeroed(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        allocate(self, A::alloc_zeroed, layout, AllocKind::Zeroed)
+    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        allocate(self, A::zalloc, layout, AllocPattern::Zeroed)
     }
 
     #[track_caller]
@@ -762,24 +736,24 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
             ptr,
             old_layout,
             new_layout,
-            AllocKind::Uninitialized,
+            AllocPattern::Uninitialized,
         )
     }
 
     #[track_caller]
-    unsafe fn grow_zeroed(
+    unsafe fn zgrow(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
         grow(
-            self,
-            |a, ptr, old, new| a.grow_zeroed(ptr, old, new),
-            ptr,
-            old_layout,
-            new_layout,
-            AllocKind::Zeroed,
+			self,
+			|a, ptr, old, new| a.zgrow(ptr, old, new),
+			ptr,
+			old_layout,
+			new_layout,
+			AllocPattern::Zeroed,
         )
     }
 
@@ -800,7 +774,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
                     new_ptr.as_ptr(),
                     old_layout,
                     new_layout,
-                    AllocKind::Shrink,
+                    AllocPattern::Shrink,
                     total,
                 )));
                 Ok(new_ptr)
@@ -811,7 +785,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
                     null_mut(),
                     old_layout,
                     new_layout,
-                    AllocKind::Shrink,
+                    AllocPattern::Shrink,
                     self.1.total(),
                 )));
                 Err(e)

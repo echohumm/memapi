@@ -28,7 +28,7 @@ fn test_alloc_and_dealloc() {
 fn test_alloc_zeroed() {
     let allocator = DefaultAlloc;
     let layout = Layout::from_size_align(32, 8).unwrap();
-    let ptr = allocator.alloc_zeroed(layout).expect("alloc_zeroed failed");
+    let ptr = allocator.zalloc(layout).expect("alloc_zeroed failed");
     unsafe {
         for i in 0..layout.size() {
             assert_eq!(*ptr.as_ptr().add(i), 0);
