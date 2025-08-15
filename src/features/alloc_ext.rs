@@ -9,13 +9,18 @@ use crate::{
 use alloc::alloc::Layout;
 use core::ptr::{self, NonNull};
 
-/// Extension methods for the core [`Alloc`] trait, providing convenient routines to allocate,
-/// initialize, clone, copy, and deallocate sized and unsized types.
+#[cfg(feature = "fallible_dealloc")]
+pub use crate::features::fallible_dealloc::ext::DeallocCheckedExt;
+
+/// This trait provides methods for the core [`Alloc`] trait, providing convenient routines to
+/// allocate, initialize, clone, copy, and deallocate sized and unsized types.
 ///
 /// These helpers simplify common allocation patterns by combining `alloc`, writes, drops, and
 /// deallocations for various data shapes.
 pub trait AllocExt: Alloc {
-    /// Allocates uninitialized memory for a single `T` and initializes it using `init`.
+    /// Allocates memory for a single `T` and initializes it using `init`.
+    ///
+    /// If `init` panics, the allocation will be deallocated.
     ///
     /// # Errors
     ///
@@ -29,7 +34,9 @@ pub trait AllocExt: Alloc {
         Ok(guard.release())
     }
 
-    /// Allocates uninitialized memory for a single `T` and writes `T`'s default into it.
+    /// Allocates memory for a single `T` and writes `T`'s default into it.
+    ///
+    /// This is equivalent to `alloc.`[`walloc`](Self::walloc)`(T::default())`.
     ///
     /// # Errors
     ///
@@ -41,7 +48,7 @@ pub trait AllocExt: Alloc {
         self.walloc(T::default())
     }
 
-    /// Allocates uninitialized memory for a single `T` and writes `data` into it.
+    /// Allocates memory for a single `T` and writes `data` into it.
     ///
     /// # Errors
     ///
@@ -60,7 +67,9 @@ pub trait AllocExt: Alloc {
     }
 
     #[cfg(not(feature = "clone_to_uninit"))]
-    /// Allocates uninitialized memory for a single `T` and clones `data` into it.
+    /// Allocates memory for a single `T` and clones `data` into it.
+    ///
+    /// This is equivalent to `alloc.`[`walloc`](Self::walloc)`(data.clone()))`
     ///
     /// # Errors
     ///
@@ -69,13 +78,16 @@ pub trait AllocExt: Alloc {
     #[track_caller]
     #[inline]
     fn alloc_clone_to<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
-        let mut guard = tri!(do self.alloc_guard());
-        guard.init(data.clone());
-        Ok(guard.release())
+        // this implementation is better than the original as it defers allocation until after the
+        //  clone succeeds, improving performance and removing the guard.
+        self.walloc(data.clone())
     }
 
     #[cfg(all(feature = "clone_to_uninit", feature = "metadata"))]
-    /// Allocates uninitialized memory for a single `T` and clones `data` into it.
+    /// Allocates memory for a copy of the value behind `data` and clones the value into it using
+    /// [`CloneToUninit`](core::clone::CloneToUninit).
+    ///
+    /// The clone operation may panic.
     ///
     /// # Errors
     ///
@@ -86,44 +98,47 @@ pub trait AllocExt: Alloc {
         &self,
         data: &T,
     ) -> Result<NonNull<T>, AllocError> {
-        // SAFETY: `data` is a reference which immediately fulfills `layout()`'s invariants
-        // SAFETY: the pointer was just allocated by this allocator, is valid for for writes of at
-        // least `data`'s size, and aligned.
-        alloc_then(self, unsafe { data.layout() }, data, |p, data| unsafe {
-            let guard = AllocGuard::new(
-                NonNull::new_unchecked(crate::unstable_util::with_meta(p.as_ptr(), data)),
-                self,
-            );
-            data.clone_to_uninit(guard.as_ptr().cast::<u8>());
-            guard.release()
-        })
+        // SAFETY: `data` is a reference that immediately fulfills `layout()`'s invariants;
+        //  the pointer was just allocated by this allocator, is valid for writes of at
+        //  least `data`'s size, and aligned.
+        unsafe {
+            alloc_then(self, data.layout(), data, |p, data| {
+                let guard = AllocGuard::new(
+                    NonNull::new_unchecked(crate::unstable_util::with_meta(p.as_ptr(), data)),
+                    self,
+                );
+                data.clone_to_uninit(guard.as_ptr().cast::<u8>());
+                guard.release()
+            })
+        }
     }
 
     #[cfg(all(feature = "clone_to_uninit", not(feature = "metadata")))]
-    /// Allocates uninitialized memory for a single `T` and clones `data` into it.
+    /// Allocates memory for a copy of the value behind `data` and clones the value into it using
+    /// [`CloneToUninit`](core::clone::CloneToUninit).
     ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
-    ///
-    /// # Safety
-    ///
-    /// Callers must ensure that if the cloning operation panics, it will not be necessary to drop
-    /// the clone.
-    ///
-    /// This is because the `metadata` feature is not enabled, which is required to drop this
-    /// unsized value.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[track_caller]
-    unsafe fn alloc_clone_to<T: core::clone::CloneToUninit + ?Sized>(
+    fn alloc_clone_to<T: core::clone::CloneToUninit + crate::type_props::VarSized + ?Sized>(
         &self,
         data: &T,
-    ) -> Result<NonNull<u8>, AllocError> {
-        alloc_then::<NonNull<u8>, Self, &T, _>(self, data.layout(), data, |p, data| {
-            let guard = crate::helpers::SliceAllocGuard::new(p, self, data.sz());
-            data.clone_to_uninit(guard.as_ptr());
-            guard.release_first()
-        })
+    ) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: `data` is a reference that immediately fulfills `layout()`'s invariants;
+        //  we just allocated the pointer using `self`;
+        //  what's returned by sz will be the metadata of the type as it's VarSized.
+        unsafe {
+            alloc_then::<NonNull<T>, Self, &T, _>(self, data.layout(), data, |p, data| {
+                let guard = AllocGuard::new(
+                    crate::type_props::varsized_nonnull_from_raw_parts::<T>(p, data.sz()),
+                    self,
+                );
+                data.clone_to_uninit(guard.as_ptr().cast());
+                guard.release()
+            })
+        }
     }
 
     /// Attempts to allocate a block of memory fitting the given [`Layout`], filled with bytes
@@ -132,13 +147,12 @@ pub trait AllocExt: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
+    /// - [`AllocError::ZeroSizedLayout`] if `layout.size() == 0`
     #[cfg_attr(miri, track_caller)]
     fn falloc(&self, layout: Layout, n: u8) -> Result<NonNull<u8>, AllocError> {
         // SAFETY: allocation returns at least `layout.size()` bytes
         alloc_then::<NonNull<u8>, Self, u8, _>(self, layout, n, |p, n| unsafe {
             ptr::write_bytes(p.as_ptr(), n, layout.size());
-
             p
         })
     }
@@ -147,20 +161,25 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
-    ///   and writes, aligned, and a valid `T`.
+    /// `ptr` must:
+    /// - point to a block of memory allocated using this allocator
+    /// - be valid for reads and writes
+    /// - be properly aligned
+    /// - point to a valid `T`
     #[track_caller]
     #[inline]
     unsafe fn drop_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
         ptr::drop_in_place(ptr.as_ptr());
-        self.dealloc(ptr.cast::<u8>(), ptr.layout());
+        self.dealloc_typed(ptr);
     }
 
     /// Zeroes and deallocates the memory at a pointer.
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// - `ptr` must:
+    ///   - point to a block of memory allocated using this allocator.
+    ///   - be valid for writes of `layout.size()` bytes
     /// - `layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -173,7 +192,9 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// `ptr` must:
+    /// - point to a block of memory allocated using this allocator.
+    /// - have correct metadata for its type
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
@@ -184,7 +205,10 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// `ptr` must:
+    /// - point to a block of memory allocated using this allocator.
+    /// - have correct metadata for its type
+    /// - be valid for writes of `ptr.`[`sz`](PtrProps::sz)`()` bytes
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zero_and_dealloc_typed<T: ?Sized>(&self, ptr: NonNull<T>) {
@@ -196,8 +220,11 @@ pub trait AllocExt: Alloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator, be valid for reads
-    ///   and writes, aligned, and a valid `T`.
+    /// `ptr` must:
+    /// - point to a block of memory allocated using this allocator
+    /// - be valid for reads, and writes of `ptr.`[`sz`](PtrProps::sz)`()` bytes
+    /// - be properly aligned
+    /// - point to a valid `T`
     #[track_caller]
     #[inline]
     unsafe fn drop_zero_and_dealloc<T: ?Sized>(&self, ptr: NonNull<T>) {
@@ -206,7 +233,7 @@ pub trait AllocExt: Alloc {
     }
 
     #[cfg(feature = "metadata")]
-    /// Allocates and copies an unsized `T` by reference, returning a `NonNull<T>`.
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
     ///
     /// # Errors
     ///
@@ -222,11 +249,11 @@ pub trait AllocExt: Alloc {
     }
 
     #[cfg(feature = "metadata")]
-    /// Allocates and copies an unsized `T` by raw pointer, returning a `NonNull<T>`.
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
     ///
     /// # Safety
     ///
-    /// - Callers must ensure `data` is a valid pointer to copy from.
+    /// Callers must ensure `data` is a valid pointer to copy from.
     ///
     /// # Errors
     ///
@@ -242,12 +269,13 @@ pub trait AllocExt: Alloc {
     }
 
     #[cfg(feature = "metadata")]
-    /// Allocates and copies an unsized `T` by reference without requiring
-    /// `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy), returning a `NonNull<T>`.
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
+    ///
+    /// This variant doesn't require `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy).
     ///
     /// # Safety
     ///
-    /// - Callers must ensure `data` is safe to copy.
+    /// Callers must ensure `data` is safe to copy.
     ///
     /// # Errors
     ///
@@ -262,12 +290,13 @@ pub trait AllocExt: Alloc {
     }
 
     #[cfg(feature = "metadata")]
-    /// Allocates and copies an unsized `T` by raw pointer without requiring
-    /// `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy), returning a `NonNull<T>`.
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
+    ///
+    /// This variant doesn't require `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy).
     ///
     /// # Safety
     ///
-    /// - Callers must ensure `data` is safe to copy.
+    /// Callers must ensure `data` is safe to copy.
     ///
     /// # Errors
     ///
@@ -285,8 +314,92 @@ pub trait AllocExt: Alloc {
         })
     }
 
-    /// Allocates memory for an uninitialized `T` and returns an [`AllocGuard`] around it to ensure
-    /// deallocation on panic.
+    #[cfg(not(feature = "metadata"))]
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
+    #[cfg_attr(miri, track_caller)]
+    fn alloc_copy_ref_to<T: ?Sized + crate::type_props::VarSized + crate::marker::UnsizedCopy>(
+        &self,
+        data: &T,
+    ) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: `T: Copy`
+        unsafe { self.alloc_copy_ref_to_unchecked(data) }
+    }
+
+    #[cfg(not(feature = "metadata"))]
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
+    ///
+    /// # Safety
+    ///
+    /// Callers must ensure `data` is a valid pointer to copy from.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
+    #[cfg_attr(miri, track_caller)]
+    unsafe fn alloc_copy_ptr_to<
+        T: ?Sized + crate::type_props::VarSized + crate::marker::UnsizedCopy,
+    >(
+        &self,
+        data: *const T,
+    ) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: `T: Copy`
+        self.alloc_copy_ptr_to_unchecked(data)
+    }
+
+    #[cfg(not(feature = "metadata"))]
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
+    ///
+    /// This variant doesn't require `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy).
+    ///
+    /// # Safety
+    ///
+    /// Callers must ensure `data` is safe to copy.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
+    #[cfg_attr(miri, track_caller)]
+    unsafe fn alloc_copy_ref_to_unchecked<T: ?Sized + crate::type_props::VarSized>(
+        &self,
+        data: &T,
+    ) -> Result<NonNull<T>, AllocError> {
+        self.alloc_copy_ptr_to_unchecked(data)
+    }
+
+    #[cfg(not(feature = "metadata"))]
+    /// Allocates memory for a copy of the value behind `data`, then copies the value into it.
+    ///
+    /// This variant doesn't require `T: `[`UnsizedCopy`](crate::marker::UnsizedCopy).
+    ///
+    /// # Safety
+    ///
+    /// Callers must ensure `data` is safe to copy.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
+    #[cfg_attr(miri, track_caller)]
+    unsafe fn alloc_copy_ptr_to_unchecked<T: ?Sized + crate::type_props::VarSized>(
+        &self,
+        data: *const T,
+    ) -> Result<NonNull<T>, AllocError> {
+        // SAFETY: the caller guarantees `data` is valid.
+        alloc_then(self, data.layout(), data, |p, data| {
+            ptr::copy_nonoverlapping(data.cast::<u8>(), p.as_ptr(), data.sz());
+            crate::type_props::varsized_nonnull_from_raw_parts(p, data.sz())
+        })
+    }
+
+    /// Allocates memory for a `T` and returns an [`AllocGuard`] around it to ensure deallocation on
+    /// panic.
     ///
     /// # Errors
     ///
@@ -307,13 +420,30 @@ pub trait AllocExt: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `T::SZ == 0`.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
+    #[cfg_attr(miri, track_caller)]
+    fn alloc_guard_for_ref<T: ?Sized>(
+        &self,
+        data: &T,
+    ) -> Result<AllocGuard<'_, T, Self>, AllocError> {
+        // SAFETY: all references are valid pointers
+        unsafe { self.alloc_guard_for_ptr(data) }
+    }
+
+    #[cfg(feature = "metadata")]
+    /// Allocates memory for a copy of `data` and returns an [`AllocGuard`] around it to ensure
+    /// deallocation on panic.
     ///
     /// # Safety
     ///
     /// Callers must ensure `data` is a valid pointer.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn alloc_guard_for<T: ?Sized>(
+    unsafe fn alloc_guard_for_ptr<T: ?Sized>(
         &self,
         data: *const T,
     ) -> Result<AllocGuard<'_, T, Self>, AllocError> {
@@ -330,15 +460,15 @@ pub trait AllocExt: Alloc {
     ///
     /// Returns the new pointer, possibly reallocated elsewhere.
     ///
-    /// # Errors
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
-    /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    ///
     /// # Safety
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `old_layout` must describe exactly the same block.
+    ///
+    /// # Errors
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
+    /// - [`AllocError::ZeroSizedLayout`] if `new_layout.size() == 0`
     #[cfg_attr(miri, track_caller)]
     unsafe fn fgrow(
         &self,
@@ -353,15 +483,15 @@ pub trait AllocExt: Alloc {
     /// Reallocate a block, growing or shrinking as needed, filling any newly
     /// allocated bytes with `n`.
     ///
-    /// # Errors
-    ///
-    /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
-    ///
     /// # Safety
     ///
     /// - `ptr` must point to a block previously allocated with this allocator.
     /// - `old_layout` must describe exactly that block.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::AllocFailed`] if allocation fails.
+    /// - [`AllocError::ZeroSizedLayout`] if `new_layout.size()` == 0
     #[cfg_attr(miri, track_caller)]
     unsafe fn refalloc(
         &self,

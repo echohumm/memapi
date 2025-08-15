@@ -5,7 +5,10 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 ## Table of Contents
 
 - [Current low-priority to-dos](#current-low-priority-to-dos)
-- [Version 0.17.0](#version-0170)
+- [Version 0.18.0](#version-0180)
+  - [Commit 2](#commit-2-2025-8-14)
+  - [Commit 1](#commit-1-2025-8-13)
+- [Version 0.17.0](#version-0170-2025-8-10)
   - [Commit 2](#commit-2-2025-8-10)
   - [Commit 1](#commit-1-2025-8-09)
 - [Version 0.16.0](#version-0160-2025-8-08)
@@ -42,9 +45,29 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Proper tests for many untested methods and features (maybe)
 - Split AllocSlice/AllocExt into multiple traits (only in consideration)
 
-## Version 0.17.0 (2025-8-10)
+## Version 0.18.0
 
-### Commit 3 (2025-8-13)
+### Commit 2 (2025-8-14)
+
+Haven't tested this fully yet
+
+- Slightly improve build.rs
+- Improve feature bundles
+- Fix README and document feature bundles in it
+- Start making some error paths cold
+- Remove jemalloc reallocation's same layout alignment requirement
+- Move mim/jemalloc ResizeInPlace implementations to their own files
+- Move features/fallible_dealloc.rs to a directory module
+  - Added methods parallel to alloc_ext/alloc_slice
+- Split features/stats.rs into multiple modules in a directory module
+- Add `ThreadSafeIOLogger` behind `stats_thread_safe_io` feature
+- (WIP) Generally clean up docs, modules, etc.
+  - still a lot to do
+  - also made some backwards progress (my brain was dying after doing features/fallible_dealloc/ext.rs, that file is 
+    seriously a cognitohazard for no reason. just thinking about it fogs my brain.)
+- Add AllocSlice missing unchecked variants
+
+### Commit 1 (2025-8-13)
 
 - Add `AllocAlignedAt` trait under `alloc_aligned_at` feature
 - Add `dev` feature which unhides several internal functions used in implementations.
@@ -56,6 +79,8 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Reduce code duplication
 - Improve MiMalloc error handling
 - Update README.md
+
+## Version 0.17.0 (2025-8-10)
 
 ### Commit 2 (2025-8-10)
 

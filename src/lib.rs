@@ -29,12 +29,14 @@
 //!     [`AllocKind`](stats::AllocKind) types.
 //!   - (With `std`) Several default logger implementations.
 //!   - (With `stats_file_lock`) Safer file locking for `FileLog`. (MSRV ≥ 1.89.0).
+//!   - (With `stats_thread_safe_io`) [`ThreadSafeIOLogger`](stats::ThreadSafeIOLog) for logging to
+//!     [lockable](stats::WriteLock) writers. (MSRV ≥ 1.61.0)
 //!   - (With `stats_parking_lot`) Usage of [`parking_lot::Mutex`] instead of [`std::sync::Mutex`].
 //!
-//! - **`fallible_dealloc`**: Adds [`FallibleDealloc`](fallible_dealloc::DeallocChecked), a trait
+//! - **`fallible_dealloc`**: Adds [`FallibleDealloc`](DeallocChecked), a trait
 //!   for fallible deallocations.
 //!
-//! - **`alloc_aligned_at`**: Adds [`AllocAlignedAt`](alloc_aligned_at::AllocAlignedAt), a trait for
+//! - **`alloc_aligned_at`**: Adds [`AllocAlignedAt`](AllocAlignedAt), a trait for
 //!   allocating such that the actual pointer isn't aligned until after an offset.
 //!
 //! - **`external_alloc`**: FFI helpers for external allocators.
@@ -66,6 +68,7 @@
 //! - **`extra_extra_const`**: Further expands `const` support (MSRV ≥ 1.83.0).
 //!
 //! All other features are either bundles of others or bindings to `MiMalloc`/`Jemalloc`'s features.
+//! For bundles, consult the readme. For external allocator bindings, consult their documentation.
 
 // TODO: more allocators, work on underlying allocators ffi
 
@@ -81,6 +84,7 @@
 )]
 #![deny(missing_docs, unused_unsafe)]
 #![cfg_attr(not(feature = "std"), no_std)]
+// #![no_std]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
@@ -90,6 +94,10 @@
 // TODO: create fewer scopes (particularly with unsafe)
 
 // TODO: generally add more helpers and dedup to reduce bin size
+
+// TODO: shortened names for more methods (for consistency)
+
+// TODO: make doc section order consistent (safety above panics above errors)
 
 macro_rules! const_if {
     (
@@ -176,13 +184,21 @@ macro_rules! tri {
     (AllocError::$n:ident($($fallible:expr)+)) => {
         match $($fallible)+ {
             Ok(s) => s,
-            Err(e) => return Err(AllocError::$n(e)),
+            Err(e) => return Err(crate::error::AllocError::$n(e)),
         }
     };
+    (lay, $sz:expr, $aln:expr) => {
+        match crate::unstable_util::layout_from_size_align($sz, $aln) {
+            Ok(layout) => layout,
+            Err(e) => return Err(
+                crate::error::AllocError::InvalidLayout(crate::error::InvLayout($sz, $aln, e))
+            ),
+        }
+    }
 }
 
 // TODO: dedup docs with some macros
-// TODO: split crate into smaller crates
+// TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
 
 extern crate alloc;
 extern crate core;
@@ -209,8 +225,13 @@ pub use features::alloc_slice::*;
 #[cfg(feature = "resize_in_place")]
 pub use features::resize_in_place::*;
 
-#[cfg(any(feature = "stats", feature = "fallible_dealloc"))]
+#[cfg(feature = "stats")]
 pub use features::*;
+
+#[cfg(feature = "fallible_dealloc")]
+pub use features::fallible_dealloc::{
+    base_try_dealloc_impl, ptr_max_align, BlockStatus, DeallocChecked,
+};
 
 #[cfg(feature = "extern_alloc")]
 pub use external_alloc::*;
@@ -304,15 +325,14 @@ unsafe impl GlobalAlloc for DefaultAlloc {
 
 default_alloc_impl!(DefaultAlloc);
 
-// TODO: split this trait into multiple:
+// MAYBEDO: split this trait into multiple:
 //  - Alloc
 //  - Dealloc
 //  - Grow: Alloc + Dealloc
 //  - Shrink: Alloc + Dealloc
-//  - Realloc: Alloc + Dealloc
-//  and some supertraits:
-//  - ResizeAlloc: Grow + Shrink + Realloc
-//  - BasicAlloc: Alloc + Dealloc
+//  - Realloc: Grow + Shrink
+//  and a supertrait which replaces this:
+//  - FullAlloc: Alloc + Dealloc
 /// A memory allocation interface.
 ///
 /// This trait does _not_ require `Self: Allocator` and is `no_std`-compatible.
@@ -334,12 +354,13 @@ pub trait Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        // SAFETY: alloc_zeroed returns at least layout.size() allocated bytes
-        alloc_then(self, layout, (), |p, ()| unsafe {
-            // SAFETY: alloc returns at least layout.size() allocated bytes
-            ptr::write_bytes(p.as_ptr(), 0, layout.size());
-            p
-        })
+        // SAFETY: alloc returns at least layout.size() allocated bytes
+        unsafe {
+            alloc_then(self, layout, (), |p, ()| {
+                ptr::write_bytes(p.as_ptr(), 0, layout.size());
+                p
+            })
+        }
     }
 
     /// Deallocates a previously allocated block.
@@ -350,9 +371,9 @@ pub trait Alloc {
     ///
     /// - `ptr` must point to a block of memory allocated using this allocator.
     /// - `layout` must describe exactly the same block.
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Some implementations may choose to panic if `ptr` or `layout` are invalid.
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout);
 
@@ -360,17 +381,17 @@ pub trait Alloc {
     ///
     /// Returns the new pointer, possibly reallocated elsewhere.
     ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// - `old_layout` must describe exactly the same block.
+    ///
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_layout.size() < old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// On failure, the original memory will not be deallocated or modified.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow(
@@ -392,17 +413,17 @@ pub trait Alloc {
     ///
     /// Returns the new pointer, possibly reallocated elsewhere.
     ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// - `old_layout` must describe exactly the same block.
+    ///
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] in `new_layout.size() < old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// On failure, the original memory will not be deallocated or modified.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
     unsafe fn zgrow(
         &self,
@@ -415,6 +436,11 @@ pub trait Alloc {
 
     /// Shrink the given block to a new, smaller layout.
     ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block of memory allocated using this allocator.
+    /// - `old_layout` must describe exactly the same block.
+    ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
@@ -422,11 +448,6 @@ pub trait Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// On failure, the original memory will not be deallocated or modified.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `old_layout` must describe exactly the same block.
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink(
         &self,
@@ -439,8 +460,14 @@ pub trait Alloc {
 
     /// Reallocates a block, growing or shrinking as needed.
     ///
+    ///
     /// On grow, preserves existing contents up to `old_layout.size()`, and
     /// on shrink, truncates to `new_layout.size()`.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block previously allocated with this allocator.
+    /// - `old_layout` must describe exactly that block.
     ///
     /// # Errors
     ///
@@ -448,11 +475,6 @@ pub trait Alloc {
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// On failure, the original memory will not be deallocated or modified.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block previously allocated with this allocator.
-    /// - `old_layout` must describe exactly that block.
     #[cfg_attr(miri, track_caller)]
     unsafe fn realloc(
         &self,
@@ -472,17 +494,17 @@ pub trait Alloc {
     /// Reallocates a block, growing or shrinking as needed, zeroing any newly
     /// allocated bytes.
     ///
+    /// # Safety
+    ///
+    /// - `ptr` must point to a block previously allocated with this allocator.
+    /// - `old_layout` must describe exactly that block.
+    ///
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// On failure, the original memory will not be deallocated or modified.
-    ///
-    /// # Safety
-    ///
-    /// - `ptr` must point to a block previously allocated with this allocator.
-    /// - `old_layout` must describe exactly that block.
     #[cfg_attr(miri, track_caller)]
     unsafe fn rezalloc(
         &self,
@@ -693,18 +715,16 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized>(
         #[cfg(feature = "alloc_ext")]
         AllocPattern::Filled(n) => {
             let mem = tri!(do a.alloc(new_layout));
-            ptr::write_bytes(
-                mem.as_ptr().add(old_size),
-                n,
-                new_layout.size() - old_size,
-            );
+            ptr::write_bytes(mem.as_ptr().add(old_size), n, new_layout.size() - old_size);
             mem
         }
         AllocPattern::Shrink => core::hint::unreachable_unchecked(),
     };
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_size);
-    a.dealloc(ptr, old_layout);
+    if old_size != 0 {
+        a.dealloc(ptr, old_layout);
+    }
 
     Ok(new_ptr)
 }
@@ -726,7 +746,9 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
     let new_ptr = tri!(do a.alloc(new_layout));
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
-    a.dealloc(ptr, old_layout);
+    if old_layout.size() != 0 {
+        a.dealloc(ptr, old_layout);
+    }
 
     Ok(new_ptr)
 }

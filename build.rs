@@ -5,23 +5,26 @@ fn main() {
         return;
     }
 
-    // Print all failures to stderr for clearer visibility
     for Failure { code, msg } in &failures {
         eprintln!("sp_frp UB test {} failed: {}", code, msg);
     }
 
-    // Example toolchain info for reference; users should substitute their own
     let example_toolchain = "nightly-x86_64-unknown-linux-gnu 1.91.0 (840b83a10 2025-07-30)";
+    let req_info = "please open an issue with your rust toolchain info";
+    let get_tc_info = "(`rustup default`, `cargo --version`).";
     panic!(
-        "sp_frp UB checks failed (codes: {:?}).\nplease open an issue with your rust toolchain \
-        info (`rustup default`, `cargo --version`).\nexample: {}",
+        "sp_frp UB checks failed (codes: {:?}).\n\
+        {} {}\n\
+        example: {}",
         failures.iter().map(|f| f.code).collect::<Vec<_>>(),
+        req_info,
+        get_tc_info,
         example_toolchain
     );
 }
 
 /// Represents a single check failure
-struct Failure {
+pub struct Failure {
     code: usize,
     msg: &'static str,
 }
@@ -39,7 +42,7 @@ mod checks {
         use crate::Failure;
         use core::ptr::NonNull;
 
-        pub(crate) fn check() -> Vec<Failure> {
+        pub fn check() -> Vec<Failure> {
             let mut failures = Vec::<Failure>::new();
             let i = 4;
 

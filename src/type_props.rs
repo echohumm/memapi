@@ -50,19 +50,28 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is non-null, aligned, and non-dangling.
+    /// Callers must ensure the pointer is:
+    /// - non-null
+    /// - non-dangling
+    /// - aligned
     unsafe fn sz(&self) -> usize;
     /// Gets the alignment of the value.
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is non-null, aligned, and non-dangling.
+    /// Callers must ensure the pointer is:
+    /// - non-null
+    /// - non-dangling
+    /// - aligned
     unsafe fn aln(&self) -> usize;
     /// Gets the memory layout for the value.
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is non-null, aligned, and non-dangling.
+    /// Callers must ensure the pointer is:
+    /// - non-null
+    /// - non-dangling
+    /// - aligned
     #[inline]
     unsafe fn layout(&self) -> Layout {
         Layout::from_size_align_unchecked(self.sz(), self.aln())
@@ -73,14 +82,20 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is non-null, aligned, and non-dangling.
+    /// Callers must ensure the pointer is:
+    /// - non-null
+    /// - non-dangling
+    /// - aligned
     unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata;
 
     /// Checks whether the value is zero-sized.
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is non-null, aligned, and non-dangling.
+    /// Callers must ensure the pointer is:
+    /// - non-null
+    /// - non-dangling
+    /// - aligned
     unsafe fn is_zst(&self) -> bool {
         self.sz() == 0
     }
@@ -89,8 +104,10 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is non-null, aligned, and non-dangling.
-    // this has almost no real use case as far as i can tell
+    /// Callers must ensure the pointer is:
+    /// - non-null
+    /// - non-dangling
+    /// - aligned
     unsafe fn max_slice_len(&self) -> usize {
         match self.sz() {
             0 => usize::MAX,
@@ -190,8 +207,9 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
 ///
 /// # Safety
 ///
-/// Implementors must ensure that `Subtype` is the actual element type contained and that the `ALN`
-/// constant accurately reflects the type's alignment requirement in all safe contexts.
+/// Implementors must ensure that `Subtype` is the actual element type contained, that the `ALN`
+/// constant accurately reflects the type's alignment requirement in all safe contexts, and that
+/// this type has `usize` metadata (`<Self as Pointee>::Metadata = usize`).
 pub unsafe trait VarSized {
     /// The element type.
     ///
@@ -213,7 +231,7 @@ pub unsafe trait VarSized {
 ///
 /// Implementors must ensure that `Subtype` is the actual element type contained and that the `ALN`
 /// constant accurately reflects the type's alignment requirement in all safe contexts.
-pub unsafe trait VarSized: crate::marker::SizeMeta {
+pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
     /// The element type.
     ///
     /// [`VarSized`] types are either slices of another type or include a slice tail; this is that

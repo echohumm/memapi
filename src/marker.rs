@@ -108,14 +108,32 @@ pub unsafe trait Thin:
 /// ```
 pub unsafe trait SizeMeta {}
 
+#[cfg(all(not(feature = "metadata"), feature = "sized_hierarchy"))]
+/// Trait indicating that a type has `usize` metadata.
+///
+/// # Safety
+///
+/// Implementors must ensure this type has `usize` metadata (`<Self as Pointee>::Metadata = usize`).
+///
+/// # Example
+///
+/// ```
+/// # use memapi::{type_props::SizedProps, marker::SizeMeta};
+///
+/// fn never_panics<T: SizeMeta>() {
+///    assert_eq!(<&T>::SZ, usize::SZ * 2)
+/// }
+/// ```
+pub unsafe trait SizeMeta: core::marker::MetaSized {}
+
 #[cfg(all(feature = "metadata", not(feature = "sized_hierarchy")))]
 /// Trait indicating that a type has `usize` metadata.
 ///
 /// # Safety
 ///
-/// This is safe to implement in this configuration; however, because the actually-unsafe
-/// version exists when both `metadata` and `sized_hierarchy` are disabled, this trait
-/// must still be marked `unsafe` for consistency across configurations.
+/// This is safe to implement in this configuration; however, because the actually-unsafe version
+/// exists when `metadata` is disabled, this trait must still be marked `unsafe` for consistency
+/// across configurations.
 ///
 /// # Example
 ///
@@ -133,9 +151,9 @@ pub unsafe trait SizeMeta: core::ptr::Pointee<Metadata = usize> {}
 ///
 /// # Safety
 ///
-/// This is safe to implement in this configuration; however, because the actually-unsafe
-/// version exists when both `metadata` and `sized_hierarchy` are disabled, this trait
-/// must still be marked `unsafe` for consistency across configurations.
+/// This is safe to implement in this configuration; however, because the actually-unsafe version
+/// exists when `metadata` is disabled, this trait must still be marked `unsafe` for consistency
+/// across configurations.
 ///
 /// # Example
 ///

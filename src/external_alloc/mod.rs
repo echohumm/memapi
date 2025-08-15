@@ -1,15 +1,10 @@
 #[cfg(feature = "jemalloc")]
-/// Module for [jemalloc](https://jemalloc.net/) support.
+/// Module for [Jemalloc](https://jemalloc.net/) support.
 pub mod jemalloc;
 
 #[cfg(feature = "mimalloc")]
-/// Module for [mimalloc](https://microsoft.github.io/mimalloc/) support.
+/// Module for [MiMalloc](https://microsoft.github.io/mimalloc/) support.
 pub mod mimalloc;
-
-#[cfg(any(feature = "jemalloc", feature = "mimalloc"))]
-pub(crate) const REALLOC_DIFF_ALIGN: crate::error::AllocError = crate::error::AllocError::Other(
-    "unsupported operation: attempted to reallocate with a different alignment",
-);
 
 /// FFI bindings to allocation libraries.
 pub mod ffi {
@@ -60,12 +55,6 @@ pub mod ffi {
     #[cfg(feature = "mimalloc")]
     /// Bindings from `mimalloc-sys`.
     pub mod mim {
-        // /// Returns the usable size of the allocation pointed to by ptr.
-        // ///
-        // /// # Safety
-        // ///
-        // /// `ptr` must have been allocated by mimalloc and must not have been freed yet.
-
         pub use memapi_mimalloc_sys::*;
     }
 }

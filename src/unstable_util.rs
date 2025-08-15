@@ -1,13 +1,7 @@
 use crate::{
-    error::{
-        ArithOp,
-        InvLayout,
-        LayoutErr,
-        RepeatLayoutError,
-        AlignErr
-    },
+    error::{AlignErr, ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
     helpers::{align_up_unchecked, checked_op},
-    type_props::USIZE_HIGH_BIT
+    type_props::USIZE_HIGH_BIT,
 };
 use alloc::alloc::Layout;
 
@@ -102,7 +96,7 @@ pub const fn repeat_layout_packed(
     let align = layout.align();
     match layout_from_size_align(size, align) {
         Ok(layout) => Ok(layout),
-        Err(r) => Err(RepeatLayoutError::InvalidLayout(InvLayout(size, align, r))),
+        Err(e) => Err(RepeatLayoutError::InvalidLayout(InvLayout(size, align, e))),
     }
 }
 

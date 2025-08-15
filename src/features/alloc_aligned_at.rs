@@ -1,7 +1,4 @@
-use crate::{
-    error::AllocError,
-    Alloc,
-};
+use crate::{error::AllocError, Alloc};
 use alloc::alloc::Layout;
 use core::ptr::{self, NonNull};
 

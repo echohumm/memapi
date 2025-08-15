@@ -1,29 +1,29 @@
 use crate::{
-    error::{
-        InvLayout,
-        AllocError,
-        ArithOp,
-        ArithOverflow,
-        Cause,
-        LayoutErr
-    },
+    error::{AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr},
     type_props::{
         varsized_nonnull_from_raw_parts, varsized_pointer_from_raw_parts, PtrProps, SizedProps,
         USIZE_MAX_NO_HIGH_BIT,
     },
-    Alloc
+    Alloc,
 };
+use alloc::alloc::Layout;
 use core::{
     mem::{forget, transmute},
     num::NonZeroUsize,
     ops::Deref,
     ptr::{self, NonNull},
 };
-use alloc::alloc::Layout;
+
+/// Converts a reference into a [`NonNull`].
+pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
+    // SAFETY: all references are valid non-null pointers
+    unsafe { NonNull::new_unchecked(r as *const T as *mut T) }
+}
 
 #[cfg(feature = "extern_alloc")]
 /// Helper to convert a NonNull<u8> to a *mut c_void.
 #[allow(dead_code)]
+#[must_use]
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 pub const fn nonnull_to_void(ptr: NonNull<u8>) -> *mut libc::c_void {
     ptr.as_ptr().cast::<libc::c_void>()
@@ -45,7 +45,7 @@ pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithO
 
     match res {
         Some(v) => Ok(v),
-        None => Err(ArithOverflow(l, op, r)),
+        None => AllocError::arith_overflow(l, op, r),
     }
 }
 
@@ -96,7 +96,7 @@ pub fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
 }
 
 /// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
-/// 
+///
 /// This is intended for initializing the memory and/or mapping the success value to another.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
@@ -153,7 +153,6 @@ pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
 ) -> Result<NonNull<u8>, AllocError> {
     zsl_check(layout, |layout: Layout| nq(f(layout), layout))
 }
-
 
 #[cfg(feature = "os_err_reporting")]
 /// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.

@@ -17,6 +17,13 @@ FEATURES = [
     "resize_in_place",
 
     "stats",
+    "stats_parking_lot",
+
+    "extern_alloc",
+    "jemalloc",
+    "mimalloc",
+    "mimalloc_err_reporting",
+    "mimalloc_err_output",
 ]
 
 def all_feature_combinations(features):

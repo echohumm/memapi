@@ -1,4 +1,4 @@
-//#![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
 use core::{
     alloc::Layout,

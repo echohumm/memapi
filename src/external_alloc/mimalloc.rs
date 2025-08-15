@@ -191,6 +191,56 @@ impl Alloc for MiMalloc {
     }
 }
 
+#[cfg(feature = "resize_in_place")]
+pub(crate) const SHRINK_IP: AllocError =
+    AllocError::Other("unsupported operation: attempted to shrink in place");
+
+#[cfg(feature = "resize_in_place")]
+impl crate::ResizeInPlace for MiMalloc {
+    unsafe fn grow_in_place(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_size: usize,
+    ) -> Result<(), AllocError> {
+        if new_size == 0 {
+            Err(crate::features::resize_in_place::RESIZE_IP_ZS)
+        } else if new_size < old_layout.size() {
+            Err(AllocError::GrowSmallerNewLayout(
+                old_layout.size(),
+                new_size,
+            ))
+        } else {
+            // this would be, though
+            if ffi::mi_expand(ptr.as_ptr().cast::<c_void>(), new_size).is_null() {
+                Err(crate::features::resize_in_place::CANNOT_RESIZE_IP)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    // TODO: verify this is true
+    /// Shrinking in-place is not supported by mimalloc.
+    ///
+    /// This is a noop and always returns an error.
+    ///
+    /// # Errors
+    ///
+    /// - [`AllocError::Other`]`("unsupported operation: attempted to shrink in place")`.
+    // it just returns an error, no reason not to inline it.
+    #[allow(clippy::inline_always)]
+    #[inline(always)]
+    unsafe fn shrink_in_place(
+        &self,
+        _: NonNull<u8>,
+        _: Layout,
+        _: usize,
+    ) -> Result<(), AllocError> {
+        Err(SHRINK_IP)
+    }
+}
+
 #[cfg(feature = "alloc_aligned_at")]
 impl crate::features::alloc_aligned_at::AllocAlignedAt for MiMalloc {
     fn alloc_at(&self, layout: Layout, offset: usize) -> Result<(NonNull<u8>, Layout), AllocError> {
@@ -209,13 +259,6 @@ impl crate::features::alloc_aligned_at::AllocAlignedAt for MiMalloc {
             ffi::mi_zalloc_aligned_at(s, a, offset)
         })
         .map(|ptr| (ptr, layout))
-    }
-}
-
-#[cfg(feature = "fallible_dealloc")]
-impl crate::features::fallible_dealloc::DeallocUnchecked for MiMalloc {
-    unsafe fn dealloc_unchecked(&self, ptr: NonNull<u8>, layout: Layout) {
-        ffi::mi_free_size_aligned(nonnull_to_void(ptr), layout.size(), layout.align());
     }
 }
 

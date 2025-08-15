@@ -1,4 +1,4 @@
-//#![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(clippy::undocumented_unsafe_blocks)]
 use core::{alloc::Layout, ptr};
 use memapi::{Alloc, AllocSlice, DefaultAlloc};
 
@@ -8,16 +8,13 @@ fn test_alloc_init_and_default_slice() {
     let len = 3;
     // alloc_init_slice
     let sptr = unsafe {
-        allocator.alloc_slice_init::<u32, _>(
-            |p, init| {
-                let p = p.cast::<u32>();
-                for i in 0..len {
-                    ptr::write(p.as_ptr().add(i), 5);
-                    *init += 1;
-                }
-            },
-            len,
-        )
+        allocator.alloc_slice_init::<u32, _>(len, |p, init| {
+            let p = p.cast::<u32>();
+            for i in 0..len {
+                ptr::write(p.as_ptr().add(i), 5);
+                *init += 1;
+            }
+        })
     }
     .unwrap();
     let slice_ref: &[u32] = unsafe { sptr.as_ref() };

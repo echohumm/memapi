@@ -39,6 +39,33 @@ pub enum AllocError {
     Other(&'static str),
 }
 
+impl AllocError {
+    #[cfg(feature = "fallible_dealloc")]
+    #[cold]
+    #[inline(never)]
+    #[cfg_attr(not(feature = "dev"), doc(hidden))]
+    pub const fn dealloc_failed(
+        p: NonNull<u8>,
+        layout: Layout,
+        block_stat: crate::BlockStatus,
+    ) -> Result<(), AllocError> {
+        Err(AllocError::DeallocFailed(
+            p,
+            layout,
+            Cause::InvalidBlockStatus(block_stat),
+        ))
+    }
+
+    #[cold]
+    #[inline(never)]
+    #[cfg_attr(not(feature = "dev"), doc(hidden))]
+    pub const fn arith_overflow(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithOverflow> {
+        Err(ArithOverflow(l, op, r))
+    }
+
+    // TODO: similar cold constructors for other errors
+}
+
 // manual implementations because of Cause, which can't be PEq if os_err_reporting is enabled
 impl PartialEq for AllocError {
     #[inline]
@@ -84,7 +111,7 @@ impl Display for AllocError {
             }
             #[cfg(feature = "fallible_dealloc")]
             AllocError::DeallocFailed(ptr, l, cause) => {
-                use crate::fallible_dealloc::BlockStatus;
+                use crate::BlockStatus;
 
                 // i hate this
                 match cause {
@@ -159,7 +186,7 @@ pub enum Cause {
     OutOfMemory,
     #[cfg(feature = "fallible_dealloc")]
     /// The block status is invalid.
-    InvalidBlockStatus(crate::fallible_dealloc::BlockStatus),
+    InvalidBlockStatus(crate::BlockStatus),
     #[cfg(feature = "os_err_reporting")]
     /// The cause is described in the contained OS error.
     ///
@@ -298,7 +325,9 @@ impl Display for AlignErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             AlignErr::ZeroAlign => write!(f, "alignment is zero"),
-            AlignErr::NonPowerOfTwoAlign(align) => write!(f, "alignment {} is not a power of two", align),
+            AlignErr::NonPowerOfTwoAlign(align) => {
+                write!(f, "alignment {} is not a power of two", align)
+            }
         }
     }
 }

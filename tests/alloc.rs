@@ -1,12 +1,10 @@
-//#![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(clippy::undocumented_unsafe_blocks)]
 use core::{alloc::Layout, ptr};
 use memapi::{
     error::AllocError,
     unstable_util::{layout_padding_for, pad_layout_to_align, repeat_layout, repeat_layout_packed},
     Alloc, DefaultAlloc,
 };
-
-// TODO: break up big tests into smaller, more generalized ones
 
 #[test]
 fn test_alloc_and_dealloc() {

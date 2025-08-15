@@ -6,9 +6,9 @@ A `no_std`-friendly memory allocation interface for managing raw buffers, suitab
 
 MSRV: 1.56
 
-MSRV with `extra_const` feature: 1.61
+MSRV with `extra_const`/`stats_thread_safe_io` feature: 1.61
 
-MSRV with `c_str` feature:
+MSRV with `c_str` feature: 1.64
 
 MSRV with `extra_extra_const` feature: 1.83
 
@@ -23,6 +23,7 @@ MSRV with `stats_file_lock` feature: 1.89
   - Default logging types with `std` feature
   - No-std-compatible logging types with `stats_parking_lot` feature
   - Safer file logging with `stats_file_lock` feature
+  - Thread-safe stdout/stderr logging with `stats_thread_safe_io` feature
 - Allocator API support on nightly (feature: `nightly`)
   - Clone/Copy specialization for performance and ease of use (feature: `specialization`)
   - CloneToUninit usage in some functions (feature: `clone_to_uninit`)
@@ -49,6 +50,26 @@ MSRV with `stats_file_lock` feature: 1.89
 - `std` support (feature: `std`)
 - Unstable utilities (feature: `unstable_util`)
 - Exposed implementation details for implementing `Alloc` yourself (feature: `dev`)
+
+---
+
+## Feature bundles
+
+### Stable
+
+- `external_allocs`: all supported external allocators
+- `external_allocs_in_place` all supported external allocators with in-place reallocation
+- `utils`: all msrv-compatible, useful features
+- `extra`: all useful features, even msrv-incompatible ones
+- `std_{utils,extra}`: same as their namesake, but with features dependent on `std`
+- `full_min`: all msrv-compatible features
+- `full`: all features, even msrv-incompatible ones
+
+### Nightly
+
+- `default_nightly`: all nightly features that are actually used in a way that matters
+- `all_nightly`: all nightly features
+- `full_nightly`: all stable features and nightly features
 
 ---
 

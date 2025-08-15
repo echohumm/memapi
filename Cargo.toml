@@ -44,8 +44,6 @@ incremental = false
 
 
 [features]
-default = ["c_str", "const_max"]
-
 # msrv-changing features
 ## that make small changes
 const_extras = []
@@ -54,6 +52,7 @@ c_str = []
 
 ## that make large changes
 stats_file_lock = ["stats", "std"]
+stats_thread_safe_io = ["stats", "std"]
 
 # nightly support
 nightly = []
@@ -62,7 +61,7 @@ sized_hierarchy = ["nightly"]
 clone_to_uninit = ["nightly"]
 specialization = ["nightly"]
 
-all_nightly = ["metadata", "sized_hierarchy", "clone_to_uninit", "specialization"]
+all_nightly = ["metadata", "clone_to_uninit", "specialization"]
 
 default_nightly = ["metadata", "clone_to_uninit", "specialization"]
 
@@ -102,10 +101,11 @@ extern_allocs_in_place = ["jemalloc_in_place", "mimalloc_in_place"]
 
 # bundles
 utils = ["alloc_slice", "alloc_ext", "fallible_dealloc"]
-extra = ["utils", "stats_parking_lot"]
+extra = ["utils", "stats_parking_lot", "stats_thread_safe_io", "stats_file_lock", "c_str", "const_max"]
 std_utils = ["utils", "os_err_reporting"]
 std_extra = ["extra", "os_err_reporting"]
 
+full_min = ["std_utils", "extern_allocs_in_place", "mimalloc_err_reporting", "std_libc"]
 full = ["std_extra", "std_utils", "extern_allocs_in_place", "mimalloc_err_reporting", "std_libc"]
 full_nightly = ["full", "all_nightly"]
 
