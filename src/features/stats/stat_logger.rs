@@ -118,8 +118,11 @@ macro_rules! delegate_logger {
 
 delegate_logger!(&L);
 delegate_logger!(&mut L);
+#[cfg(not(feature = "no_alloc"))]
 delegate_logger!(alloc::boxed::Box<L>);
+#[cfg(not(feature = "no_alloc"))]
 delegate_logger!(alloc::rc::Rc<L>);
+#[cfg(not(feature = "no_alloc"))]
 delegate_logger!(alloc::sync::Arc<L>);
 
 #[cfg(feature = "std")]
@@ -140,7 +143,10 @@ pub struct FmtLog<W: core::fmt::Write> {
     pub total: AtomicUsize,
 }
 
-#[cfg(any(feature = "std", feature = "stats_parking_lot"))]
+#[cfg(all(
+    any(feature = "std", feature = "stats_parking_lot"),
+    not(feature = "no_alloc")
+))]
 /// A logger that pushes all statistics to a vector.
 pub struct StatCollectingLog {
     /// The vector which results are passed to.
@@ -178,7 +184,10 @@ impl<W: core::fmt::Write> StatsLogger for FmtLog<W> {
     atomic_total_ops!(total);
 }
 
-#[cfg(any(feature = "std", feature = "stats_parking_lot"))]
+#[cfg(all(
+    any(feature = "std", feature = "stats_parking_lot"),
+    not(feature = "no_alloc")
+))]
 impl StatsLogger for StatCollectingLog {
     fn log(&self, stat: AllocRes) {
         lock_mutex_expect(
@@ -234,11 +243,14 @@ impl<W: core::fmt::Write + Default> Default for FmtLog<W> {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(
+    any(feature = "std", feature = "stats_parking_lot"),
+    not(feature = "no_alloc")
+))]
 impl Default for StatCollectingLog {
     fn default() -> StatCollectingLog {
         StatCollectingLog {
-            results: Mutex::new(Vec::new()),
+            results: Mutex::new(alloc::vec::Vec::new()),
             total: AtomicUsize::new(0),
         }
     }
@@ -326,7 +338,12 @@ impl<W: super::lock::WriteLock> ThreadSafeIOLog<W> {
     }
 }
 
-#[cfg(feature = "std")]
+// TODO: make sure all cfgs are right because some (like below) were wrong (was just feature = "std"
+
+#[cfg(all(
+    any(feature = "std", feature = "stats_parking_lot"),
+    not(feature = "no_alloc")
+))]
 impl StatCollectingLog {
     const_if! {
         "const_extras",
@@ -335,7 +352,7 @@ impl StatCollectingLog {
         #[inline]
         pub const fn new() -> StatCollectingLog {
             StatCollectingLog {
-                results: Mutex::new(Vec::new()),
+                results: Mutex::new(alloc::vec::Vec::new()),
                 total: AtomicUsize::new(0),
             }
         }
@@ -346,7 +363,7 @@ impl StatCollectingLog {
     #[inline]
     pub fn with_capacity(cap: usize) -> StatCollectingLog {
         StatCollectingLog {
-            results: Mutex::new(Vec::with_capacity(cap)),
+            results: Mutex::new(alloc::vec::Vec::with_capacity(cap)),
             total: AtomicUsize::new(0),
         }
     }
@@ -419,11 +436,11 @@ pub type StdoutLog = ThreadSafeIOLog<std::io::Stdout>;
 /// A logger that writes to stderr.
 pub type StderrLog = ThreadSafeIOLog<std::io::Stderr>;
 
-#[cfg(not(feature = "stats_thread_safe_io"))]
+#[cfg(all(not(feature = "stats_thread_safe_io"), feature = "std"))]
 /// A logger that writes to stdout.
 pub type StdoutLog = IOLog<std::io::Stdout>;
 
-#[cfg(not(feature = "stats_thread_safe_io"))]
+#[cfg(all(not(feature = "stats_thread_safe_io"), feature = "std"))]
 /// A logger that writes to stderr.
 pub type StderrLog = IOLog<std::io::Stderr>;
 

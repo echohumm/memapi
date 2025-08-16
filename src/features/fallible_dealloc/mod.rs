@@ -1,5 +1,4 @@
-use crate::{error::AllocError, Alloc};
-use alloc::alloc::Layout;
+use crate::{error::AllocError, Alloc, Layout};
 use core::{
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     ptr::NonNull,

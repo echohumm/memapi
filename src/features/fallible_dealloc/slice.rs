@@ -10,6 +10,8 @@ use core::{
 };
 
 /// Slice-specific extension methods for [`DeallocChecked`].
+#[allow(clippy::module_name_repetitions)]
+
 pub trait DeallocCheckedSlice: DeallocChecked {
     /// Attempts to drop `init` elements from a partially initialized slice, then zero and
     /// deallocate its memory.
@@ -19,7 +21,6 @@ pub trait DeallocCheckedSlice: DeallocChecked {
     /// `ptr` must:
     /// - be properly aligned
     /// - point to `init` valid `T`
-    /// - have correct metadata, the total number of `T` which fit in it
     ///
     /// # Errors
     ///
@@ -39,10 +40,9 @@ pub trait DeallocCheckedSlice: DeallocChecked {
     ///
     /// # Safety
     ///
-    /// - `ptr` must:
-    ///   - be properly aligned
-    ///   - point to `init` valid `T`
-    /// - `len` must be the total number of `T` which fit in that block
+    /// `ptr` must:
+    /// - be properly aligned
+    /// - point to `init` valid `T`
     ///
     /// # Errors
     ///
@@ -61,7 +61,6 @@ pub trait DeallocCheckedSlice: DeallocChecked {
             len
         )));
         base_try_dealloc_impl(self, slice, tri!(lay, sz, T::ALN), |d, ptr, layout| {
-            // Now that ownership/layout validated, drop only the `init` elements and zero the block.
             ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr(), init));
             let p_bytes = ptr.cast::<u8>();
             ptr::write_bytes(p_bytes.as_ptr(), 0, layout.size());
@@ -69,14 +68,13 @@ pub trait DeallocCheckedSlice: DeallocChecked {
         })
     }
 
-    /// Attemtps to drop `init` elements from a partially initialized slice and deallocate it.
+    /// Attempts to drop `init` elements from a partially initialized slice and deallocate it.
     ///
     /// # Safety
     ///
     /// `ptr` must:
     /// - be properly aligned
     /// - point to `init` valid `T`
-    /// - have correct metadata, the total number of `T` which fit in it
     ///
     /// # Errors
     ///
@@ -97,10 +95,9 @@ pub trait DeallocCheckedSlice: DeallocChecked {
     ///
     /// # Safety
     ///
-    /// - `ptr` must:
-    ///   - be properly aligned
-    ///   - point to `init` valid `T`
-    /// - `len` must be the total number of `T` which fit in that block
+    /// `ptr` must:
+    /// - be properly aligned
+    /// - point to `init` valid `T`
     ///
     /// # Errors
     ///

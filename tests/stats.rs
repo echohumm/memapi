@@ -1,12 +1,8 @@
-#![allow(clippy::undocumented_unsafe_blocks)]
-use core::{
-    alloc::Layout,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-use memapi::{
-    stats::{FmtLog, Stats},
-    Alloc,
-};
+// miri is incompatible with malloc_defaultalloc
+#![cfg(any(not(miri), not(feature = "malloc_defaultalloc")))]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+use core::sync::atomic::{AtomicUsize, Ordering};
+use memapi::{stats::{FmtLog, Stats}, Alloc, Layout};
 
 #[test]
 fn test_stats_counts_correct() {
@@ -31,7 +27,7 @@ fn test_stats_counts_correct() {
 }
 
 #[test]
-fn test_stats_str_logger_test() {
+fn test_stats_str_logger() {
     let logger = FmtLog::new(String::new());
     let stats_alloc = Stats::new(&logger);
 

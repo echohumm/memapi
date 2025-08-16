@@ -9,7 +9,7 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/echohumm/memapi"
 keywords = ["allocator", "no_std", "memory", "allocation"]
-categories = ["no-std", "memory-management"]
+categories = ["no-std::no-alloc", "memory-management"]
 include = [
     "src/**",
     "build.rs",
@@ -42,8 +42,12 @@ incremental = false
 
 
 
-
 [features]
+# meta features
+dev = []
+no_alloc = []
+malloc_defaultalloc = ["no_alloc", "extern_alloc"]
+
 # msrv-changing features
 ## that make small changes
 const_extras = []
@@ -78,6 +82,7 @@ alloc_aligned_at = []
 
 alloc_ext = []
 alloc_slice = []
+alloc_slice_extend = []
 resize_in_place = []
 
 # stats
@@ -88,28 +93,12 @@ stats_parking_lot = ["stats", "parking_lot"]
 extern_alloc = ["libc"]
 
 jemalloc = ["memapi-jemalloc-sys", "extern_alloc"]
-jemalloc_in_place = ["jemalloc", "resize_in_place"]
-
 mimalloc = ["memapi-mimalloc-sys", "extern_alloc"]
-mimalloc_in_place = ["mimalloc", "resize_in_place"]
+# libc's malloc
+malloc = ["extern_alloc"]
+
 mimalloc_err_reporting = ["mimalloc", "mim_dbg", "os_err_reporting"]
 mimalloc_err_output = ["mimalloc_err_reporting"]
-
-# external allocator bundles
-extern_allocs = ["jemalloc", "mimalloc"]
-extern_allocs_in_place = ["jemalloc_in_place", "mimalloc_in_place"]
-
-# bundles
-utils = ["alloc_slice", "alloc_ext", "fallible_dealloc"]
-extra = ["utils", "stats_parking_lot", "stats_thread_safe_io", "stats_file_lock", "c_str", "const_max"]
-std_utils = ["utils", "os_err_reporting"]
-std_extra = ["extra", "os_err_reporting"]
-
-full_min = ["std_utils", "extern_allocs_in_place", "mimalloc_err_reporting", "std_libc"]
-full = ["std_extra", "std_utils", "extern_allocs_in_place", "mimalloc_err_reporting", "std_libc"]
-full_nightly = ["full", "all_nightly"]
-
-dev = []
 
 # jemalloc feature bindings
 jem_bg_threads_rt = ["memapi-jemalloc-sys/background_threads_runtime_support"]

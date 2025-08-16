@@ -36,9 +36,10 @@ MSRV with `stats_file_lock` feature: 1.89
 - OS error reporting with supported allocators (feature: `os_err_reporting`)
   - Supports Jemalloc and Rust's default allocator
   - Supports MiMalloc (feature: `mimalloc_err_reporting`)
-- External allocator support (MSRV: 1.63)
+- External allocator support
   - Jemalloc (feature: `jemalloc`)
   - MiMalloc (feature: `mimalloc`)
+  - Malloc (feature: `malloc`)
 - Fallback implementation for stable Rust
 - Low-cost wrapper over the global allocator
 - `no_std` compatible
@@ -47,29 +48,11 @@ MSRV with `stats_file_lock` feature: 1.89
 - Resize-in-place extension methods (feature: `resize_in_place`)
 - Basic extension methods (feature: `alloc_ext`)
 - Slice-focused extension methods (feature: `alloc_slice`)
+- Slice-extending extension methods (feature: `alloc_slice_extend`)
 - `std` support (feature: `std`)
 - Unstable utilities (feature: `unstable_util`)
-- Exposed implementation details for implementing `Alloc` yourself (feature: `dev`)
-
----
-
-## Feature bundles
-
-### Stable
-
-- `external_allocs`: all supported external allocators
-- `external_allocs_in_place` all supported external allocators with in-place reallocation
-- `utils`: all msrv-compatible, useful features
-- `extra`: all useful features, even msrv-incompatible ones
-- `std_{utils,extra}`: same as their namesake, but with features dependent on `std`
-- `full_min`: all msrv-compatible features
-- `full`: all features, even msrv-incompatible ones
-
-### Nightly
-
-- `default_nightly`: all nightly features that are actually used in a way that matters
-- `all_nightly`: all nightly features
-- `full_nightly`: all stable features and nightly features
+- Exposed implementation details for implementing traits yourself (feature: `dev`)
+  - Most internal functions are public, just doc(hidden), and dev exposes them
 
 ---
 
@@ -208,7 +191,8 @@ memapi = "0.15.0"
 
 ## No-Std Support
 
-This crate works without the Rust standard library. It relies on `alloc` from the core distribution.
+This crate works without the Rust standard library. It relies on `alloc` from the core distribution
+(unless the `no_alloc` feature is on).
 
 ---
 

@@ -1,5 +1,4 @@
-use crate::helpers::dangling_nonnull;
-use alloc::alloc::Layout;
+use crate::{helpers::dangling_nonnull, Layout};
 use core::{
     mem::{align_of, align_of_val, size_of, size_of_val},
     ptr::NonNull,
@@ -54,6 +53,8 @@ pub trait PtrProps<T: ?Sized> {
     /// - non-null
     /// - non-dangling
     /// - aligned
+    ///
+    /// References are always valid.
     unsafe fn sz(&self) -> usize;
     /// Gets the alignment of the value.
     ///
@@ -63,6 +64,8 @@ pub trait PtrProps<T: ?Sized> {
     /// - non-null
     /// - non-dangling
     /// - aligned
+    ///
+    /// References are always valid.
     unsafe fn aln(&self) -> usize;
     /// Gets the memory layout for the value.
     ///
@@ -72,6 +75,8 @@ pub trait PtrProps<T: ?Sized> {
     /// - non-null
     /// - non-dangling
     /// - aligned
+    ///
+    /// References are always valid.
     #[inline]
     unsafe fn layout(&self) -> Layout {
         Layout::from_size_align_unchecked(self.sz(), self.aln())
@@ -86,6 +91,8 @@ pub trait PtrProps<T: ?Sized> {
     /// - non-null
     /// - non-dangling
     /// - aligned
+    ///
+    /// References are always valid.
     unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata;
 
     /// Checks whether the value is zero-sized.
@@ -96,6 +103,8 @@ pub trait PtrProps<T: ?Sized> {
     /// - non-null
     /// - non-dangling
     /// - aligned
+    ///
+    /// References are always valid.
     unsafe fn is_zst(&self) -> bool {
         self.sz() == 0
     }
@@ -108,6 +117,8 @@ pub trait PtrProps<T: ?Sized> {
     /// - non-null
     /// - non-dangling
     /// - aligned
+    ///
+    /// References are always valid.
     unsafe fn max_slice_len(&self) -> usize {
         match self.sz() {
             0 => usize::MAX,
@@ -161,6 +172,7 @@ macro_rules! impl_ptr_props_identity {
 macro_rules! impl_ptr_props_as_ref {
     ($($name:ty),* $(,)?) => {
         $(
+            #[cfg(not(feature = "no_alloc"))]
             impl<T: ?Sized> PtrProps<T> for $name {
                 #[inline]
                 unsafe fn sz(&self) -> usize {
@@ -276,85 +288,53 @@ unsafe impl VarSized for std::path::Path {
 
 // TODO: use const_if! (cant rn because it doesnt support relaxed bounds or multiple bounds
 
-#[cfg(feature = "const_extras")]
-/// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
-#[must_use]
-pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
-    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-    varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
-}
-
-#[cfg(not(feature = "const_extras"))]
-/// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
-#[must_use]
-pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
-    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-    varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
-}
-
-#[cfg(feature = "const_extras")]
-/// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
-#[must_use]
-pub const fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
-    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-    varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
-}
-
-#[cfg(not(feature = "const_extras"))]
-/// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
-#[must_use]
-pub fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
-    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-    varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
-}
-
-#[cfg(feature = "const_extras")]
-/// Creates a `NonNull<T>` from a pointer and a `usize` size metadata.
-#[must_use]
-#[inline]
-pub const fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
-    p: NonNull<u8>,
-    meta: usize,
-) -> NonNull<T> {
-    // SAFETY: `p` was already non-null, so it with different meta must also be nn.
-    unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
-}
-
-#[cfg(not(feature = "const_extras"))]
-/// Creates a `NonNull<T>` from a pointer and a `usize` size metadata.
-#[must_use]
-#[inline]
-pub fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
-    p: NonNull<u8>,
-    meta: usize,
-) -> NonNull<T> {
-    // SAFETY: `p` was already non-null, so it with different meta must also be nn.
-    unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
-}
-
-#[cfg(feature = "const_extras")]
-/// Creates a `*mut T` from a pointer and a `usize` size metadata.
-#[must_use]
-#[inline]
-pub const fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
-    p: *mut u8,
-    meta: usize,
-) -> *mut T {
-    // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe {
-        // i hate this so much
-        *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
+const_if! {
+    "const_extras",
+    "Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.",
+    #[must_use]
+    pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
+        // SAFETY: the implementor of VarSized guarantees the ALN is valid.
+        varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
     }
 }
 
-#[cfg(not(feature = "const_extras"))]
-/// Creates a `*mut T` from a pointer and a `usize` size metadata.
-#[must_use]
-#[inline]
-pub fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
-    // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe {
-        // i hate this so much
-        *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
+const_if! {
+    "const_extras",
+    "Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.",
+    #[must_use]
+    pub const fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
+        // SAFETY: the implementor of VarSized guarantees the ALN is valid.
+        varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
+    }
+}
+
+const_if! {
+    "const_extras",
+    "Creates a `NonNull<T>` from a pointer and a `usize` size metadata.",
+    #[must_use]
+    #[inline]
+    pub const fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
+        p: NonNull<u8>,
+        meta: usize,
+    ) -> NonNull<T> {
+        // SAFETY: `p` was already non-null, so it with different meta must also be nn.
+        unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
+    }
+}
+
+const_if! {
+    "const_extras",
+    "Creates a `*mut T` from a pointer and a `usize` size metadata.",
+    #[must_use]
+    #[inline]
+    pub const fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
+        p: *mut u8,
+        meta: usize,
+    ) -> *mut T {
+        // SAFETY: VarSized trait requires T::Metadata == usize
+        unsafe {
+            // i hate this so much
+            *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
+        }
     }
 }

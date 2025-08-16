@@ -1,6 +1,8 @@
-#![allow(clippy::undocumented_unsafe_blocks)]
-use core::{alloc::Layout, ptr};
-use memapi::{Alloc, AllocSlice, DefaultAlloc};
+// miri is incompatible with malloc_defaultalloc
+#![cfg(any(not(miri), not(feature = "malloc_defaultalloc")))]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+use core::ptr;
+use memapi::{Alloc, AllocSlice, DefaultAlloc, Layout};
 
 #[test]
 fn test_alloc_init_and_default_slice() {
@@ -8,7 +10,7 @@ fn test_alloc_init_and_default_slice() {
     let len = 3;
     // alloc_init_slice
     let sptr = unsafe {
-        allocator.alloc_slice_init::<u32, _>(len, |p, init| {
+        allocator.isalloc::<u32, _>(len, |p, init| {
             let p = p.cast::<u32>();
             for i in 0..len {
                 ptr::write(p.as_ptr().add(i), 5);
@@ -24,7 +26,7 @@ fn test_alloc_init_and_default_slice() {
     }
 
     // alloc_default_slice
-    let dptr = allocator.alloc_slice_default::<u32>(len).unwrap();
+    let dptr = allocator.salloc_def::<u32>(len).unwrap();
     let dslice: &[u32] = unsafe { dptr.as_ref() };
     assert_eq!(dslice, &[0; 3]);
     unsafe {

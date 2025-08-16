@@ -1,6 +1,8 @@
-#![allow(clippy::undocumented_unsafe_blocks)]
-use core::{alloc::Layout, ptr};
-use memapi::{type_props::SizedProps, Alloc, AllocExt, DefaultAlloc};
+// miri is incompatible with malloc_defaultalloc
+#![cfg(any(not(miri), not(feature = "malloc_defaultalloc")))]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+use core::ptr;
+use memapi::{type_props::SizedProps, Alloc, AllocExt, DefaultAlloc, Layout};
 
 #[test]
 #[allow(clippy::cast_possible_truncation)]
@@ -22,7 +24,7 @@ fn test_alloc_init_and_default_and_write() {
     let allocator = DefaultAlloc;
     // alloc_init
     let ptr = allocator
-        .alloc_init::<u32, _>(|p| unsafe { *p.as_ptr() = 42 })
+        .ialloc::<u32, _>(|p| unsafe { *p.as_ptr() = 42 })
         .unwrap();
     assert_eq!(unsafe { *ptr.as_ptr() }, 42);
     unsafe {
@@ -30,7 +32,7 @@ fn test_alloc_init_and_default_and_write() {
     }
 
     // alloc_default
-    let dptr = allocator.alloc_default::<u32>().unwrap();
+    let dptr = allocator.alloc_def::<u32>().unwrap();
     assert_eq!(unsafe { *dptr.as_ptr() }, u32::default());
     unsafe {
         allocator.dealloc(dptr.cast(), u32::LAYOUT);

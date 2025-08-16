@@ -1,8 +1,8 @@
 use crate::{
+    stats::minstring::String,
     stats::AllocRes::{Fail, Succ},
-    AllocPattern,
+    AllocPattern, Layout,
 };
-use alloc::{alloc::Layout, string::ToString};
 use core::{
     fmt::{self, Display, Formatter},
     hint::unreachable_unchecked,
@@ -19,6 +19,8 @@ pub enum AllocRes {
 }
 
 impl Display for AllocRes {
+    // its long, but simple so we dont care
+    #[allow(clippy::too_many_lines)]
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Succ(stat) => match stat {
@@ -35,10 +37,11 @@ impl Display for AllocRes {
                         region.align,
                         region.ptr,
                         match kind {
-                            AllocPattern::Uninitialized => "uninitialized".to_string(),
-                            AllocPattern::Zeroed => "zeroed".to_string(),
+                            AllocPattern::Uninitialized => String::from_str("uninitialized"),
+                            AllocPattern::Zeroed => String::from_str("zeroed"),
                             #[cfg(feature = "alloc_ext")]
-                            AllocPattern::Filled(n) => alloc::format!("filled with the byte {}", n),
+                            AllocPattern::Filled(n) =>
+                                String::from_str("filled with the byte ").append_u8(*n),
                             // SAFETY: Only a reallocation can be a shrink, not an allocation.
                             AllocPattern::Shrink => unsafe { unreachable_unchecked() },
                         },
@@ -58,15 +61,17 @@ impl Display for AllocRes {
                         info.new.ptr,
                         match kind {
                             AllocPattern::Uninitialized =>
-                                "newly allocated bytes were uninitialized".to_string(),
-                            AllocPattern::Zeroed => "newly allocated bytes were zeroed".to_string(),
+                                String::from_str("newly allocated bytes were uninitialized"),
+                            AllocPattern::Zeroed =>
+                                String::from_str("newly allocated bytes were zeroed"),
                             #[cfg(feature = "alloc_ext")]
-                            AllocPattern::Filled(n) => alloc::format!(
-                                "newly allocated bytes were filled with the byte {}",
-                                n
-                            ),
+                            // TODO: use this. right now we don't because we moved falloc to 
+                            //  AllocExt
+                            AllocPattern::Filled(n) =>
+                                String::from_str("newly allocated bytes were filled with the byte ")
+                                    .append_u8(*n),
                             AllocPattern::Shrink =>
-                                "there were no newly allocated bytes".to_string(),
+                                String::from_str("there were no newly allocated bytes"),
                         },
                         total
                     )

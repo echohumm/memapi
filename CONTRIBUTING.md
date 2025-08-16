@@ -32,6 +32,7 @@ This document explains how to work on the repository, run checks locally, and op
 Useful commands:
 
 - Format: `cargo fmt --all` (CI expects formatted code; run `cargo fmt --all --check` to verify)
+[//]: # (TODO: update this)
 - Lints: `cargo clippy --all-targets --all-features -- -D warnings`
 - Docs: `cargo doc --no-deps --all-features`
 - Build fast: `cargo check --all-targets`

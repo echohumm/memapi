@@ -6,7 +6,8 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Current low-priority to-dos](#current-low-priority-to-dos)
 - [Version 0.18.0](#version-0180)
-  - [Commit 2](#commit-2-2025-8-14)
+  - [Commit 3](#commit-3-2025-8-15-2337)
+  - [Commit 2](#commit-2-2025-8-14-1926)
   - [Commit 1](#commit-1-2025-8-13)
 - [Version 0.17.0](#version-0170-2025-8-10)
   - [Commit 2](#commit-2-2025-8-10)
@@ -36,18 +37,49 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   - [Commit 1 (2025-7-26)](#commit-1-2025-7-26)
 - [Version 0.13.2](#version-0132-2025-7-25)
 
-## Current low-priority to-dos
+## Entry format
+
+```markdown
+## Version <MAJOR>.<MINOR>.<PATCH> [[<META_NOTE>] | (<PUBLISH_DATE> <PUBLISH_MST_TIME>)]
+
+### Commit <COMMIT_NUMBER> {on release: (<DATE> <MST_TIME>)}
+
+- <CHANGE MESSAGE> [(<NOTE>)
+  [- <SUBCHANGE_NOTE>]
+```
+
+# Current high priority to-dos
+
+unless i get depressed again or a cognitohazard like `fallible_dealloc/ext.rs` appears and breaks my brain again, these 
+will probably be done by august 17.
 
 - Debloat the primary surfaces
+- Sort stuff and fix module structure (it's SO bad)
+- Fix `malloc`'s weird system of private abstractions
+- Split AllocSlice/AllocExt into multiple traits
+
+## Current low-priority to-dos
+
 - Performance and binary size improvements
   - make as many sections as possible `const` [perf]
-  - use helpers for repetitive code [size]
-- Proper tests for many untested methods and features (maybe)
-- Split AllocSlice/AllocExt into multiple traits (only in consideration)
+  - use helpers for repetitive code [size] (~40% done?)
+- Proper tests for many untested methods and features
 
 ## Version 0.18.0
 
-### Commit 2 (2025-8-14)
+### Commit 3 (2025-8-15 23:41)
+
+- Remove feature bundles
+- Make compatible with `no_std::no_alloc` with `no_alloc` feature
+- Add `Malloc` allocator as a wrapper around libc's allocation functions
+- Remove `*ref` functions from `AllocSlice`/`AllocExt`
+- Move many `AllocSlice` methods to `AllocSliceExt` (temporary, until separated into more 
+  descriptive traits)
+- Add `malloc_defaultalloc` feature to make `DefaultAlloc` use malloc instead of Rust's allocation 
+  functions when `no_alloc` is on
+- Shorten more method names (e.g., `alloc_slice` -> `salloc`, `alloc_copy_slice_to` -> `salloc_copy`)
+
+### Commit 2 (2025-8-14 19:26)
 
 Haven't tested this fully yet
 

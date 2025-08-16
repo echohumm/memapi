@@ -1,7 +1,7 @@
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
-use core::{alloc::Layout, ptr};
-use memapi::{ffi::mim::mi_usable_size, mimalloc::MiMalloc, Alloc};
+use core::ptr;
+use memapi::{ffi::mim::mi_usable_size, mimalloc::MiMalloc, Alloc, Layout};
 
 #[test]
 fn alloc_and_dealloc_basic() {

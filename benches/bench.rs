@@ -1,10 +1,9 @@
 extern crate alloc;
 extern crate criterion;
 
-use alloc::alloc::Layout;
 use core::{hint::black_box, time::Duration};
 use criterion::{criterion_main, Criterion};
-use memapi::{type_props::SizedProps, AllocExt, DefaultAlloc};
+use memapi::{type_props::SizedProps, AllocExt, DefaultAlloc, Layout};
 
 fn bench_alloc_dealloc(c: &mut Criterion) {
     c.bench_function("alloc", |b| {
@@ -12,7 +11,7 @@ fn bench_alloc_dealloc(c: &mut Criterion) {
             let alloc = black_box(DefaultAlloc);
             let mem = black_box(black_box(alloc.walloc(black_box(193874_usize))).unwrap());
             unsafe {
-                alloc.drop_and_dealloc(mem);
+                alloc.drop_dealloc(mem);
             }
         });
     });
@@ -22,9 +21,9 @@ fn bench_alloc_default_u64(c: &mut Criterion) {
     c.bench_function("alloc_default<u64>", |b| {
         b.iter(|| {
             let alloc = black_box(DefaultAlloc);
-            let ptr = black_box(alloc.alloc_default::<u64>()).unwrap();
+            let ptr = black_box(alloc.alloc_def::<u64>()).unwrap();
             unsafe {
-                alloc.drop_and_dealloc(ptr);
+                alloc.drop_dealloc(ptr);
             }
         });
     });
@@ -37,7 +36,7 @@ fn bench_alloc_write_u128(c: &mut Criterion) {
             let value = black_box(0xDEADBEEF_DEADBEEF_DEADBEEF_DEADBEEF_u128);
             let ptr = black_box(alloc.walloc::<u128>(value)).unwrap();
             unsafe {
-                alloc.drop_and_dealloc(ptr);
+                alloc.drop_dealloc(ptr);
             }
         });
     });
@@ -56,7 +55,7 @@ fn bench_alloc_filled_1k(c: &mut Criterion) {
             let byte = black_box(0xA5_u8);
             let ptr = black_box(alloc.falloc(layout, byte)).unwrap();
             unsafe {
-                alloc.zero_and_dealloc(ptr, layout);
+                alloc.zdealloc(ptr, layout);
             }
         });
     });
@@ -82,7 +81,7 @@ fn bench_grow_filled_1k_to_4k(c: &mut Criterion) {
                     .unwrap(),
             );
 
-            alloc.zero_and_dealloc(grown, new_layout);
+            alloc.zdealloc(grown, new_layout);
         });
     });
 }
@@ -107,7 +106,7 @@ fn bench_realloc_filled_4k_to_1k(c: &mut Criterion) {
                     .unwrap(),
             );
 
-            alloc.zero_and_dealloc(shrunk, new_layout);
+            alloc.zdealloc(shrunk, new_layout);
         });
     });
 }
@@ -117,7 +116,7 @@ fn bench_dealloc_typed_usize(c: &mut Criterion) {
         b.iter(|| unsafe {
             let alloc = black_box(DefaultAlloc);
             let ptr = black_box(alloc.walloc::<usize>(black_box(193874_usize))).unwrap();
-            alloc.dealloc_typed(ptr);
+            alloc.dealloc_t(ptr);
         });
     });
 }
@@ -131,7 +130,7 @@ fn bench_zero_and_dealloc_8k(c: &mut Criterion) {
                 black_box(1),
             ));
             let ptr = black_box(alloc.falloc(layout, black_box(0x77_u8))).unwrap();
-            alloc.zero_and_dealloc(ptr, layout);
+            alloc.zdealloc(ptr, layout);
         });
     });
 }

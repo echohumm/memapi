@@ -1,12 +1,11 @@
 // genuinely no clue how to doc these unsafe blocks
-#![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use crate::{
     error::AllocError,
     external_alloc::ffi::jem as ffi,
     helpers::{nonnull_to_void, null_q_dyn, null_q_zsl_check},
-    Alloc,
+    Alloc, Layout,
 };
-use alloc::alloc::{GlobalAlloc, Layout};
 use core::ptr::NonNull;
 use libc::c_void;
 
@@ -49,7 +48,7 @@ unsafe fn resize<F: Fn() -> *mut c_void>(
     nq(ralloc(), new_layout)
 }
 
-/// Handle to the jemalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
+/// Handle to the Jemalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`](Alloc).
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Jemalloc;
@@ -99,7 +98,8 @@ unsafe fn raw_ralloc(ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -
     }
 }
 
-unsafe impl GlobalAlloc for Jemalloc {
+#[cfg(not(feature = "no_alloc"))]
+unsafe impl alloc::alloc::GlobalAlloc for Jemalloc {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         alloc(layout).cast::<u8>()
@@ -130,12 +130,12 @@ unsafe impl GlobalAlloc for Jemalloc {
 impl Alloc for Jemalloc {
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        null_q_zsl_check(layout, |layout: Layout| alloc(layout), null_q_dyn)
+        null_q_zsl_check(layout, alloc, null_q_dyn)
     }
 
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        null_q_zsl_check(layout, |layout: Layout| zalloc(layout), null_q_dyn)
+        null_q_zsl_check(layout, zalloc, null_q_dyn)
     }
 
     #[inline]

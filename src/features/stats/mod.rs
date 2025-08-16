@@ -1,9 +1,8 @@
 use crate::{
     error::AllocError,
     stats::AllocRes::{Fail, Succ},
-    Alloc, AllocPattern, DefaultAlloc,
+    Alloc, AllocPattern, DefaultAlloc, Layout,
 };
-use alloc::alloc::Layout;
 use core::ptr::{null_mut, NonNull};
 
 mod stat_logger;
@@ -16,6 +15,8 @@ pub use data::*;
 mod lock;
 #[cfg(feature = "stats_thread_safe_io")]
 pub use lock::*;
+
+pub(crate) mod minstring;
 
 /// A wrapper that delegates all `Alloc` calls to `A` and logs
 /// each result via `L`.
@@ -260,21 +261,21 @@ impl<A: crate::DeallocChecked, L: StatsLogger> crate::DeallocChecked for Stats<A
                 }));
                 Ok(())
             }
-            Err(e) => match e {
-                AllocError::DeallocFailed(p, l, ref c) => {
-                    if let crate::error::Cause::InvalidBlockStatus(s) = c {
-                        tryfree_err(self, p, l, *s);
-                        Err(e)
-                    } else {
-                        tryfree_err(self, p, l, crate::BlockStatus::Unknown);
-                        Err(e)
+            Err(e) => {
+                match e {
+                    AllocError::DeallocFailed(p, l, ref c) => {
+                        if let crate::error::Cause::InvalidBlockStatus(s) = c {
+                            tryfree_err(self, p, l, *s);
+                        } else {
+                            tryfree_err(self, p, l, crate::BlockStatus::Unknown);
+                        }
+                    }
+                    _ => {
+                        tryfree_err(self, ptr, layout, crate::BlockStatus::Unknown);
                     }
                 }
-                other => {
-                    tryfree_err(self, ptr, layout, crate::BlockStatus::Unknown);
-                    Err(other)
-                }
-            },
+                Err(e)
+            }
         }
     }
 

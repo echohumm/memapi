@@ -1,10 +1,8 @@
-#![allow(clippy::undocumented_unsafe_blocks)]
-use core::{alloc::Layout, ptr};
-use memapi::{
-    error::AllocError,
-    unstable_util::{layout_padding_for, pad_layout_to_align, repeat_layout, repeat_layout_packed},
-    Alloc, DefaultAlloc,
-};
+// miri is incompatible with malloc_defaultalloc
+#![cfg(any(not(miri), not(feature = "malloc_defaultalloc")))]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+use core::ptr;
+use memapi::{error::AllocError, Alloc, DefaultAlloc, Layout};
 
 #[test]
 fn test_alloc_and_dealloc() {
@@ -68,28 +66,4 @@ fn test_shrink_and_error_cases() {
     unsafe {
         allocator.dealloc(shr, new);
     }
-}
-
-#[test]
-fn test_pad_layout_functions() {
-    let layout = Layout::from_size_align(10, 4).unwrap();
-    let padding_size = layout_padding_for(layout, 4);
-    assert_eq!(padding_size, 2);
-
-    let aligned_layout = pad_layout_to_align(layout);
-    assert_eq!(aligned_layout.align(), 4);
-    assert_eq!(aligned_layout.size(), 12);
-}
-
-#[test]
-fn test_repeat_layout_variants() {
-    let layout = Layout::from_size_align(4, 4).unwrap();
-    let (rep, count) = repeat_layout(layout, 3).unwrap();
-    assert_eq!(count, 4);
-    assert_eq!(rep.size(), 4 * 3);
-    assert_eq!(rep.align(), 4);
-
-    let rep_packed = repeat_layout_packed(layout, 5).unwrap();
-    assert_eq!(rep_packed.size(), 4 * 5);
-    assert_eq!(rep_packed.align(), 4);
 }

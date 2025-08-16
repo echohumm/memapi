@@ -1,5 +1,4 @@
-use crate::{error::AllocError, Alloc};
-use alloc::alloc::Layout;
+use crate::{error::AllocError, Alloc, Layout};
 use core::ptr::{self, NonNull};
 
 /// Trait for allocators that support allocating memory aligned at a specific offset.

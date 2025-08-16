@@ -6,6 +6,8 @@ import sys
 import os
 
 FEATURES = [
+    "no_alloc",
+
     "std",
 
     "os_err_reporting",
@@ -22,14 +24,27 @@ FEATURES = [
     "extern_alloc",
     "jemalloc",
     "mimalloc",
+    "malloc",
     "mimalloc_err_reporting",
     "mimalloc_err_output",
 ]
+
 
 def all_feature_combinations(features):
     for r in range(len(features) + 1):
         for combo in itertools.combinations(features, r):
             yield combo
+
+
+def process_feature_combo(combo):
+    """Process a feature combination, adding malloc_defaultalloc if no_alloc is present."""
+    feature_set = set(combo)
+
+    # If no_alloc is enabled, automatically add malloc_defaultalloc
+    if "no_alloc" in feature_set:
+        feature_set.add("malloc_defaultalloc")
+
+    return tuple(sorted(feature_set))
 
 
 def main():
@@ -55,11 +70,22 @@ def main():
     env = os.environ.copy()
     env["RUSTFLAGS"] = "-D warnings"
 
+    # Keep track of processed combinations to avoid duplicates
+    processed_combos = set()
+
     for combo in all_feature_combinations(FEATURES):
+        # Process the combination (add malloc_defaultalloc if no_alloc is present)
+        processed_combo = process_feature_combo(combo)
+
+        # Skip if we've already tested this exact combination
+        if processed_combo in processed_combos:
+            continue
+        processed_combos.add(processed_combo)
+
         cmd = list(cargo_cmd)
         cmd.append("--no-default-features")
-        if combo:
-            feature_list = ",".join(combo)
+        if processed_combo:
+            feature_list = ",".join(processed_combo)
             cmd += ["--features", feature_list]
             print(f"{'Clippy checking' if args.clippy else 'Testing'} features: {feature_list}")
         else:

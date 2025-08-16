@@ -1,14 +1,13 @@
-#![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use crate::{
     ffi::mim as ffi,
     helpers::{nonnull_to_void, null_q, null_q_zsl_check},
-    Alloc, AllocError,
+    Alloc, AllocError, Layout,
 };
-use alloc::alloc::{GlobalAlloc, Layout};
 use core::ptr::NonNull;
 use libc::c_void;
 
-/// Handle to the mimalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
+/// Handle to the `MiMalloc` allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`].
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct MiMalloc;
@@ -47,7 +46,8 @@ unsafe extern "C" fn error_handler(e: libc::c_int, _: *mut c_void) {
 #[no_mangle]
 unsafe extern "C" fn discard_output(_: *const libc::c_char, _: *mut c_void) {}
 
-unsafe impl GlobalAlloc for MiMalloc {
+#[cfg(not(feature = "no_alloc"))]
+unsafe impl alloc::alloc::GlobalAlloc for MiMalloc {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         ffi::mi_malloc_aligned(layout.size(), layout.align()).cast::<u8>()
@@ -83,7 +83,9 @@ fn zsl_check_alloc<F: Fn(usize, usize) -> *mut c_void>(
         ) {
             Err(AllocError::AllocFailed(l, _)) => {
                 let code = LAST_ERR.load(core::sync::atomic::Ordering::SeqCst);
-                Err(if code != 0 {
+                Err(if code == 0 {
+                    AllocError::AllocFailed(l, crate::error::Cause::Unknown)
+                } else {
                     // only reset if it hasn't been updated already
                     let _ = LAST_ERR.compare_exchange(
                         code,
@@ -95,8 +97,6 @@ fn zsl_check_alloc<F: Fn(usize, usize) -> *mut c_void>(
                         l,
                         crate::error::Cause::OSErr(std::io::Error::from_raw_os_error(code)),
                     )
-                } else {
-                    AllocError::AllocFailed(l, crate::error::Cause::Unknown)
                 })
             }
             Err(e) => Err(e),

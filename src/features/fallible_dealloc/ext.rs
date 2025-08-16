@@ -1,10 +1,12 @@
-use crate::{base_try_dealloc_impl, error::AllocError, type_props::PtrProps, DeallocChecked};
-use alloc::alloc::Layout;
+use crate::{
+    base_try_dealloc_impl, error::AllocError, type_props::PtrProps, DeallocChecked, Layout,
+};
 use core::ptr::{self, NonNull};
 
 // this file seems to be a cognitohazard
 
 /// Extension methods for [`DeallocChecked`]
+#[allow(clippy::module_name_repetitions)]
 pub trait DeallocCheckedExt: DeallocChecked {
     /// Attempts to drop the data at a pointer and deallocate its previously allocated block.
     ///
@@ -95,4 +97,4 @@ pub trait DeallocCheckedExt: DeallocChecked {
     }
 }
 
-impl<D: DeallocChecked> DeallocCheckedExt for D {}
+impl<D: DeallocChecked + ?Sized> DeallocCheckedExt for D {}

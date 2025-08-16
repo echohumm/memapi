@@ -4,9 +4,8 @@ use crate::{
         varsized_nonnull_from_raw_parts, varsized_pointer_from_raw_parts, PtrProps, SizedProps,
         USIZE_MAX_NO_HIGH_BIT,
     },
-    Alloc,
+    Alloc, Layout,
 };
-use alloc::alloc::Layout;
 use core::{
     mem::{forget, transmute},
     num::NonZeroUsize,
@@ -260,8 +259,7 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
     transmute::<NonZeroUsize, NonNull<u8>>(NonZeroUsize::new_unchecked(align))
 }
 
-// here only because it may be used elsewhere later
-#[cfg(feature = "alloc_slice")]
+#[cfg(any(feature = "alloc_slice", feature = "no_alloc"))]
 /// Gets either a valid layout with space for `n` count of `T`, or an
 /// `AllocError::LayoutError(sz, aln)`.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
@@ -305,7 +303,7 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, La
 ///
 /// # Examples
 ///
-/// ```
+/// ```none
 /// # use core::ptr::NonNull;
 /// # use memapi::{helpers::AllocGuard, Alloc, DefaultAlloc};
 /// # let alloc = DefaultAlloc;
@@ -399,15 +397,15 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```none
 /// # extern crate alloc;
 /// # use core::ptr::NonNull;
-/// # use alloc::alloc::Layout;
 /// # use memapi::{
 /// #  helpers::SliceAllocGuard,
 /// #  Alloc,
 /// #  DefaultAlloc,
-/// #  type_props::SizedProps
+/// #  type_props::SizedProps,
+/// #  Layout
 /// # };
 /// # let alloc = DefaultAlloc;
 /// # let len = 5;

@@ -1,11 +1,12 @@
-#![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
 use core::{
-    alloc::Layout,
     ptr::{self, NonNull},
     slice,
 };
-use memapi::{ffi::jem::malloc_usable_size, jemalloc::Jemalloc, type_props::SizedProps, Alloc};
+use memapi::{
+    ffi::jem::malloc_usable_size, jemalloc::Jemalloc, type_props::SizedProps, Alloc, Layout,
+};
 
 #[test]
 fn alloc_and_dealloc_basic() {

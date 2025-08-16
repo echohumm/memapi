@@ -1,4 +1,4 @@
-#![allow(clippy::undocumented_unsafe_blocks)]
+#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 // these tests are tests which check for potential UB, such as manually constructing a pointer with
 //  metadata via transmutation.
 use core::ptr::NonNull;

@@ -1,4 +1,4 @@
-use alloc::alloc::Layout;
+use crate::Layout;
 use core::{
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     ptr::NonNull,
