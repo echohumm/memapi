@@ -1,8 +1,8 @@
+use crate::fallible_dealloc::{base_try_dealloc_impl, DeallocChecked};
 use crate::{
     error::{AllocError, ArithOp},
     helpers::{checked_op, nonnull_slice_len, slice_ptr_from_raw_parts},
     type_props::SizedProps,
-    {base_try_dealloc_impl, DeallocChecked},
 };
 use core::{
     mem::MaybeUninit,
@@ -11,8 +11,55 @@ use core::{
 
 /// Slice-specific extension methods for [`DeallocChecked`].
 #[allow(clippy::module_name_repetitions)]
-
 pub trait DeallocCheckedSlice: DeallocChecked {
+    /// Attempts to zero and deallocate `n` elements at the given pointer.
+    ///
+    /// # Errors
+    ///
+    /// Implementations may return `Err` on deallocation failure, when the provided block is
+    /// [invalid](super::BlockStatus), or if the provided layout is zero-sized.
+    #[cfg_attr(miri, track_caller)]
+    fn try_zero_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) -> Result<(), AllocError> {
+        let sz = tri!(AllocError::ArithmeticOverflow(checked_op(
+            T::SZ,
+            ArithOp::Mul,
+            n
+        )));
+        base_try_dealloc_impl(
+            self,
+            ptr,
+            tri!(lay, sz, T::ALN),
+            // SAFETY: ptr was allocated by us with the given layout
+            |d, ptr, layout| unsafe {
+                let p_bytes = ptr.cast::<u8>();
+                ptr::write_bytes(p_bytes.as_ptr(), 0, layout.size());
+                d.dealloc(p_bytes, layout);
+            },
+        )
+    }
+
+    /// Attempts to deallocate a previously allocated block.
+    ///
+    /// # Errors
+    ///
+    /// Implementations may return `Err` on deallocation failure, when the provided block is
+    /// [invalid](super::BlockStatus), or if the provided layout is zero-sized.
+    #[cfg_attr(miri, track_caller)]
+    fn try_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) -> Result<(), AllocError> {
+        let sz = tri!(AllocError::ArithmeticOverflow(checked_op(
+            T::SZ,
+            ArithOp::Mul,
+            n
+        )));
+        self.try_dealloc(ptr.cast::<u8>(), tri!(lay, sz, T::ALN))
+    }
+}
+
+impl<A: DeallocChecked + ?Sized> DeallocCheckedSlice for A {}
+
+#[cfg(feature = "alloc_ext")]
+/// Higher-level slice-specific extension methods for [`DeallocChecked`].
+pub trait DeallocCheckedSliceExt: DeallocCheckedSlice {
     /// Attempts to drop `init` elements from a partially initialized slice, then zero and
     /// deallocate its memory.
     ///
@@ -120,48 +167,7 @@ pub trait DeallocCheckedSlice: DeallocChecked {
             d.dealloc(ptr.cast::<u8>(), layout);
         })
     }
-
-    /// Attempts to zero and deallocate `n` elements at the given pointer.
-    ///
-    /// # Errors
-    ///
-    /// Implementations may return `Err` on deallocation failure, when the provided block is
-    /// [invalid](super::BlockStatus), or if the provided layout is zero-sized.
-    #[cfg_attr(miri, track_caller)]
-    fn try_zero_and_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) -> Result<(), AllocError> {
-        let sz = tri!(AllocError::ArithmeticOverflow(checked_op(
-            T::SZ,
-            ArithOp::Mul,
-            n
-        )));
-        base_try_dealloc_impl(
-            self,
-            ptr,
-            tri!(lay, sz, T::ALN),
-            // SAFETY: ptr was allocated by us with the given layout
-            |d, ptr, layout| unsafe {
-                let p_bytes = ptr.cast::<u8>();
-                ptr::write_bytes(p_bytes.as_ptr(), 0, layout.size());
-                d.dealloc(p_bytes, layout);
-            },
-        )
-    }
-
-    /// Attempts to deallocate a previously allocated block.
-    ///
-    /// # Errors
-    ///
-    /// Implementations may return `Err` on deallocation failure, when the provided block is
-    /// [invalid](super::BlockStatus), or if the provided layout is zero-sized.
-    #[cfg_attr(miri, track_caller)]
-    fn try_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) -> Result<(), AllocError> {
-        let sz = tri!(AllocError::ArithmeticOverflow(checked_op(
-            T::SZ,
-            ArithOp::Mul,
-            n
-        )));
-        self.try_dealloc(ptr.cast::<u8>(), tri!(lay, sz, T::ALN))
-    }
 }
 
-impl<A: DeallocChecked + ?Sized> DeallocCheckedSlice for A {}
+#[cfg(feature = "alloc_ext")]
+impl<A: DeallocCheckedSlice + ?Sized> DeallocCheckedSliceExt for A {}

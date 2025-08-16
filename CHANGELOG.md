@@ -6,7 +6,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Current low-priority to-dos](#current-low-priority-to-dos)
 - [Version 0.18.0](#version-0180)
-  - [Commit 3](#commit-3-2025-8-15-2337)
+  - [Commit 3](#commit-3-2025-8-15-2341)
   - [Commit 2](#commit-2-2025-8-14-1926)
   - [Commit 1](#commit-1-2025-8-13)
 - [Version 0.17.0](#version-0170-2025-8-10)
@@ -48,10 +48,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
   [- <SUBCHANGE_NOTE>]
 ```
 
-# Current high priority to-dos
-
-unless i get depressed again or a cognitohazard like `fallible_dealloc/ext.rs` appears and breaks my brain again, these 
-will probably be done by august 17.
+# Current high-priority to-dos
 
 - Debloat the primary surfaces
 - Sort stuff and fix module structure (it's SO bad)
@@ -66,6 +63,11 @@ will probably be done by august 17.
 - Proper tests for many untested methods and features
 
 ## Version 0.18.0
+
+### Commit 4 (2025-8-16 8:34)
+
+- Start working on module structure (WIP)
+  - there will be many commits for this while i'm working on it and testing it out.
 
 ### Commit 3 (2025-8-15 23:41)
 

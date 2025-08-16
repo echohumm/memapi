@@ -1,8 +1,10 @@
 use crate::{
-    base_try_dealloc_impl, error::AllocError, type_props::PtrProps, DeallocChecked, Layout,
+    error::AllocError,
+    fallible_dealloc::{base_try_dealloc_impl, DeallocChecked},
+    type_props::PtrProps,
+    Layout,
 };
 use core::ptr::{self, NonNull};
-
 // this file seems to be a cognitohazard
 
 /// Extension methods for [`DeallocChecked`]

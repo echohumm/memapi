@@ -243,8 +243,8 @@ impl crate::ResizeInPlace for Jemalloc {
                 Ok(())
             } else if usable_size == ffi::nallocx(new_size, flags) {
                 debug_assert_eq!(
-                    crate::external_alloc::ffi::jem::nallocx(new_size, flags),
-                    crate::external_alloc::ffi::jem::nallocx(old_layout.size(), flags)
+                    crate::ffi::jem::nallocx(new_size, flags),
+                    crate::ffi::jem::nallocx(old_layout.size(), flags)
                 );
 
                 Ok(())

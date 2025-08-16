@@ -230,7 +230,7 @@ fn tryfree_err<A: Alloc, L: StatsLogger>(
     a: &Stats<A, L>,
     ptr: NonNull<u8>,
     layout: Layout,
-    status: crate::BlockStatus,
+    status: crate::fallible_dealloc::BlockStatus,
 ) {
     a.1.log(Fail(AllocStat::TryFree {
         status,
@@ -244,14 +244,16 @@ fn tryfree_err<A: Alloc, L: StatsLogger>(
 }
 
 #[cfg(feature = "fallible_dealloc")]
-impl<A: crate::DeallocChecked, L: StatsLogger> crate::DeallocChecked for Stats<A, L> {
+impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
+    crate::fallible_dealloc::DeallocChecked for Stats<A, L>
+{
     fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), AllocError> {
         match self.0.try_dealloc(ptr, layout) {
             Ok(()) => {
                 let size = layout.size();
                 let total = self.1.dec_total_bytes_allocated(size);
                 self.1.log(Succ(AllocStat::TryFree {
-                    status: crate::BlockStatus::Owned,
+                    status: crate::fallible_dealloc::BlockStatus::Owned,
                     region: MemoryRegion {
                         ptr: ptr.as_ptr(),
                         size,
@@ -267,11 +269,16 @@ impl<A: crate::DeallocChecked, L: StatsLogger> crate::DeallocChecked for Stats<A
                         if let crate::error::Cause::InvalidBlockStatus(s) = c {
                             tryfree_err(self, p, l, *s);
                         } else {
-                            tryfree_err(self, p, l, crate::BlockStatus::Unknown);
+                            tryfree_err(self, p, l, crate::fallible_dealloc::BlockStatus::Unknown);
                         }
                     }
                     _ => {
-                        tryfree_err(self, ptr, layout, crate::BlockStatus::Unknown);
+                        tryfree_err(
+                            self,
+                            ptr,
+                            layout,
+                            crate::fallible_dealloc::BlockStatus::Unknown,
+                        );
                     }
                 }
                 Err(e)
@@ -279,7 +286,7 @@ impl<A: crate::DeallocChecked, L: StatsLogger> crate::DeallocChecked for Stats<A
         }
     }
 
-    fn status(&self, ptr: NonNull<u8>, layout: Layout) -> crate::BlockStatus {
+    fn status(&self, ptr: NonNull<u8>, layout: Layout) -> crate::fallible_dealloc::BlockStatus {
         self.0.status(ptr, layout)
     }
 

@@ -26,19 +26,23 @@ fn main() {
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::BlockStatus::NotOwned),
+            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::NotOwned),
         ));
 
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::BlockStatus::OwnedIncomplete(Some(l2))),
+            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::OwnedIncomplete(
+                Some(l2),
+            )),
         ));
 
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::BlockStatus::OwnedMisaligned(Some(1))),
+            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::OwnedMisaligned(
+                Some(1),
+            )),
         ));
     }
 

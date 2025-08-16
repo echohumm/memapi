@@ -65,7 +65,7 @@ impl Display for AllocRes {
                             AllocPattern::Zeroed =>
                                 String::from_str("newly allocated bytes were zeroed"),
                             #[cfg(feature = "alloc_ext")]
-                            // TODO: use this. right now we don't because we moved falloc to 
+                            // TODO: use this. right now we don't because we moved falloc to
                             //  AllocExt
                             AllocPattern::Filled(n) =>
                                 String::from_str("newly allocated bytes were filled with the byte ")

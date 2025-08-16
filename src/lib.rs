@@ -284,16 +284,10 @@ pub use features::alloc_slice::*;
 pub use features::resize_in_place::*;
 
 #[cfg(all(
-    feature = "stats",
+    any(feature = "stats", feature = "fallible_dealloc"),
     any(not(feature = "no_alloc"), feature = "malloc_defaultalloc")
 ))]
 pub use features::*;
-
-// TODO: dont make these here
-#[cfg(feature = "fallible_dealloc")]
-pub use features::fallible_dealloc::{
-    base_try_dealloc_impl, ptr_max_align, BlockStatus, DeallocChecked,
-};
 
 #[cfg(feature = "extern_alloc")]
 pub use external_alloc::*;
@@ -373,7 +367,7 @@ macro_rules! default_alloc_impl {
                 &self,
                 layout: $crate::Layout,
             ) -> Result<core::ptr::NonNull<u8>, $crate::error::AllocError> {
-                crate::external_alloc::ffi::malloc::alloc(layout)
+                crate::ffi::malloc::alloc(layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -382,13 +376,13 @@ macro_rules! default_alloc_impl {
                 &self,
                 layout: $crate::Layout,
             ) -> Result<core::ptr::NonNull<u8>, $crate::error::AllocError> {
-                crate::external_alloc::ffi::malloc::zalloc(layout)
+                crate::ffi::malloc::zalloc(layout)
             }
 
             #[cfg_attr(miri, track_caller)]
             #[inline]
             unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: $crate::Layout) {
-                crate::external_alloc::ffi::malloc::dealloc(ptr, layout);
+                crate::ffi::malloc::dealloc(ptr, layout);
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -399,7 +393,7 @@ macro_rules! default_alloc_impl {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, AllocError> {
-                crate::external_alloc::ffi::malloc::grow(ptr, old_layout, new_layout)
+                crate::ffi::malloc::grow(ptr, old_layout, new_layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -409,7 +403,7 @@ macro_rules! default_alloc_impl {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, AllocError> {
-                crate::external_alloc::ffi::malloc::zgrow(ptr, old_layout, new_layout)
+                crate::ffi::malloc::zgrow(ptr, old_layout, new_layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -419,7 +413,7 @@ macro_rules! default_alloc_impl {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, AllocError> {
-                crate::external_alloc::ffi::malloc::shrink(ptr, old_layout, new_layout)
+                crate::ffi::malloc::shrink(ptr, old_layout, new_layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -429,7 +423,7 @@ macro_rules! default_alloc_impl {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, AllocError> {
-                crate::external_alloc::ffi::malloc::realloc_helper(ptr, old_layout, new_layout)
+                crate::ffi::malloc::realloc_helper(ptr, old_layout, new_layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -439,7 +433,7 @@ macro_rules! default_alloc_impl {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, AllocError> {
-                crate::external_alloc::ffi::malloc::rezalloc(ptr, old_layout, new_layout)
+                crate::ffi::malloc::rezalloc(ptr, old_layout, new_layout)
             }
         }
     };

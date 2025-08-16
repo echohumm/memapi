@@ -47,7 +47,7 @@ impl AllocError {
     pub const fn dealloc_failed(
         p: NonNull<u8>,
         layout: Layout,
-        block_stat: crate::BlockStatus,
+        block_stat: crate::fallible_dealloc::BlockStatus,
     ) -> Result<(), AllocError> {
         Err(AllocError::DeallocFailed(
             p,
@@ -111,7 +111,7 @@ impl Display for AllocError {
             }
             #[cfg(feature = "fallible_dealloc")]
             AllocError::DeallocFailed(ptr, l, cause) => {
-                use crate::BlockStatus;
+                use crate::fallible_dealloc::BlockStatus;
 
                 // i hate this
                 match cause {
@@ -186,7 +186,7 @@ pub enum Cause {
     OutOfMemory,
     #[cfg(feature = "fallible_dealloc")]
     /// The block status is invalid.
-    InvalidBlockStatus(crate::BlockStatus),
+    InvalidBlockStatus(crate::fallible_dealloc::BlockStatus),
     #[cfg(feature = "os_err_reporting")]
     /// The cause is described in the contained OS error.
     ///

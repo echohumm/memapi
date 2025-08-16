@@ -18,22 +18,22 @@ pub struct Malloc;
 unsafe impl alloc::alloc::GlobalAlloc for Malloc {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        crate::external_alloc::ffi::malloc::raw_alloc(layout)
+        crate::ffi::malloc::raw_alloc(layout)
     }
 
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        crate::external_alloc::ffi::malloc::raw_dealloc(ptr, layout);
+        crate::ffi::malloc::raw_dealloc(ptr, layout);
     }
 
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        crate::external_alloc::ffi::malloc::raw_zalloc(layout)
+        crate::ffi::malloc::raw_zalloc(layout)
     }
 
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        crate::external_alloc::ffi::malloc::raw_realloc(ptr, layout, new_size)
+        crate::ffi::malloc::raw_realloc(ptr, layout, new_size)
     }
 }
 

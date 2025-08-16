@@ -2,7 +2,10 @@
 #![cfg(any(not(miri), not(feature = "malloc_defaultalloc")))]
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use core::sync::atomic::{AtomicUsize, Ordering};
-use memapi::{stats::{FmtLog, Stats}, Alloc, Layout};
+use memapi::{
+    stats::{FmtLog, Stats},
+    Alloc, Layout,
+};
 
 #[test]
 fn test_stats_counts_correct() {

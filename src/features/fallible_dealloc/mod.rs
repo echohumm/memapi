@@ -6,9 +6,13 @@ use core::{
 
 #[cfg(feature = "alloc_ext")]
 pub(crate) mod ext;
+#[cfg(feature = "alloc_ext")]
+pub use ext::DeallocCheckedExt;
 
 #[cfg(feature = "alloc_slice")]
 pub(crate) mod slice;
+#[cfg(feature = "alloc_slice")]
+pub use slice::DeallocCheckedSlice;
 
 /// A trait for allocators to attempt deallocation.
 pub trait DeallocChecked: Alloc {
