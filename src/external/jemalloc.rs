@@ -21,6 +21,7 @@ macro_rules! assume {
     };
 }
 
+// TODO: make consistent with malloc's method
 unsafe fn resize<F: Fn() -> *mut c_void>(
     ralloc: F,
     ptr: NonNull<u8>,
@@ -39,10 +40,10 @@ unsafe fn resize<F: Fn() -> *mut c_void>(
         return Ok(ptr);
     } else if is_grow {
         if new_size < old_size {
-            return Err(AllocError::GrowSmallerNewLayout(old_size, new_size));
+            return Err(AllocError::grow_smaller(old_size, new_size));
         }
     } else if new_size > old_size {
-        return Err(AllocError::ShrinkBiggerNewLayout(old_size, new_size));
+        return Err(AllocError::shrink_larger(old_size, new_size));
     }
 
     nq(ralloc(), new_layout)
@@ -199,10 +200,7 @@ impl crate::ResizeInPlace for Jemalloc {
         if new_size == 0 {
             Err(crate::features::resize_in_place::RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
-            Err(AllocError::GrowSmallerNewLayout(
-                old_layout.size(),
-                new_size,
-            ))
+            Err(AllocError::grow_smaller(old_layout.size(), new_size))
         } else {
             // it isn't my fault if this is wrong lol
             if ffi::xallocx(
@@ -228,10 +226,7 @@ impl crate::ResizeInPlace for Jemalloc {
         if new_size == 0 {
             Err(crate::features::resize_in_place::RESIZE_IP_ZS)
         } else if new_size > old_layout.size() {
-            Err(AllocError::ShrinkBiggerNewLayout(
-                old_layout.size(),
-                new_size,
-            ))
+            Err(AllocError::shrink_larger(old_layout.size(), new_size))
         } else if new_size == old_layout.size() {
             // noop
             Ok(())

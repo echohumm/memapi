@@ -1,6 +1,8 @@
 use crate::{
-    stats::minstring::String,
-    stats::AllocRes::{Fail, Succ},
+    stats::{
+        minstring::String,
+        AllocRes::{Fail, Succ}
+    },
     AllocPattern, Layout,
 };
 use core::{
@@ -11,6 +13,7 @@ use core::{
 
 /// The result of an allocation operation, containing statistics on the operation.
 #[derive(Debug)]
+#[repr(u8)]
 pub enum AllocRes {
     /// The allocation succeeded.
     Succ(AllocStat),
@@ -40,8 +43,10 @@ impl Display for AllocRes {
                             AllocPattern::Uninitialized => String::from_str("uninitialized"),
                             AllocPattern::Zeroed => String::from_str("zeroed"),
                             #[cfg(feature = "alloc_ext")]
-                            AllocPattern::Filled(n) =>
-                                String::from_str("filled with the byte ").append_u8(*n),
+                            // TODO: use this again
+                            // SAFETY: we map Fill to Uninitialized until this is used consistently
+                            //  again
+                            AllocPattern::Filled(n) => unsafe { unreachable_unchecked() },
                             // SAFETY: Only a reallocation can be a shrink, not an allocation.
                             AllocPattern::Shrink => unsafe { unreachable_unchecked() },
                         },
@@ -65,11 +70,7 @@ impl Display for AllocRes {
                             AllocPattern::Zeroed =>
                                 String::from_str("newly allocated bytes were zeroed"),
                             #[cfg(feature = "alloc_ext")]
-                            // TODO: use this. right now we don't because we moved falloc to
-                            //  AllocExt
-                            AllocPattern::Filled(n) =>
-                                String::from_str("newly allocated bytes were filled with the byte ")
-                                    .append_u8(*n),
+                            AllocPattern::Filled(n) => unsafe { unreachable_unchecked() },
                             AllocPattern::Shrink =>
                                 String::from_str("there were no newly allocated bytes"),
                         },
@@ -133,6 +134,7 @@ impl Display for AllocRes {
 
 /// A loggable allocation statistic.
 #[derive(Debug)]
+#[repr(u8)]
 pub enum AllocStat {
     /// An allocation operation.
     Alloc {
@@ -193,7 +195,10 @@ impl AllocStat {
                     align: new_layout.align(),
                 },
             },
-            kind,
+            kind: match kind {
+                AllocPattern::Filled(n) => AllocPattern::Uninitialized,
+                other => other,
+            },
             total,
         }
     }

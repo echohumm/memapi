@@ -66,7 +66,7 @@ fn test_shrink_and_error_cases() {
     let err = unsafe { allocator.shrink(shr, new, old).unwrap_err() };
     assert_eq!(
         err,
-        AllocError::ShrinkBiggerNewLayout(new.size(), old.size())
+        AllocError::ShrinkLargerNewLayout(new.size(), old.size())
     );
 
     // error: grow to a smaller size

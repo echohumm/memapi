@@ -21,12 +21,11 @@ use core::{
 pub fn preproc_layout(layout: Layout) -> Result<Layout, InvLayout> {
     let sz = layout.size();
     let align = tri!(do round_to_ptr_align(sz, layout.align()));
-    match crate::unstable_util::lay_from_size_align(
-        sz,
-        align,
-    ) {
+    match crate::unstable_util::lay_from_size_align(sz, align) {
         Ok(l) => Ok(l),
-        Err(LayoutErr::ExceedsMax) => Err(InvLayout(sz, align, LayoutErr::MallocExceedsMax)),
+        Err(LayoutErr::ExceedsMax) => {
+            AllocError::inv_layout(sz, align, LayoutErr::MallocExceedsMax)
+        }
         // SAFETY: the only other error which can occur is Align, but since the alignment came from
         //  a valid layout and round_to_ptr_align cannot make it zero or a non-power-of-two, it will
         //  still be valid, so that error cannot occur.
@@ -41,7 +40,7 @@ pub(crate) fn round_to_ptr_align(sz: usize, align: usize) -> Result<usize, InvLa
     }
     match checked_op(align, ArithOp::Add, mask) {
         Ok(v) => Ok(v & !mask),
-        Err(e) => Err(InvLayout(sz, align, LayoutErr::MallocOverflow(e))),
+        Err(e) => AllocError::inv_layout(sz, align, LayoutErr::MallocOverflow(e)),
     }
 }
 
@@ -695,7 +694,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         }
     }
 
-    // TODO: other *_from_slice methods
+    // TODO: other *_from_slice_* methods
 }
 
 impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {

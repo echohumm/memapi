@@ -4,17 +4,8 @@ use core::{
     ptr::NonNull,
 };
 
-#[cfg(feature = "alloc_ext")]
-pub(crate) mod ext;
-#[cfg(feature = "alloc_ext")]
-pub use ext::DeallocCheckedExt;
-
 #[cfg(feature = "alloc_slice")]
 pub(crate) mod slice;
-#[cfg(feature = "alloc_slice")]
-pub use slice::DeallocCheckedSlice;
-#[cfg(all(feature = "alloc_slice", feature = "alloc_ext"))]
-pub use slice::DeallocCheckedSliceExt;
 
 /// A trait for allocators to attempt deallocation.
 pub trait DeallocChecked: Alloc {
@@ -92,6 +83,7 @@ pub fn ptr_max_align(ptr: NonNull<u8>) -> usize {
 /// [`Owned`](BlockStatus::Owned) signifies the block is valid to deallocate. All other variants are
 /// an error.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[repr(u8)]
 pub enum BlockStatus {
     /// The block status is unknown.
     Unknown,

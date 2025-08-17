@@ -65,7 +65,16 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.18.0
 
-### Commit 5 (2025-8-16)
+### Commit 6 (2025-8-16 15:19)
+
+- Add rustfmt config
+- Add more cold error constructors
+- Remove many methods from `AllocSlice`/`AllocExt`
+- Add missing `falloc_at` method to `AllocAlignedAt`
+- Add missing `repr(u8)` attrs to some enums
+- 
+
+### Commit 5 (2025-8-16 15:19)
 
 - Update README.md
 - Somewhat fix module structure

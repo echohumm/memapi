@@ -1,13 +1,15 @@
-use crate::Layout;
-use core::{
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
-    ptr::NonNull,
+use {
+    crate::Layout,
+    core::{
+        fmt::{Debug, Display, Formatter, Result as FmtResult},
+        ptr::NonNull,
+    },
 };
 
 /// Errors for allocation operations.
 #[derive(Debug)]
-#[repr(u8)]
 #[cfg_attr(not(feature = "std"), derive(Clone, Copy))]
+#[repr(u8)]
 #[allow(clippy::module_name_repetitions)]
 pub enum AllocError {
     /// The underlying allocator failed to allocate using the given layout; see the contained cause.
@@ -30,7 +32,7 @@ pub enum AllocError {
     /// Attempted to grow to a smaller size.
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
-    ShrinkBiggerNewLayout(usize, usize),
+    ShrinkLargerNewLayout(usize, usize),
     /// An arithmetic operation would overflow.
     ///
     /// This error contains both sides of the operation and the operation itself.
@@ -49,11 +51,7 @@ impl AllocError {
         layout: Layout,
         block_stat: crate::fallible_dealloc::BlockStatus,
     ) -> Result<(), AllocError> {
-        Err(AllocError::DeallocFailed(
-            p,
-            layout,
-            Cause::InvalidBlockStatus(block_stat),
-        ))
+        Err(AllocError::DeallocFailed(p, layout, Cause::InvalidBlockStatus(block_stat)))
     }
 
     #[cold]
@@ -63,7 +61,32 @@ impl AllocError {
         Err(ArithOverflow(l, op, r))
     }
 
-    // TODO: similar cold constructors for other errors
+    #[cold]
+    #[inline(never)]
+    #[cfg_attr(not(feature = "dev"), doc(hidden))]
+    pub const fn inv_layout<Ret>(
+        sz: usize,
+        align: usize,
+        err: LayoutErr,
+    ) -> Result<Ret, InvLayout> {
+        Err(InvLayout(sz, align, err))
+    }
+
+    #[cold]
+    #[inline(never)]
+    #[cfg_attr(not(feature = "dev"), doc(hidden))]
+    #[must_use]
+    pub const fn grow_smaller(old: usize, new: usize) -> AllocError {
+        AllocError::GrowSmallerNewLayout(old, new)
+    }
+
+    #[cold]
+    #[inline(never)]
+    #[cfg_attr(not(feature = "dev"), doc(hidden))]
+    #[must_use]
+    pub const fn shrink_larger(old: usize, new: usize) -> AllocError {
+        AllocError::ShrinkLargerNewLayout(old, new)
+    }
 }
 
 // manual implementations because of Cause, which can't be PEq if os_err_reporting is enabled
@@ -72,7 +95,7 @@ impl PartialEq for AllocError {
     fn eq(&self, other: &AllocError) -> bool {
         use AllocError::{
             AllocFailed, ArithmeticOverflow, GrowSmallerNewLayout, InvalidLayout, Other,
-            ShrinkBiggerNewLayout, ZeroSizedLayout,
+            ShrinkLargerNewLayout, ZeroSizedLayout,
         };
 
         match (self, other) {
@@ -84,7 +107,7 @@ impl PartialEq for AllocError {
             (InvalidLayout(il1), InvalidLayout(il2)) => il1 == il2,
             (ZeroSizedLayout(a), ZeroSizedLayout(b)) => a == b,
             (GrowSmallerNewLayout(old1, new1), GrowSmallerNewLayout(old2, new2))
-            | (ShrinkBiggerNewLayout(old1, new1), ShrinkBiggerNewLayout(old2, new2)) => {
+            | (ShrinkLargerNewLayout(old1, new1), ShrinkLargerNewLayout(old2, new2)) => {
                 old1 == old2 && new1 == new2
             }
             (ArithmeticOverflow(e1), ArithmeticOverflow(e2)) => e1 == e2,
@@ -151,16 +174,12 @@ impl Display for AllocError {
             AllocError::ZeroSizedLayout(_) => {
                 write!(f, "received a zero-sized layout")
             }
-            AllocError::GrowSmallerNewLayout(old, new) => write!(
-                f,
-                "attempted to grow from a size of {} to a smaller size of {}",
-                old, new
-            ),
-            AllocError::ShrinkBiggerNewLayout(old, new) => write!(
-                f,
-                "attempted to shrink from a size of {} to a larger size of {}",
-                old, new
-            ),
+            AllocError::GrowSmallerNewLayout(old, new) => {
+                write!(f, "attempted to grow from a size of {} to a smaller size of {}", old, new)
+            }
+            AllocError::ShrinkLargerNewLayout(old, new) => {
+                write!(f, "attempted to shrink from a size of {} to a larger size of {}", old, new)
+            }
             AllocError::ArithmeticOverflow(overflow) => {
                 write!(f, "{}", overflow)
             }
@@ -223,8 +242,9 @@ impl Display for Cause {
 #[cfg(feature = "std")]
 impl std::error::Error for Cause {}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// An error that can occur when creating a layout for repeated instances of a type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 #[allow(clippy::module_name_repetitions)]
 pub enum RepeatLayoutError {
     /// The computed layout is invalid.
@@ -309,7 +329,6 @@ pub enum LayoutErr {
     MallocOverflow(ArithOverflow),
 }
 
-
 impl Display for LayoutErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
@@ -342,7 +361,7 @@ impl std::error::Error for LayoutErr {}
 pub enum AlignErr {
     /// The alignment is zero.
     ZeroAlign,
-    /// The alignment is not a power of two.
+    /// The alignment isn't a power of two.
     NonPowerOfTwoAlign(usize),
 }
 
@@ -351,7 +370,7 @@ impl Display for AlignErr {
         match self {
             AlignErr::ZeroAlign => write!(f, "alignment is zero"),
             AlignErr::NonPowerOfTwoAlign(align) => {
-                write!(f, "alignment {} is not a power of two", align)
+                write!(f, "alignment {} isn't a power of two", align)
             }
         }
     }
@@ -376,11 +395,7 @@ impl ArithOverflow {
 
 impl Display for ArithOverflow {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(
-            f,
-            "arithmetic operation would overflow: {} {} {}",
-            self.0, self.1, self.2
-        )
+        write!(f, "arithmetic operation would overflow: {} {} {}", self.0, self.1, self.2)
     }
 }
 

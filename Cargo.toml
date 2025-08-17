@@ -94,7 +94,6 @@ alloc_aligned_at = []
 
 alloc_ext = []
 alloc_slice = []
-alloc_slice_extend = []
 resize_in_place = []
 
 # stats

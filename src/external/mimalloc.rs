@@ -211,7 +211,7 @@ impl Alloc for MiMalloc {
     ) -> Result<NonNull<u8>, AllocError> {
         realloc(ptr, old_layout, new_layout, |old, new| {
             if new < old {
-                Some(AllocError::GrowSmallerNewLayout(old, new))
+                Some(AllocError::grow_smaller(old, new))
             } else {
                 None
             }
@@ -226,7 +226,7 @@ impl Alloc for MiMalloc {
     ) -> Result<NonNull<u8>, AllocError> {
         realloc(ptr, old_layout, new_layout, |old, new| {
             if new > old {
-                Some(AllocError::ShrinkBiggerNewLayout(old, new))
+                Some(AllocError::shrink_larger(old, new))
             } else {
                 None
             }
@@ -261,10 +261,7 @@ impl crate::ResizeInPlace for MiMalloc {
         if new_size == 0 {
             Err(crate::features::resize_in_place::RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
-            Err(AllocError::GrowSmallerNewLayout(
-                old_layout.size(),
-                new_size,
-            ))
+            Err(AllocError::grow_smaller(old_layout.size(), new_size))
         } else {
             // this would be, though
             if ffi::mi_expand(ptr.as_ptr().cast::<c_void>(), new_size).is_null() {

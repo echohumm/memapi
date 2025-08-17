@@ -135,7 +135,6 @@ pub mod ffi {
     #[cfg(any(feature = "malloc", feature = "malloc_defaultalloc"))]
     #[allow(clippy::module_name_repetitions)]
     /// Bindings to `libc`'s allocation functions and small helpers.
-    // TODO: make this less bad
     pub mod libc {
         use crate::{
             error::AllocError,
@@ -339,7 +338,7 @@ pub mod ffi {
                 false,
                 false,
                 core::cmp::PartialOrd::gt,
-                AllocError::GrowSmallerNewLayout,
+                AllocError::grow_smaller,
             )
         }
 
@@ -357,7 +356,7 @@ pub mod ffi {
                 true,
                 true,
                 core::cmp::PartialOrd::gt,
-                AllocError::GrowSmallerNewLayout,
+                AllocError::grow_smaller,
             )
         }
 
@@ -373,7 +372,7 @@ pub mod ffi {
                 false,
                 false,
                 core::cmp::PartialOrd::lt,
-                AllocError::ShrinkBiggerNewLayout,
+                AllocError::shrink_larger,
             )
         }
 

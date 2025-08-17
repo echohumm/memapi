@@ -87,7 +87,7 @@ pub trait ResizeInPlace: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ShrinkBiggerNewLayout`] if `new_size > old_layout.size()`.
+    /// - [`AllocError::ShrinkLargerNewLayout`] if `new_size > old_layout.size()`.
     /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
     /// - [`AllocError::Other`]`("cannot resize in place")` if the shrink operation could not be
     ///   completed in-place.
@@ -195,7 +195,6 @@ pub trait ResizeInPlace: Alloc {
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 pub const RESIZE_IP_ZS: AllocError = AllocError::Other("zero-sized resize in place was requested");
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub const CANNOT_RESIZE_IP: AllocError = AllocError::Other("cannot resize in place");
+pub const CANNOT_RESIZE_IP: AllocError = AllocError::Other("can't resize in place");
 
-// TODO: the absolutely hellish task of adding in-place operations parallel to alloc_ext's and
-//  alloc_slice's methods
+// TODO: add methods parallel to the other extension traits' methods

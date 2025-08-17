@@ -122,7 +122,9 @@
 
 // TODO: run tests which are cfgd out on no_alloc always
 
-// TODO: add missing cfg_attr(miri, track_caller) attributes
+// TODO: add missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
+
+// TODO: consistent attribute and doc orderings
 
 macro_rules! const_if {
     (
@@ -277,7 +279,7 @@ macro_rules! assume {
                 core::hint::unreachable_unchecked();
             }
         }
-    }
+    };
 }
 
 // TODO: dedup docs with some macros
@@ -341,11 +343,14 @@ pub mod unstable_util;
 /// Errors that can occur during allocation.
 pub mod error;
 
-use core::{
-    cmp::Ordering,
-    ptr::{self, NonNull},
+use {
+    core::{
+        cmp::Ordering,
+        ptr::{self, NonNull},
+    },
+    error::AllocError,
+    helpers::alloc_then,
 };
-use {error::AllocError, helpers::alloc_then};
 
 #[cfg(any(not(feature = "no_alloc"), feature = "malloc_defaultalloc"))]
 /// Default allocator, delegating to the global allocator.
@@ -647,7 +652,7 @@ pub trait Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::ShrinkBiggerNewLayout`] if `new_layout.size() > old_layout.size()`.
+    /// - [`AllocError::ShrinkLargerNewLayout`] if `new_layout.size() > old_layout.size()`.
     /// - [`AllocError::ZeroSizedLayout`] if `new_layout` has a size of zero.
     ///
     /// On failure, the original memory won't be deallocated or modified.
@@ -874,7 +879,7 @@ pub unsafe fn grow<A: Alloc + ?Sized>(
                 grow_unchecked(&a, ptr, old_layout, new_layout, pattern)
             }
         }
-        Ordering::Greater => Err(AllocError::GrowSmallerNewLayout(
+        Ordering::Greater => Err(AllocError::grow_smaller(
             old_layout.size(),
             new_layout.size(),
         )),
@@ -892,7 +897,7 @@ pub unsafe fn shrink<A: Alloc + ?Sized>(
     new_layout: Layout,
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => Err(AllocError::ShrinkBiggerNewLayout(
+        Ordering::Less => Err(AllocError::shrink_larger(
             old_layout.size(),
             new_layout.size(),
         )),
@@ -996,6 +1001,7 @@ pub unsafe fn ralloc<A: Alloc + ?Sized>(
 /// This is used to determine or represent the pattern new bytes will be or were filled with.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[derive(Debug, Copy, Clone)]
+#[repr(u8)]
 pub enum AllocPattern {
     /// Uninitialized bytes.
     Uninitialized,

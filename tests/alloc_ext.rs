@@ -20,33 +20,6 @@ fn test_alloc_filled() {
 }
 
 #[test]
-fn test_alloc_init_and_default_and_write() {
-    let allocator = DefaultAlloc;
-    // alloc_init
-    let ptr = allocator
-        .ialloc::<u32, _>(|p| unsafe { *p.as_ptr() = 42 })
-        .unwrap();
-    assert_eq!(unsafe { *ptr.as_ptr() }, 42);
-    unsafe {
-        allocator.dealloc(ptr.cast(), u32::LAYOUT);
-    }
-
-    // alloc_default
-    let dptr = allocator.alloc_def::<u32>().unwrap();
-    assert_eq!(unsafe { *dptr.as_ptr() }, u32::default());
-    unsafe {
-        allocator.dealloc(dptr.cast(), u32::LAYOUT);
-    }
-
-    // alloc_write
-    let wptr = allocator.walloc(7u32).unwrap();
-    assert_eq!(unsafe { *wptr.as_ptr() }, 7);
-    unsafe {
-        allocator.dealloc(wptr.cast(), u32::LAYOUT);
-    }
-}
-
-#[test]
 #[allow(clippy::cast_possible_truncation)]
 fn test_grow_and_variants() {
     let allocator = DefaultAlloc;

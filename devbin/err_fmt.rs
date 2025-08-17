@@ -51,7 +51,7 @@ fn main() {
     items.push(AllocError::ZeroSizedLayout(dangling));
 
     items.push(AllocError::GrowSmallerNewLayout(1024, 256));
-    items.push(AllocError::ShrinkBiggerNewLayout(256, 1024));
+    items.push(AllocError::ShrinkLargerNewLayout(256, 1024));
 
     items.push(AllocError::ArithmeticOverflow(arith));
 
