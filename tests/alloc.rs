@@ -1,7 +1,8 @@
 // miri is incompatible with malloc_defaultalloc
-#![cfg(any(not(miri), not(feature = "malloc_defaultalloc")))]
+#![cfg_attr(feature = "malloc_defaultalloc", cfg(not(miri)))]
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use core::ptr;
+use memapi::type_props::SizedProps;
 use memapi::{error::AllocError, Alloc, DefaultAlloc, Layout};
 
 #[test]
@@ -36,7 +37,19 @@ fn test_alloc_zeroed() {
 #[test]
 fn test_shrink_and_error_cases() {
     let allocator = DefaultAlloc;
-    let old = Layout::from_size_align(8, 1).unwrap();
+    let old = Layout::from_size_align(
+        8,
+        // alignment must be a power of two AND a multiple of *void's size for malloc.
+        //  usize::SZ = *void's size
+        if cfg!(feature = "malloc_defaultalloc") {
+            usize::SZ
+        } else {
+            1
+        },
+    )
+    .unwrap();
+    // 1 is fine here though because we already satisfy the alignment, and
+    //  1 < MAXIMUM_GUARANTEED_ALIGNMENT
     let new = Layout::from_size_align(4, 1).unwrap();
     let ptr = allocator.alloc(old).unwrap();
     unsafe {

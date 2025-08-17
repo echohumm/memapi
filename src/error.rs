@@ -296,14 +296,39 @@ pub enum LayoutErr {
     /// The requested size was greater than
     /// [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT) when rounded up to the
     /// nearest multiple of the requested alignment.
-    Overflow,
+    ExceedsMax,
+    /// When attempting to make a layout `malloc`-compatible, the requested alignment was rounded up
+    /// to a multiple of [`usize::SZ`].
+    ///
+    /// However, this new alignment would cause a [`LayoutErr::ExceedsMax`] error.
+    MallocExceedsMax,
+    /// When attempting to make a layout `malloc`-compatible, an attempt was made to round the
+    /// alignment up to a multiple of [`usize::SZ`], but that arithmetic would overflow.
+    ///
+    /// The contained [`ArithOverflow`] records the exact operands and operation that overflowed.
+    MallocOverflow(ArithOverflow),
 }
+
 
 impl Display for LayoutErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             LayoutErr::Align(inv_align) => write!(f, "{}", inv_align),
-            LayoutErr::Overflow => write!(f, "size would overflow"),
+            LayoutErr::ExceedsMax => write!(f, "size would overflow when rounded up to alignment"),
+            LayoutErr::MallocExceedsMax => {
+                write!(
+                    f,
+                    "computed size would overflow `Layout`'s max when rounded up to the alignment \
+                    after rounding the alignment to a malloc-compatible boundary \
+                    (pointer-sized alignment)"
+                )
+            }
+            LayoutErr::MallocOverflow(o) => write!(
+                f,
+                "failed to compute a malloc-compatible alignment: arithmetic overflow while \
+                 performing the operation {} {} {}",
+                o.0, o.1, o.2
+            ),
         }
     }
 }

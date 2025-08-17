@@ -1,5 +1,5 @@
 // miri is incompatible with malloc_defaultalloc
-#![cfg(any(not(miri), not(feature = "malloc_defaultalloc")))]
+#![cfg_attr(feature = "malloc_defaultalloc", cfg(not(miri)))]
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use core::ptr;
 use memapi::{type_props::SizedProps, Alloc, AllocExt, DefaultAlloc, Layout};

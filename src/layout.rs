@@ -74,10 +74,9 @@ impl Layout {
     ///   `align == 0`.
     /// - `LayoutErr::Align(`
     ///   [`AlignErr::NonPowerOfTwoAlign(align)`](crate::error::AlignErr::NonPowerOfTwoAlign)`)` if
-    ///   `align` is non-zero, but
-    ///   not a power of two.
-    /// - [`LayoutErr::Overflow`] if `size` rounded up to the nearest multiple of `align` does not
-    ///   exceed [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT).
+    ///   `align` is non-zero, but not a power of two.
+    /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
+    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT).
     #[inline]
     pub const fn from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
         lay_from_size_align(size, align)
@@ -96,19 +95,7 @@ impl Layout {
     #[inline]
     #[must_use]
     pub const unsafe fn from_size_align_unchecked(size: usize, align: usize) -> Layout {
-        #[cfg(feature = "const_extras")]
-        #[allow(unknown_lints, clippy::incompatible_msrv)]
-        {
-            let res = crate::unstable_util::check_lay(size, align).is_ok();
-
-            debug_assert!(
-                res,
-                "Layout::from_size_align_unchecked: invalid size or alignment"
-            );
-            if !res {
-                core::hint::unreachable_unchecked();
-            }
-        }
+        assume!(const crate::unstable_util::check_lay(size, align).is_ok());
 
         Layout { size, align }
     }
@@ -211,6 +198,29 @@ impl Layout {
         match Layout::from_size_align(size, align) {
             Ok(layout) => Ok(layout),
             Err(e) => Err(RepeatLayoutError::InvalidLayout(InvLayout(size, align, e))),
+        }
+    }
+
+    /// Creates a layout with the same size as `self` but an alignment meeting `align`. If
+    /// `self.align >= align`, returns `self`.
+    ///
+    /// This method doesn't modify the size of the new layout.
+    ///
+    /// # Errors
+    ///
+    /// - `LayoutErr::Align(`
+    ///   [`AlignErr::NonPowerOfTwoAlign(align)`](crate::error::AlignErr::NonPowerOfTwoAlign)`)` if
+    ///   `align` is larger than `self.align`, but not a power of two.
+    /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
+    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT).
+    #[allow(clippy::double_must_use)]
+    #[must_use = "this function returns a new layout, it doesn't modify the original one"]
+    #[inline]
+    pub const fn align_to(&self, align: usize) -> Result<Layout, LayoutErr> {
+        if align > self.align() {
+            Layout::from_size_align(self.size(), align)
+        } else {
+            Ok(*self)
         }
     }
 

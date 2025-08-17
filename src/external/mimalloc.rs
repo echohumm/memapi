@@ -1,6 +1,6 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use crate::{
-    ffi::mim as ffi,
+    external::ffi::mim as ffi,
     helpers::{nonnull_to_void, null_q, null_q_zsl_check},
     Alloc, AllocError, Layout,
 };
@@ -13,9 +13,80 @@ use libc::c_void;
 pub struct MiMalloc;
 
 #[cfg(feature = "mimalloc_err_reporting")]
-// 0 = ok
-// others = os error code
-static LAST_ERR: core::sync::atomic::AtomicI32 = core::sync::atomic::AtomicI32::new(0);
+thread_local! {
+    // 0 = ok, other = os error code
+    static LAST_ERR: core::cell::Cell<i32> = core::cell::Cell::new(0);
+}
+
+#[cfg(feature = "mimalloc_global_err")]
+static GLOBAL_LAST_ERR: core::sync::atomic::AtomicI32 = core::sync::atomic::AtomicI32::new(0);
+
+#[cfg(feature = "mimalloc_global_err")]
+/// Atomically loads the raw integer value of the last global error.
+#[must_use]
+pub fn get_global_last_err_val(ord: core::sync::atomic::Ordering) -> i32 {
+    GLOBAL_LAST_ERR.load(ord)
+}
+
+#[cfg(feature = "mimalloc_global_err")]
+/// Loads the last global error as an [`std::io::Error`] if present.
+///
+/// Returns `None` when the stored integer is `0`.
+#[must_use]
+pub fn get_global_last_err(ord: core::sync::atomic::Ordering) -> Option<std::io::Error> {
+    match get_global_last_err_val(ord) {
+        0 => None,
+        v => Some(std::io::Error::from_raw_os_error(v)),
+    }
+}
+
+#[cfg(feature = "mimalloc_global_err")]
+/// Clears the global error (sets it to `0`) using the given atomic ordering.
+pub fn clear_global_last_err(ord: core::sync::atomic::Ordering) {
+    GLOBAL_LAST_ERR.store(0, ord);
+}
+
+#[cfg(feature = "mimalloc_global_err")]
+/// Gets a static reference to the underlying atomic storing the last global error.
+#[must_use]
+pub fn global_err() -> &'static core::sync::atomic::AtomicI32 {
+    &GLOBAL_LAST_ERR
+}
+
+#[cfg(feature = "mimalloc_global_err")]
+/// Copies the thread-local last error into the global error if possible.
+///
+/// If there's no thread-local error (`LAST_ERR == 0`) returns `Ok(false)`. If a thread-local error
+/// exists and the global error was `0`, copies it into the global atomic, clears the thread-local
+/// value *if `mov` is `true`*, and returns `Ok(true)`. Otherwise, returns an error.
+///
+/// `succ` is used as the success ordering for the underlying atomic compare-exchange, while `fail`
+/// is used as the failure ordering.
+///
+/// # Errors
+///
+/// If a thread-local error exists but the global atomic was already non-zero,
+/// returns`Err(current_global_value)`.
+pub fn local_to_global_err(
+    succ: core::sync::atomic::Ordering,
+    fail: core::sync::atomic::Ordering,
+    mov: bool,
+) -> Result<bool, i32> {
+    let local = LAST_ERR.with(core::cell::Cell::get);
+    if local == 0 {
+        return Ok(false);
+    }
+
+    match GLOBAL_LAST_ERR.compare_exchange(0, local, succ, fail) {
+        Ok(_) => {
+            if mov {
+                LAST_ERR.with(|c| c.set(0));
+            }
+            Ok(true)
+        }
+        Err(current_global) => Err(current_global),
+    }
+}
 
 #[cfg(feature = "mimalloc_err_reporting")]
 /// Initializes the `MiMalloc` error/output handler.
@@ -36,7 +107,7 @@ unsafe extern "C" fn error_handler(e: libc::c_int, _: *mut c_void) {
     if e == libc::EFAULT {
         libc::abort();
     }
-    LAST_ERR.store(e, core::sync::atomic::Ordering::SeqCst);
+    LAST_ERR.with(|c| c.set(e));
 }
 
 #[cfg(all(
@@ -82,17 +153,17 @@ fn zsl_check_alloc<F: Fn(usize, usize) -> *mut c_void>(
             null_q,
         ) {
             Err(AllocError::AllocFailed(l, _)) => {
-                let code = LAST_ERR.load(core::sync::atomic::Ordering::SeqCst);
+                let code = LAST_ERR.with(|c| {
+                    let v = c.get();
+                    if v != 0 {
+                        c.set(0);
+                    }
+                    v
+                });
+
                 Err(if code == 0 {
                     AllocError::AllocFailed(l, crate::error::Cause::Unknown)
                 } else {
-                    // only reset if it hasn't been updated already
-                    let _ = LAST_ERR.compare_exchange(
-                        code,
-                        0,
-                        core::sync::atomic::Ordering::SeqCst,
-                        core::sync::atomic::Ordering::SeqCst,
-                    );
                     AllocError::AllocFailed(
                         l,
                         crate::error::Cause::OSErr(std::io::Error::from_raw_os_error(code)),
@@ -132,27 +203,18 @@ impl Alloc for MiMalloc {
         }
     }
 
-    // TODO: dedup these
-
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        let old_size = old_layout.size();
-        let new_size = new_layout.size();
-
-        let new_align = new_layout.align();
-
-        if new_size == old_size && new_align == old_layout.align() {
-            return Ok(ptr);
-        } else if new_size < old_size {
-            return Err(AllocError::GrowSmallerNewLayout(old_size, new_size));
-        }
-
-        zsl_check_alloc(new_layout, |_, _| {
-            ffi::mi_realloc_aligned(nonnull_to_void(ptr), new_size, new_align)
+        realloc(ptr, old_layout, new_layout, |old, new| {
+            if new < old {
+                Some(AllocError::GrowSmallerNewLayout(old, new))
+            } else {
+                None
+            }
         })
     }
 
@@ -162,19 +224,12 @@ impl Alloc for MiMalloc {
         old_layout: Layout,
         new_layout: Layout,
     ) -> Result<NonNull<u8>, AllocError> {
-        let old_size = old_layout.size();
-        let new_size = new_layout.size();
-
-        let new_align = new_layout.align();
-
-        if new_size == old_size && new_align == old_layout.align() {
-            return Ok(ptr);
-        } else if new_size > old_size {
-            return Err(AllocError::ShrinkBiggerNewLayout(old_size, new_size));
-        }
-
-        zsl_check_alloc(new_layout, |_, _| {
-            ffi::mi_realloc_aligned(nonnull_to_void(ptr), new_size, new_align)
+        realloc(ptr, old_layout, new_layout, |old, new| {
+            if new > old {
+                Some(AllocError::ShrinkBiggerNewLayout(old, new))
+            } else {
+                None
+            }
         })
     }
 
@@ -220,8 +275,7 @@ impl crate::ResizeInPlace for MiMalloc {
         }
     }
 
-    // TODO: verify this is true
-    /// Shrinking in-place is not supported by mimalloc.
+    /// Shrinking in-place isn't supported by mimalloc.
     ///
     /// This is a noop and always returns an error.
     ///
@@ -293,4 +347,25 @@ impl crate::features::fallible_dealloc::DeallocChecked for MiMalloc {
     fn owns(&self, ptr: NonNull<u8>) -> bool {
         unsafe { ffi::mi_is_in_heap_region(nonnull_to_void(ptr)) }
     }
+}
+
+unsafe fn realloc(
+    ptr: NonNull<u8>,
+    old_layout: Layout,
+    new_layout: Layout,
+    size_err: impl Fn(usize, usize) -> Option<AllocError>,
+) -> Result<NonNull<u8>, AllocError> {
+    let old_size = old_layout.size();
+    let new_size = new_layout.size();
+    let new_align = new_layout.align();
+
+    if new_size == old_size && new_align == old_layout.align() {
+        return Ok(ptr);
+    } else if let Some(err) = size_err(old_size, new_size) {
+        return Err(err);
+    }
+
+    zsl_check_alloc(new_layout, |_, _| {
+        ffi::mi_realloc_aligned(nonnull_to_void(ptr), new_size, new_align)
+    })
 }

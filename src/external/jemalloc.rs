@@ -2,7 +2,7 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use crate::{
     error::AllocError,
-    external_alloc::ffi::jem as ffi,
+    external::ffi::jem as ffi,
     helpers::{nonnull_to_void, null_q_dyn, null_q_zsl_check},
     Alloc, Layout,
 };
@@ -243,8 +243,8 @@ impl crate::ResizeInPlace for Jemalloc {
                 Ok(())
             } else if usable_size == ffi::nallocx(new_size, flags) {
                 debug_assert_eq!(
-                    crate::ffi::jem::nallocx(new_size, flags),
-                    crate::ffi::jem::nallocx(old_layout.size(), flags)
+                    crate::external::ffi::jem::nallocx(new_size, flags),
+                    crate::external::ffi::jem::nallocx(old_layout.size(), flags)
                 );
 
                 Ok(())

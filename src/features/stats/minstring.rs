@@ -7,7 +7,10 @@ use core::{
 };
 
 pub(crate) struct String {
-    bytes: Vec,
+    buf: NonNull<u8>,
+    len: usize,
+    cap: usize,
+    alloc: DefaultAlloc,
 }
 
 impl String {
@@ -21,12 +24,10 @@ impl String {
             ptr::copy_nonoverlapping(str.as_ptr(), buf.as_ptr(), str.len());
 
             String {
-                bytes: Vec {
-                    buf,
-                    len: str.len(),
-                    cap: str.len(),
-                    alloc,
-                },
+                buf,
+                len: str.len(),
+                cap: str.len(),
+                alloc,
             }
         }
     }
@@ -35,10 +36,7 @@ impl String {
         // SAFETY: we know the bytes are valid UTF-8
         unsafe {
             #[allow(clippy::transmute_bytes_to_str)]
-            transmute(slice::from_raw_parts(
-                self.bytes.buf.as_ptr(),
-                self.bytes.len,
-            ))
+            transmute(slice::from_raw_parts(self.buf.as_ptr(), self.len))
         }
     }
 
@@ -57,31 +55,32 @@ impl String {
                 n /= 10;
                 dlen += 1;
             }
-            // digits are reversed; fix that in-place
-            digits[..dlen].reverse();
+
+            // for some reason my ide refuses to acknowledge that `digits[..dlen].reverse()` is a
+            //  valid method call, so, UFCS here
+            <[u8]>::reverse(&mut digits[..dlen]);
         }
 
-        let old_len = self.bytes.len;
+        let old_len = self.len;
         let new_len = old_len + dlen;
 
         // SAFETY: we know that the layout of the string is at least the size of the old length
         //  and this is only used with very small strings, so the operations will never overflow
         unsafe {
             let new_buf = self
-                .bytes
                 .alloc
                 .alloc(Layout::from_size_align_unchecked(new_len, 1))
                 .expect("alloc failed");
 
-            ptr::copy_nonoverlapping(self.bytes.buf.as_ptr(), new_buf.as_ptr(), old_len);
+            ptr::copy_nonoverlapping(self.buf.as_ptr(), new_buf.as_ptr(), old_len);
             ptr::copy_nonoverlapping(digits.as_ptr(), new_buf.as_ptr().add(old_len), dlen);
 
-            let old_layout = Layout::from_size_align_unchecked(self.bytes.cap, 1);
-            self.bytes.alloc.dealloc(self.bytes.buf, old_layout);
+            let old_layout = Layout::from_size_align_unchecked(self.cap, 1);
+            self.alloc.dealloc(self.buf, old_layout);
 
-            self.bytes.buf = new_buf;
-            self.bytes.len = new_len;
-            self.bytes.cap = new_len;
+            self.buf = new_buf;
+            self.len = new_len;
+            self.cap = new_len;
 
             self
         }
@@ -94,19 +93,11 @@ impl Display for String {
     }
 }
 
-struct Vec {
-    buf: NonNull<u8>,
-    len: usize,
-    cap: usize,
-    alloc: DefaultAlloc,
-}
-
-impl Drop for Vec {
+impl Drop for String {
     fn drop(&mut self) {
         // SAFETY: the cap will be valid because we allocated it
         unsafe {
-            self.alloc
-                .dealloc(self.buf, Layout::from_size_align_unchecked(self.cap, 1));
+            self.alloc.dealloc(self.buf, Layout::from_size_align_unchecked(self.cap, 1));
         }
     }
 }

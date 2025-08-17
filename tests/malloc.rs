@@ -1,17 +1,19 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
+#![cfg(unix)]
 use core::{
     ptr::{self, NonNull},
     slice,
 };
 use memapi::{
-    external::ffi::jem::malloc_usable_size, external::jemalloc::Jemalloc, type_props::SizedProps,
+    external::ffi::libc::malloc_usable_size, external::malloc::Malloc, type_props::SizedProps,
     Alloc, Layout,
 };
 
 #[test]
 fn alloc_and_dealloc_basic() {
-    let alloc = Jemalloc;
+    println!("alloc_and_dealloc_basic");
+    let alloc = Malloc;
     let layout = Layout::from_size_align(64, 8).unwrap();
 
     unsafe {
@@ -24,7 +26,8 @@ fn alloc_and_dealloc_basic() {
 
 #[test]
 fn alloc_zeroed_is_really_zeroed() {
-    let alloc = Jemalloc;
+    println!("alloc_zeroed_is_really_zeroed");
+    let alloc = Malloc;
     let size = 128;
     let layout = Layout::from_size_align(size, 8).unwrap();
 
@@ -42,7 +45,7 @@ fn alloc_zeroed_is_really_zeroed() {
 
 #[test]
 fn usable_size_at_least_requested() {
-    let alloc = Jemalloc;
+    let alloc = Malloc;
     let size = 100;
     let layout = Layout::from_size_align(size, 16).unwrap();
 
@@ -62,9 +65,13 @@ fn usable_size_at_least_requested() {
 #[test]
 #[allow(clippy::cast_possible_truncation)]
 fn realloc_preserves_initial_contents() {
-    let alloc = Jemalloc;
+    println!("realloc_preserves_initial_contents");
+    let alloc = Malloc;
     let old_count = 4;
-    let old_layout = Layout::array::<u32>(old_count).unwrap();
+    let old_layout = Layout::array::<u32>(old_count)
+        .unwrap()
+        .align_to(usize::SZ)
+        .unwrap();
 
     unsafe {
         // allocate and write a pattern
@@ -101,9 +108,11 @@ fn error_reporting_works() {
         type_props::{usize_bit, USIZE_MAX_NO_HIGH_BIT},
     };
 
-    let alloc = Jemalloc;
+    let alloc = Malloc;
 
-    let layout = unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };
+    // we have to lower this for malloc, because of its rounding up of the alignment which size is
+    //  then rounded up to
+    let layout = unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT - 7, 1) };
 
     let err = alloc.alloc(layout).expect_err("allocation should fail");
 

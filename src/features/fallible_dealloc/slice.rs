@@ -1,13 +1,10 @@
-use crate::fallible_dealloc::{base_try_dealloc_impl, DeallocChecked};
 use crate::{
     error::{AllocError, ArithOp},
-    helpers::{checked_op, nonnull_slice_len, slice_ptr_from_raw_parts},
+    fallible_dealloc::{base_try_dealloc_impl, DeallocChecked},
+    helpers::checked_op,
     type_props::SizedProps,
 };
-use core::{
-    mem::MaybeUninit,
-    ptr::{self, NonNull},
-};
+use core::ptr::{self, NonNull};
 
 /// Slice-specific extension methods for [`DeallocChecked`].
 #[allow(clippy::module_name_repetitions)]
@@ -76,10 +73,14 @@ pub trait DeallocCheckedSliceExt: DeallocCheckedSlice {
     #[track_caller]
     unsafe fn try_drop_zero_and_dealloc_uninit_slice<T>(
         &self,
-        slice: NonNull<[MaybeUninit<T>]>,
+        slice: NonNull<[core::mem::MaybeUninit<T>]>,
         init: usize,
     ) -> Result<(), AllocError> {
-        self.try_drop_zero_and_dealloc_raw_slice(slice.cast::<T>(), init, nonnull_slice_len(slice))
+        self.try_drop_zero_and_dealloc_raw_slice(
+            slice.cast::<T>(),
+            init,
+            crate::helpers::nonnull_slice_len(slice),
+        )
     }
 
     /// Attempts to drop `init` elements from a pointer to a slice, then zeroes and deallocates its
@@ -108,7 +109,7 @@ pub trait DeallocCheckedSliceExt: DeallocCheckedSlice {
             len
         )));
         base_try_dealloc_impl(self, slice, tri!(lay, sz, T::ALN), |d, ptr, layout| {
-            ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr(), init));
+            ptr::drop_in_place(crate::helpers::slice_ptr_from_raw_parts(ptr.as_ptr(), init));
             let p_bytes = ptr.cast::<u8>();
             ptr::write_bytes(p_bytes.as_ptr(), 0, layout.size());
             d.dealloc(p_bytes, layout);
@@ -130,10 +131,10 @@ pub trait DeallocCheckedSliceExt: DeallocCheckedSlice {
     #[cfg_attr(miri, track_caller)]
     unsafe fn try_drop_and_dealloc_uninit_slice<T>(
         &self,
-        ptr: NonNull<[MaybeUninit<T>]>,
+        ptr: NonNull<[core::mem::MaybeUninit<T>]>,
         init: usize,
     ) -> Result<(), AllocError> {
-        let len = nonnull_slice_len(ptr);
+        let len = crate::helpers::nonnull_slice_len(ptr);
         self.try_drop_and_dealloc_raw_slice(ptr.cast::<T>(), init, len)
     }
 
@@ -163,7 +164,7 @@ pub trait DeallocCheckedSliceExt: DeallocCheckedSlice {
             len
         )));
         base_try_dealloc_impl(self, ptr, tri!(lay, sz, T::ALN), |d, ptr, layout| {
-            ptr::drop_in_place(slice_ptr_from_raw_parts(ptr.as_ptr(), init));
+            ptr::drop_in_place(crate::helpers::slice_ptr_from_raw_parts(ptr.as_ptr(), init));
             d.dealloc(ptr.cast::<u8>(), layout);
         })
     }

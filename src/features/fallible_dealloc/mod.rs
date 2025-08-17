@@ -13,6 +13,8 @@ pub use ext::DeallocCheckedExt;
 pub(crate) mod slice;
 #[cfg(feature = "alloc_slice")]
 pub use slice::DeallocCheckedSlice;
+#[cfg(all(feature = "alloc_slice", feature = "alloc_ext"))]
+pub use slice::DeallocCheckedSliceExt;
 
 /// A trait for allocators to attempt deallocation.
 pub trait DeallocChecked: Alloc {

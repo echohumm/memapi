@@ -7,6 +7,7 @@ import os
 
 FEATURES = [
     "no_alloc",
+    "malloc_defaultalloc",
 
     "std",
 
@@ -26,6 +27,7 @@ FEATURES = [
     "mimalloc",
     "malloc",
     "mimalloc_err_reporting",
+    "mimalloc_global_err",
     "mimalloc_err_output",
 ]
 

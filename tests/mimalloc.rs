@@ -1,7 +1,7 @@
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
 use core::ptr;
-use memapi::{ffi::mim::mi_usable_size, mimalloc::MiMalloc, Alloc, Layout};
+use memapi::{external::ffi::mim::mi_usable_size, external::mimalloc::MiMalloc, Alloc, Layout};
 
 #[test]
 fn alloc_and_dealloc_basic() {
@@ -105,7 +105,7 @@ fn error_reporting_works() {
 
     let alloc = MiMalloc;
 
-    memapi::mimalloc::init_error_handler();
+    memapi::external::mimalloc::init_error_handler();
 
     // creation will succeed, but this amount of memory is far too large for anything to allocate.
     let layout = unsafe { Layout::from_size_align_unchecked(USIZE_MAX_NO_HIGH_BIT, 1) };

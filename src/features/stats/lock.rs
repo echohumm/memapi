@@ -1,4 +1,3 @@
-use alloc::sync::Arc;
 use std::io::{stderr, stdout, Stderr, StderrLock, Stdout, StdoutLock, Write};
 
 /// A trait for locking an output stream in a thread-safe manner.
@@ -58,7 +57,8 @@ impl<W: WriteLock> WriteLock for Box<W> {
     }
 }
 
-impl<W: WriteLock> WriteLock for Arc<W> {
+#[cfg(not(feature = "no_alloc"))]
+impl<W: WriteLock> WriteLock for alloc::sync::Arc<W> {
     type Guard = W::Guard;
 
     fn lock(&self) -> W::Guard {

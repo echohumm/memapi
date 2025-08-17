@@ -1,16 +1,18 @@
-use crate::ffi::malloc::{realloc_helper, rezalloc, zgrow};
 use crate::{
-    ffi::malloc::{alloc, dealloc, grow, shrink, zalloc},
+    external::ffi::libc::{alloc, dealloc, grow, realloc_helper, rezalloc, shrink, zalloc, zgrow},
     Alloc, AllocError, Layout,
 };
 use core::ptr::NonNull;
 
-// TODO: tests for this
 #[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 /// Handle to libc's allocation functions. This type implements the [`GlobalAlloc`] trait, allowing
 /// use as a global allocator, and [`Alloc`](Alloc).
 ///
 /// This is almost the same as [`System`](std::alloc::System).
+///
+/// Note that, in addition to the usual requirement of alignments being a
+/// [power of two](usize::is_power_of_two), this allocator requires that `align` is a multiple of
+/// [`usize::SZ`](crate::type_props::SizedProps::SZ), AKA the size of C's *void.
 pub struct Malloc;
 
 #[cfg(not(feature = "no_alloc"))]
@@ -18,22 +20,22 @@ pub struct Malloc;
 unsafe impl alloc::alloc::GlobalAlloc for Malloc {
     #[inline]
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        crate::ffi::malloc::raw_alloc(layout)
+        crate::external::ffi::libc::raw_alloc(layout)
     }
 
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        crate::ffi::malloc::raw_dealloc(ptr, layout);
+        crate::external::ffi::libc::raw_dealloc(ptr, layout);
     }
 
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        crate::ffi::malloc::raw_zalloc(layout)
+        crate::external::ffi::libc::raw_zalloc(layout)
     }
 
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
-        crate::ffi::malloc::raw_realloc(ptr, layout, new_size)
+        crate::external::ffi::libc::raw_realloc(ptr, layout, new_size)
     }
 }
 

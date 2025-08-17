@@ -16,6 +16,8 @@ use core::ptr::{self, NonNull};
 
 #[cfg(feature = "fallible_dealloc")]
 pub use crate::features::fallible_dealloc::slice::DeallocCheckedSlice;
+#[cfg(all(feature = "alloc_ext", feature = "fallible_dealloc"))]
+pub use crate::features::fallible_dealloc::slice::DeallocCheckedSliceExt;
 
 #[cfg(feature = "alloc_ext")]
 const INSUF_GROW_SRC: AllocError =

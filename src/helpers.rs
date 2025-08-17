@@ -13,6 +13,38 @@ use core::{
     ptr::{self, NonNull},
 };
 
+/// Preprocesses a [`Layout`] to get its `Malloc`-compatible form (rounds the alignment up to the
+/// nearest multiple of [`usize::SZ`], AKA `size_of::<*const c_void>()`).
+///
+/// If the layout is already compatible, does nothing.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub fn preproc_layout(layout: Layout) -> Result<Layout, InvLayout> {
+    let sz = layout.size();
+    let align = tri!(do round_to_ptr_align(sz, layout.align()));
+    match crate::unstable_util::lay_from_size_align(
+        sz,
+        align,
+    ) {
+        Ok(l) => Ok(l),
+        Err(LayoutErr::ExceedsMax) => Err(InvLayout(sz, align, LayoutErr::MallocExceedsMax)),
+        // SAFETY: the only other error which can occur is Align, but since the alignment came from
+        //  a valid layout and round_to_ptr_align cannot make it zero or a non-power-of-two, it will
+        //  still be valid, so that error cannot occur.
+        _ => unsafe { core::hint::unreachable_unchecked() },
+    }
+}
+
+pub(crate) fn round_to_ptr_align(sz: usize, align: usize) -> Result<usize, InvLayout> {
+    let mask = usize::SZ - 1;
+    if align & mask == 0 {
+        return Ok(align);
+    }
+    match checked_op(align, ArithOp::Add, mask) {
+        Ok(v) => Ok(v & !mask),
+        Err(e) => Err(InvLayout(sz, align, LayoutErr::MallocOverflow(e))),
+    }
+}
+
 /// Converts a reference into a [`NonNull`].
 pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
     // SAFETY: all references are valid non-null pointers
@@ -220,7 +252,7 @@ pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
 /// [`InvLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`].
 pub const fn align_up(sz: usize, align: NonZeroUsize) -> Result<usize, InvLayout> {
     if sz > USIZE_MAX_NO_HIGH_BIT || align.get() > USIZE_MAX_NO_HIGH_BIT {
-        return Err(InvLayout(sz, align.get(), LayoutErr::Overflow));
+        return Err(InvLayout(sz, align.get(), LayoutErr::ExceedsMax));
     }
 
     // SAFETY: align must be nonzero according to NonZeroUsize, and we just checked they were below
@@ -280,7 +312,7 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, La
     let (sz, align) = (T::SZ, T::ALN);
 
     if sz != 0 && n > ((USIZE_MAX_NO_HIGH_BIT + 1) - align) / sz {
-        return Err((sz, align, LayoutErr::Overflow));
+        return Err((sz, align, LayoutErr::ExceedsMax));
     }
 
     // SAFETY: we just validated that a layout with a size of `sz * n` and alignment of `align` will

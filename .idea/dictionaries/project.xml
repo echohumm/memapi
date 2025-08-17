@@ -6,6 +6,7 @@
       <w>allz</w>
       <w>clippy</w>
       <w>criter</w>
+      <w>csky</w>
       <w>defaultalloc</w>
       <w>dontfixme</w>
       <w>dptr</w>
@@ -48,14 +49,18 @@
       <w>sptr</w>
       <w>superlint</w>
       <w>uarc</w>
+      <w>ufcs</w>
       <w>usizes</w>
       <w>varsized</w>
       <w>vec's</w>
+      <w>visionos</w>
       <w>weaks</w>
       <w>wptr</w>
+      <w>xtensa</w>
       <w>zalloc</w>
       <w>zdealloc</w>
       <w>zgrow</w>
+      <w>zkvm</w>
       <w>zootopia</w>
       <w>zsalloc</w>
       <w>zsgrow</w>

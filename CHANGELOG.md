@@ -6,6 +6,8 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Current low-priority to-dos](#current-low-priority-to-dos)
 - [Version 0.18.0](#version-0180)
+  - [Commit 5](#commit-5-2025-8-16)
+  - [Commit 4](#commit-4-2025-8-16-834)
   - [Commit 3](#commit-3-2025-8-15-2341)
   - [Commit 2](#commit-2-2025-8-14-1926)
   - [Commit 1](#commit-1-2025-8-13)
@@ -40,7 +42,7 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 ## Entry format
 
 ```markdown
-## Version <MAJOR>.<MINOR>.<PATCH> [[<META_NOTE>] | (<PUBLISH_DATE> <PUBLISH_MST_TIME>)]
+## Version <MAJOR>.<MINOR>.<PATCH> [[<META_NOTE>] &| (<PUBLISH_DATE> <PUBLISH_MST_TIME>)]
 
 ### Commit <COMMIT_NUMBER> {on release: (<DATE> <MST_TIME>)}
 
@@ -50,24 +52,32 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 # Current high-priority to-dos
 
-- Debloat the primary surfaces
 - Sort stuff and fix module structure (it's SO bad)
-- Fix `malloc`'s weird system of private abstractions
+- Make other external allocators' methodology consistent with Malloc's
 - Split AllocSlice/AllocExt into multiple traits
 
 ## Current low-priority to-dos
 
 - Performance and binary size improvements
   - make as many sections as possible `const` [perf]
-  - use helpers for repetitive code [size] (~40% done?)
+  - use helpers for repetitive code [size] (~60% done, maybe?)
 - Proper tests for many untested methods and features
 
 ## Version 0.18.0
 
+### Commit 5 (2025-8-16)
+
+- Update README.md
+- Somewhat fix module structure
+- Make MiMalloc error reporting thread-local
+- Add `mimalloc_global_err` to add a global error state in addition to the new thread-local one
+- Reduce `external::mimalloc`, and `external::ffi::libc` repetition
+- Add tests for `Malloc`
+- Small fixes and improvements
+
 ### Commit 4 (2025-8-16 8:34)
 
 - Start working on module structure (WIP)
-  - there will be many commits for this while i'm working on it and testing it out.
 
 ### Commit 3 (2025-8-15 23:41)
 

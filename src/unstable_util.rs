@@ -33,7 +33,7 @@ pub const fn check_lay(size: usize, align: usize) -> Result<(), LayoutErr> {
     } else if !align.is_power_of_two() {
         return Err(LayoutErr::Align(AlignErr::NonPowerOfTwoAlign(align)));
     } else if size > USIZE_HIGH_BIT - align {
-        return Err(LayoutErr::Overflow);
+        return Err(LayoutErr::ExceedsMax);
     }
     Ok(())
 }

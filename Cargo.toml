@@ -29,6 +29,15 @@ maintenance = { status = "actively-developed" }
 
 
 
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = false
+# overflow checks should be disabled since we manually check where necessary anyways
+overflow-checks = false
+incremental = false
+
 [profile.bench]
 opt-level = 3
 lto = true
@@ -43,13 +52,16 @@ incremental = false
 
 
 [features]
+default = ["const_panic"]
+
 # meta features
 dev = []
 no_alloc = []
-malloc_defaultalloc = ["no_alloc", "extern_alloc"]
+malloc_defaultalloc = ["extern_alloc"]
 
 # msrv-changing features
 ## that make small changes
+const_panic = []
 const_extras = []
 const_max = ["const_extras"]
 c_str = []
@@ -98,6 +110,7 @@ mimalloc = ["memapi-mimalloc-sys", "extern_alloc"]
 malloc = ["extern_alloc"]
 
 mimalloc_err_reporting = ["mimalloc", "mim_dbg", "os_err_reporting"]
+mimalloc_global_err = ["mimalloc_err_reporting"]
 mimalloc_err_output = ["mimalloc_err_reporting"]
 
 # jemalloc feature bindings
@@ -147,6 +160,11 @@ required-features = ["jemalloc"]
 name = "mim"
 path = "tests/mimalloc.rs"
 required-features = ["mimalloc"]
+
+[[test]]
+name = "malloc"
+path = "tests/malloc.rs"
+required-features = ["malloc"]
 
 [[test]]
 name = "slice"

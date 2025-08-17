@@ -1,3 +1,4 @@
+#[cfg(not(feature = "no_alloc"))]
 extern crate alloc;
 extern crate criterion;
 
@@ -135,6 +136,7 @@ fn bench_zero_and_dealloc_8k(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_alloc_dealloc_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc};
 
@@ -151,6 +153,7 @@ fn bench_alloc_dealloc_base(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_alloc_default_u64_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc};
 
@@ -167,6 +170,7 @@ fn bench_alloc_default_u64_base(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_alloc_write_u128_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc};
 
@@ -184,6 +188,7 @@ fn bench_alloc_write_u128_base(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_alloc_filled_1k_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc};
 
@@ -202,6 +207,7 @@ fn bench_alloc_filled_1k_base(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_grow_filled_1k_to_4k_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc, realloc};
 
@@ -236,6 +242,7 @@ fn bench_grow_filled_1k_to_4k_base(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_realloc_filled_4k_to_1k_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc, realloc};
 
@@ -270,6 +277,7 @@ fn bench_realloc_filled_4k_to_1k_base(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_dealloc_typed_usize_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc};
 
@@ -286,6 +294,7 @@ fn bench_dealloc_typed_usize_base(c: &mut Criterion) {
     });
 }
 
+#[cfg(not(feature = "no_alloc"))]
 fn bench_zero_and_dealloc_8k_base(c: &mut Criterion) {
     use alloc::alloc::{alloc, dealloc};
 
@@ -324,6 +333,7 @@ pub fn crate_benches() {
     bench_zero_and_dealloc_8k(&mut criterion);
 }
 
+#[cfg(not(feature = "no_alloc"))]
 pub fn base_benches() {
     let mut criterion = get_criter();
 
@@ -335,6 +345,11 @@ pub fn base_benches() {
     bench_realloc_filled_4k_to_1k_base(&mut criterion);
     bench_dealloc_typed_usize_base(&mut criterion);
     bench_zero_and_dealloc_8k_base(&mut criterion);
+}
+
+#[cfg(feature = "no_alloc")]
+pub fn base_benches() {
+    println!("No base benchmarks available for no_alloc");
 }
 
 criterion_main!(crate_benches, base_benches);

@@ -20,26 +20,29 @@ MSRV with `stats_file_lock` feature: 1.89
 
 - Allocation primitives: allocation, deallocation, grow/shrink, and realloc operations
 - Allocation statistics gathering (feature: `stats`)
-  - Default logging types with `std` feature
-  - No-std-compatible logging types with `stats_parking_lot` feature
-  - Safer file logging with `stats_file_lock` feature
-  - Thread-safe stdout/stderr logging with `stats_thread_safe_io` feature
+    - Default logging types with `std` feature
+    - No-std-compatible logging types with `stats_parking_lot` feature
+    - Safer file logging with `stats_file_lock` feature
+    - Thread-safe stdout/stderr logging with `stats_thread_safe_io` feature
 - Allocator API support on nightly (feature: `nightly`)
-  - Clone/Copy specialization for performance and ease of use (feature: `specialization`)
-  - CloneToUninit usage in some functions (feature: `clone_to_uninit`)
-  - Pointer metadata usage in some functions (feature: `metadata`)
-  - Sized hierarchy support (feature: `sized_hierarchy`)
+    - Clone/Copy specialization for performance and ease of use (feature: `specialization`)
+    - CloneToUninit usage in some functions (feature: `clone_to_uninit`)
+    - Pointer metadata usage in some functions (feature: `metadata`)
+    - Sized hierarchy support (feature: `sized_hierarchy`)
 - C-style string support (feature: `c_str`) (MSRV: 1.64)
 - Constants: extra (feature: `extra_const`) (MSRV: 1.61)
 - Constants: even more (feature: `extra_extra_const`) (MSRV: 1.83)
 - Error reporting via `AllocError`
 - OS error reporting with supported allocators (feature: `os_err_reporting`)
-  - Supports Jemalloc and Rust's default allocator
-  - Supports MiMalloc (feature: `mimalloc_err_reporting`)
+    - Supports Jemalloc, Rust's default allocator, and Malloc
+    - Supports MiMalloc (feature: `mimalloc_err_reporting`)
+        - Logs to stderr if `mimalloc_err_output` is enabled
+        - A global, atomic error state can be used to transfer errors from the thread-local error
+          state (feature: `mimalloc_global_err`)
 - External allocator support
-  - Jemalloc (feature: `jemalloc`)
-  - MiMalloc (feature: `mimalloc`)
-  - Malloc (feature: `malloc`)
+    - Jemalloc (feature: `jemalloc`)
+    - MiMalloc (feature: `mimalloc`)
+    - Malloc (feature: `malloc`)
 - Fallback implementation for stable Rust
 - Low-cost wrapper over the global allocator
 - `no_std` compatible
@@ -52,7 +55,7 @@ MSRV with `stats_file_lock` feature: 1.89
 - `std` support (feature: `std`)
 - Unstable utilities (feature: `unstable_util`)
 - Exposed implementation details for implementing traits yourself (feature: `dev`)
-  - Most internal functions are public, just doc(hidden), and dev exposes them
+    - Most internal functions are public, just doc(hidden), and dev exposes them
 
 ---
 
