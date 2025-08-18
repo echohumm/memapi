@@ -4,9 +4,13 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Table of Contents
 
+[//]: # (TODO: do this a better way)
+
 - [Current low-priority to-dos](#current-low-priority-to-dos)
 - [Version 0.18.0](#version-0180)
-  - [Commit 5](#commit-5-2025-8-16)
+  - [Commit 7](#commit-7-2025-8-16-1855)
+  - [Commit 6](#commit-6-2025-8-16-1519)
+  - [Commit 5](#commit-5-2025-8-16-1519)
   - [Commit 4](#commit-4-2025-8-16-834)
   - [Commit 3](#commit-3-2025-8-15-2341)
   - [Commit 2](#commit-2-2025-8-14-1926)
@@ -65,6 +69,15 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.18.0
 
+### Commit 7 (2025-8-16 18:55)
+
+i'm almost ready to release this version finally, just need to check that everything is correct
+
+...1.0 soon?
+
+- Formatting
+- Small fixes
+
 ### Commit 6 (2025-8-16 15:19)
 
 - Add rustfmt config
@@ -72,7 +85,6 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 - Remove many methods from `AllocSlice`/`AllocExt`
 - Add missing `falloc_at` method to `AllocAlignedAt`
 - Add missing `repr(u8)` attrs to some enums
-- 
 
 ### Commit 5 (2025-8-16 15:19)
 

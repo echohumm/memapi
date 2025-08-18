@@ -1,9 +1,10 @@
 // miri is incompatible with malloc_defaultalloc
 #![cfg_attr(feature = "malloc_defaultalloc", cfg(not(miri)))]
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
-use core::ptr;
-use memapi::type_props::SizedProps;
-use memapi::{error::AllocError, Alloc, DefaultAlloc, Layout};
+use {
+    core::ptr,
+    memapi::{Alloc, DefaultAlloc, Layout, error::AllocError, type_props::SizedProps}
+};
 
 #[test]
 fn test_alloc_and_dealloc() {
@@ -41,11 +42,7 @@ fn test_shrink_and_error_cases() {
         8,
         // alignment must be a power of two AND a multiple of *void's size for malloc.
         //  usize::SZ = *void's size
-        if cfg!(feature = "malloc_defaultalloc") {
-            usize::SZ
-        } else {
-            1
-        },
+        if cfg!(feature = "malloc_defaultalloc") { usize::SZ } else { 1 }
     )
     .unwrap();
     // 1 is fine here though because we already satisfy the alignment, and
@@ -64,17 +61,11 @@ fn test_shrink_and_error_cases() {
 
     // error: shrink to a larger size
     let err = unsafe { allocator.shrink(shr, new, old).unwrap_err() };
-    assert_eq!(
-        err,
-        AllocError::ShrinkLargerNewLayout(new.size(), old.size())
-    );
+    assert_eq!(err, AllocError::ShrinkLargerNewLayout(new.size(), old.size()));
 
     // error: grow to a smaller size
     let err2 = unsafe { allocator.grow(shr, old, new).unwrap_err() };
-    assert_eq!(
-        err2,
-        AllocError::GrowSmallerNewLayout(old.size(), new.size())
-    );
+    assert_eq!(err2, AllocError::GrowSmallerNewLayout(old.size(), new.size()));
 
     unsafe {
         allocator.dealloc(shr, new);

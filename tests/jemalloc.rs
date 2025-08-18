@@ -1,12 +1,16 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
-use core::{
-    ptr::{self, NonNull},
-    slice,
-};
-use memapi::{
-    external::ffi::jem::malloc_usable_size, external::jemalloc::Jemalloc, type_props::SizedProps,
-    Alloc, Layout,
+use {
+    core::{
+        ptr::{self, NonNull},
+        slice
+    },
+    memapi::{
+        Alloc,
+        Layout,
+        external::{ffi::jem::malloc_usable_size, jemalloc::Jemalloc},
+        type_props::SizedProps
+    }
 };
 
 #[test]
@@ -32,10 +36,7 @@ fn alloc_zeroed_is_really_zeroed() {
         let ptr = alloc.zalloc(layout).unwrap();
         // treat as byte slice
         let buf = slice::from_raw_parts(ptr.as_ptr(), size);
-        assert!(
-            buf.iter().all(|&b| b == 0),
-            "alloc_zeroed must produce all-zero bytes"
-        );
+        assert!(buf.iter().all(|&b| b == 0), "alloc_zeroed must produce all-zero bytes");
         alloc.dealloc(ptr, layout);
     }
 }
@@ -49,12 +50,7 @@ fn usable_size_at_least_requested() {
     unsafe {
         let ptr = alloc.alloc(layout).unwrap();
         let usable = malloc_usable_size(ptr.as_ptr().cast());
-        assert!(
-            usable >= size,
-            "usable_size {} should be >= requested {}",
-            usable,
-            size
-        );
+        assert!(usable >= size, "usable_size {} should be >= requested {}", usable, size);
         alloc.dealloc(ptr, layout);
     }
 }
@@ -76,10 +72,8 @@ fn realloc_preserves_initial_contents() {
         // grow to twice as many elements
         let new_size = old_count * 2 * u32::SZ;
         let new_layout = Layout::from_size_align_unchecked(new_size, u32::ALN);
-        let new_ptr: NonNull<u32> = alloc
-            .realloc(ptr.cast(), old_layout, new_layout)
-            .unwrap()
-            .cast();
+        let new_ptr: NonNull<u32> =
+            alloc.realloc(ptr.cast(), old_layout, new_layout).unwrap().cast();
 
         // original data should be intact
         for i in 0..old_count {
@@ -98,7 +92,7 @@ fn realloc_preserves_initial_contents() {
 fn error_reporting_works() {
     use memapi::{
         error::{AllocError, Cause},
-        type_props::{usize_bit, USIZE_MAX_NO_HIGH_BIT},
+        type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
     };
 
     let alloc = Jemalloc;
@@ -113,9 +107,9 @@ fn error_reporting_works() {
             Cause::OutOfMemory => panic!("how..?"),
             #[cfg(feature = "fallible_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
-            Cause::OSErr(e) => println!("{:?}", e),
+            Cause::OSErr(e) => println!("{:?}", e)
         },
-        _ => panic!("unexpected error: {}", err),
+        _ => panic!("unexpected error: {}", err)
     }
 
     let layout2 = unsafe { Layout::from_size_align_unchecked(1, usize_bit(1)) };
@@ -128,8 +122,8 @@ fn error_reporting_works() {
             Cause::OutOfMemory => panic!("how..?"),
             #[cfg(feature = "fallible_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
-            Cause::OSErr(e) => println!("{:?}", e),
+            Cause::OSErr(e) => println!("{:?}", e)
         },
-        _ => panic!("unexpected error: {}", err),
+        _ => panic!("unexpected error: {}", err)
     }
 }

@@ -1,10 +1,12 @@
-use crate::{
-    error::{AllocError, ArithOp},
-    fallible_dealloc::{base_try_dealloc_impl, DeallocChecked},
-    helpers::checked_op,
-    type_props::SizedProps,
+use {
+    crate::{
+        error::{AllocError, ArithOp},
+        fallible_dealloc::DeallocChecked,
+        helpers::checked_op,
+        type_props::SizedProps
+    },
+    core::ptr::NonNull
 };
-use core::ptr::{self, NonNull};
 
 /// Slice-specific extension methods for [`DeallocChecked`].
 #[allow(clippy::module_name_repetitions)]
@@ -17,11 +19,7 @@ pub trait DeallocCheckedSlice: DeallocChecked {
     /// [invalid](super::BlockStatus), or if the provided layout is zero-sized.
     #[cfg_attr(miri, track_caller)]
     fn try_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) -> Result<(), AllocError> {
-        let sz = tri!(AllocError::ArithmeticOverflow(checked_op(
-            T::SZ,
-            ArithOp::Mul,
-            n
-        )));
+        let sz = tri!(AllocError::ArithmeticOverflow(checked_op(T::SZ, ArithOp::Mul, n)));
         self.try_dealloc(ptr.cast::<u8>(), tri!(lay, sz, T::ALN))
     }
 }

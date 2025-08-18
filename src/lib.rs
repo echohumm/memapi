@@ -38,15 +38,14 @@
 //!     [lockable](stats::WriteLock) writers. (MSRV ≥ 1.61.0)
 //!   - (With `stats_parking_lot`) Usage of [`parking_lot::Mutex`] instead of [`std::sync::Mutex`].
 //!
-//! - **`fallible_dealloc`**: Adds [`DeallocChecked`], a trait
-//!   for fallible deallocations.
-//!   - (With `alloc_ext`): [`DeallocCheckedExt`], a trait for ergonomic fallible
-//!     deallocation abstractions.
+//! - **`fallible_dealloc`**: Adds [`DeallocChecked`], a trait for fallible deallocations.
+//!   - (With `alloc_ext`): [`DeallocCheckedExt`], a trait for ergonomic fallible deallocation
+//!     abstractions.
 //!   - (With `alloc_slice`): [`DeallocCheckedSlice`], a trait for slice-based fallible deallocation
 //!     extensions.
 //!
-//! - **`alloc_aligned_at`**: Adds [`AllocAlignedAt`](AllocAlignedAt), a trait for
-//!   allocating such that the actual pointer isn't aligned until after an offset.
+//! - **`alloc_aligned_at`**: Adds [`AllocAlignedAt`](AllocAlignedAt), a trait for allocating such
+//!   that the actual pointer isn't aligned until after an offset.
 //!
 //! - **`external_alloc`**: FFI helpers for external allocators.
 //!
@@ -284,19 +283,16 @@ macro_rules! assume {
 
 // TODO: dedup docs with some macros
 // TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
+// TODO: simplify cfgs and make sure they are correct
 
-#[cfg(not(feature = "no_alloc"))]
-extern crate alloc;
+#[cfg(not(feature = "no_alloc"))] extern crate alloc;
 extern crate core;
 
-#[cfg(feature = "no_alloc")]
-mod layout;
+#[cfg(feature = "no_alloc")] mod layout;
 
-#[cfg(not(feature = "no_alloc"))]
-pub use alloc::alloc::Layout;
+#[cfg(not(feature = "no_alloc"))] pub use alloc::alloc::Layout;
 
-#[cfg(feature = "no_alloc")]
-pub use layout::Layout;
+#[cfg(feature = "no_alloc")] pub use layout::Layout;
 
 #[cfg(feature = "extern_alloc")]
 /// External allocator support.
@@ -314,20 +310,14 @@ pub mod external;
 ))]
 mod features;
 
-#[cfg(feature = "alloc_aligned_at")]
-pub use features::alloc_aligned_at::AllocAlignedAt;
-#[cfg(feature = "alloc_ext")]
-pub use features::alloc_ext::*;
-#[cfg(feature = "alloc_slice")]
-pub use features::alloc_slice::*;
-#[cfg(feature = "resize_in_place")]
-pub use features::resize_in_place::*;
-
+#[cfg(feature = "alloc_aligned_at")] pub use features::alloc_aligned_at::AllocAlignedAt;
+#[cfg(all(feature = "alloc_aligned_at", feature = "alloc_ext"))]
+pub use features::alloc_aligned_at::{AlignedAtSectorDescriptor, AllocAlignedAtExt};
+#[cfg(feature = "alloc_ext")] pub use features::alloc_ext::*;
+#[cfg(feature = "alloc_slice")] pub use features::alloc_slice::*;
+#[cfg(feature = "resize_in_place")] pub use features::resize_in_place::*;
 #[cfg(any(
-    all(
-        feature = "stats",
-        any(not(feature = "no_alloc"), feature = "malloc_defaultalloc")
-    ),
+    all(feature = "stats", any(not(feature = "no_alloc"), feature = "malloc_defaultalloc")),
     feature = "fallible_dealloc"
 ))]
 pub use features::*;
@@ -346,15 +336,15 @@ pub mod error;
 use {
     core::{
         cmp::Ordering,
-        ptr::{self, NonNull},
+        ptr::{self, NonNull}
     },
     error::AllocError,
-    helpers::alloc_then,
+    helpers::alloc_then
 };
 
 #[cfg(any(not(feature = "no_alloc"), feature = "malloc_defaultalloc"))]
 /// Default allocator, delegating to the global allocator.
-#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DefaultAlloc;
 
 #[allow(unused_macros)]
@@ -366,13 +356,13 @@ macro_rules! default_alloc_impl {
             #[inline]
             fn alloc(
                 &self,
-                layout: crate::Layout,
+                layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non zero-sized before use.
                     |layout| unsafe { alloc::alloc::alloc(layout) },
-                    crate::helpers::null_q_dyn,
+                    crate::helpers::null_q_dyn
                 )
             }
 
@@ -380,13 +370,13 @@ macro_rules! default_alloc_impl {
             #[inline]
             fn zalloc(
                 &self,
-                layout: crate::Layout,
+                layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non zero-sized before use.
                     |layout| unsafe { alloc::alloc::alloc_zeroed(layout) },
-                    crate::helpers::null_q_dyn,
+                    crate::helpers::null_q_dyn
                 )
             }
 
@@ -405,7 +395,7 @@ macro_rules! default_alloc_impl {
             #[inline]
             fn alloc(
                 &self,
-                layout: crate::Layout,
+                layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::external::ffi::libc::alloc(layout)
             }
@@ -414,7 +404,7 @@ macro_rules! default_alloc_impl {
             #[inline]
             fn zalloc(
                 &self,
-                layout: crate::Layout,
+                layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::external::ffi::libc::zalloc(layout)
             }
@@ -431,7 +421,7 @@ macro_rules! default_alloc_impl {
                 &self,
                 ptr: core::ptr::NonNull<u8>,
                 old_layout: crate::Layout,
-                new_layout: crate::Layout,
+                new_layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::external::ffi::libc::grow(ptr, old_layout, new_layout)
             }
@@ -441,7 +431,7 @@ macro_rules! default_alloc_impl {
                 &self,
                 ptr: core::ptr::NonNull<u8>,
                 old_layout: crate::Layout,
-                new_layout: crate::Layout,
+                new_layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::external::ffi::libc::zgrow(ptr, old_layout, new_layout)
             }
@@ -451,7 +441,7 @@ macro_rules! default_alloc_impl {
                 &self,
                 ptr: core::ptr::NonNull<u8>,
                 old_layout: crate::Layout,
-                new_layout: crate::Layout,
+                new_layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::external::ffi::libc::shrink(ptr, old_layout, new_layout)
             }
@@ -461,7 +451,7 @@ macro_rules! default_alloc_impl {
                 &self,
                 ptr: core::ptr::NonNull<u8>,
                 old_layout: crate::Layout,
-                new_layout: crate::Layout,
+                new_layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::external::ffi::libc::realloc_helper(ptr, old_layout, new_layout)
             }
@@ -471,7 +461,7 @@ macro_rules! default_alloc_impl {
                 &self,
                 ptr: core::ptr::NonNull<u8>,
                 old_layout: crate::Layout,
-                new_layout: crate::Layout,
+                new_layout: crate::Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::external::ffi::libc::rezalloc(ptr, old_layout, new_layout)
             }
@@ -484,21 +474,15 @@ macro_rules! default_alloc_impl {
 unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        alloc::alloc::alloc(layout)
-    }
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 { alloc::alloc::alloc(layout) }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        alloc::alloc::dealloc(ptr, layout);
-    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) { alloc::alloc::dealloc(ptr, layout); }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        alloc::alloc::alloc_zeroed(layout)
-    }
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 { alloc::alloc::alloc_zeroed(layout) }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -511,9 +495,7 @@ unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
 // SAFETY: Malloc doesn't unwind, and all layout operations are correct
 unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
     #[inline]
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        external::ffi::libc::raw_alloc(layout)
-    }
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 { external::ffi::libc::raw_alloc(layout) }
 
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
@@ -606,15 +588,9 @@ pub trait Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
-        grow(
-            self,
-            ptr,
-            old_layout,
-            new_layout,
-            AllocPattern::Uninitialized,
-        )
+        grow(self, ptr, old_layout, new_layout, AllocPattern::Uninitialized)
     }
 
     /// Grows the given block to a new, larger layout, zeroing any newly allocated bytes.
@@ -637,7 +613,7 @@ pub trait Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         grow(self, ptr, old_layout, new_layout, AllocPattern::Zeroed)
     }
@@ -661,7 +637,7 @@ pub trait Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         shrink(self, ptr, old_layout, new_layout)
     }
@@ -688,15 +664,9 @@ pub trait Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
-        ralloc(
-            self,
-            ptr,
-            old_layout,
-            new_layout,
-            AllocPattern::Uninitialized,
-        )
+        ralloc(self, ptr, old_layout, new_layout, AllocPattern::Uninitialized)
     }
 
     /// Reallocates a block, growing or shrinking as needed, zeroing any newly
@@ -718,7 +688,7 @@ pub trait Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         ralloc(self, ptr, old_layout, new_layout, AllocPattern::Zeroed)
     }
@@ -736,7 +706,7 @@ pub(crate) mod nightly {
         #[inline]
         fn allocate(
             &self,
-            layout: crate::Layout,
+            layout: crate::Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::allocate(&alloc::alloc::Global, layout)
         }
@@ -745,7 +715,7 @@ pub(crate) mod nightly {
         #[inline]
         fn allocate_zeroed(
             &self,
-            layout: crate::Layout,
+            layout: crate::Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::allocate_zeroed(&alloc::alloc::Global, layout)
         }
@@ -762,7 +732,7 @@ pub(crate) mod nightly {
             &self,
             ptr: core::ptr::NonNull<u8>,
             old_layout: crate::Layout,
-            new_layout: crate::Layout,
+            new_layout: crate::Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::grow(&alloc::alloc::Global, ptr.cast(), old_layout, new_layout)
         }
@@ -773,13 +743,13 @@ pub(crate) mod nightly {
             &self,
             ptr: core::ptr::NonNull<u8>,
             old_layout: crate::Layout,
-            new_layout: crate::Layout,
+            new_layout: crate::Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::grow_zeroed(
                 &alloc::alloc::Global,
                 ptr.cast(),
                 old_layout,
-                new_layout,
+                new_layout
             )
         }
 
@@ -789,13 +759,13 @@ pub(crate) mod nightly {
             &self,
             ptr: core::ptr::NonNull<u8>,
             old_layout: crate::Layout,
-            new_layout: crate::Layout,
+            new_layout: crate::Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::shrink(
                 &alloc::alloc::Global,
                 ptr.cast(),
                 old_layout,
-                new_layout,
+                new_layout
             )
         }
     }
@@ -808,21 +778,15 @@ pub(crate) mod nightly {
 impl<A: Alloc + ?Sized> Alloc for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        (**self).alloc(layout)
-    }
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> { (**self).alloc(layout) }
 
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
-    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        (**self).zalloc(layout)
-    }
+    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> { (**self).zalloc(layout) }
 
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        (**self).dealloc(ptr, layout);
-    }
+    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) { (**self).dealloc(ptr, layout); }
 }
 
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
@@ -834,7 +798,7 @@ impl Alloc for std::alloc::System {
             layout,
             // SAFETY: System::alloc is only called after the layout is verified non-zero-sized.
             |layout| unsafe { alloc::alloc::GlobalAlloc::alloc(self, layout) },
-            helpers::null_q_dyn,
+            helpers::null_q_dyn
         )
     }
 
@@ -846,7 +810,7 @@ impl Alloc for std::alloc::System {
             // SAFETY: System::alloc_zeroed is only called after the layout is verified
             //  non-zero-sized.
             |layout| unsafe { alloc::alloc::GlobalAlloc::alloc_zeroed(self, layout) },
-            helpers::null_q_dyn,
+            helpers::null_q_dyn
         )
     }
 
@@ -868,7 +832,7 @@ pub unsafe fn grow<A: Alloc + ?Sized>(
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    pattern: AllocPattern,
+    pattern: AllocPattern
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => grow_unchecked(a, ptr, old_layout, new_layout, pattern),
@@ -879,10 +843,7 @@ pub unsafe fn grow<A: Alloc + ?Sized>(
                 grow_unchecked(&a, ptr, old_layout, new_layout, pattern)
             }
         }
-        Ordering::Greater => Err(AllocError::grow_smaller(
-            old_layout.size(),
-            new_layout.size(),
-        )),
+        Ordering::Greater => Err(AllocError::grow_smaller(old_layout.size(), new_layout.size()))
     }
 }
 
@@ -894,13 +855,10 @@ pub unsafe fn shrink<A: Alloc + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
-    new_layout: Layout,
+    new_layout: Layout
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => Err(AllocError::shrink_larger(
-            old_layout.size(),
-            new_layout.size(),
-        )),
+        Ordering::Less => Err(AllocError::shrink_larger(old_layout.size(), new_layout.size())),
         Ordering::Equal => {
             if new_layout.align() == old_layout.align() {
                 Ok(ptr)
@@ -908,7 +866,7 @@ pub unsafe fn shrink<A: Alloc + ?Sized>(
                 shrink_unchecked(&a, ptr, old_layout, new_layout)
             }
         }
-        Ordering::Greater => shrink_unchecked(a, ptr, old_layout, new_layout),
+        Ordering::Greater => shrink_unchecked(a, ptr, old_layout, new_layout)
     }
 }
 
@@ -926,7 +884,7 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized>(
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    pattern: AllocPattern,
+    pattern: AllocPattern
 ) -> Result<NonNull<u8>, AllocError> {
     let old_size = old_layout.size();
     let new_ptr = match pattern {
@@ -938,7 +896,7 @@ unsafe fn grow_unchecked<A: Alloc + ?Sized>(
             ptr::write_bytes(mem.as_ptr().add(old_size), n, new_layout.size() - old_size);
             mem
         }
-        AllocPattern::Shrink => core::hint::unreachable_unchecked(),
+        AllocPattern::Shrink => core::hint::unreachable_unchecked()
     };
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_size);
@@ -961,7 +919,7 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
-    new_layout: Layout,
+    new_layout: Layout
 ) -> Result<NonNull<u8>, AllocError> {
     let new_ptr = tri!(do a.alloc(new_layout));
 
@@ -981,7 +939,7 @@ pub unsafe fn ralloc<A: Alloc + ?Sized>(
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    pat: AllocPattern,
+    pat: AllocPattern
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => grow_unchecked(&a, ptr, old_layout, new_layout, pat),
@@ -1000,7 +958,7 @@ pub unsafe fn ralloc<A: Alloc + ?Sized>(
 ///
 /// This is used to determine or represent the pattern new bytes will be or were filled with.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum AllocPattern {
     /// Uninitialized bytes.
@@ -1011,7 +969,7 @@ pub enum AllocPattern {
     /// Bytes filled with a specific value.
     Filled(u8),
     /// No new bytes.
-    Shrink,
+    Shrink
 }
 
 /// Helpers that tend to be useful in other libraries as well.

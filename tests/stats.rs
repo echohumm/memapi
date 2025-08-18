@@ -1,10 +1,13 @@
 // miri is incompatible with malloc_defaultalloc
 #![cfg_attr(feature = "malloc_defaultalloc", cfg(not(miri)))]
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
-use core::sync::atomic::{AtomicUsize, Ordering};
-use memapi::{
-    stats::{FmtLog, Stats},
-    Alloc, Layout,
+use {
+    core::sync::atomic::{AtomicUsize, Ordering},
+    memapi::{
+        Alloc,
+        Layout,
+        stats::{FmtLog, Stats}
+    }
 };
 
 #[test]
@@ -22,11 +25,7 @@ fn test_stats_counts_correct() {
     );
 
     unsafe { stats_alloc.dealloc(ptr, layout) };
-    assert_eq!(
-        logger.load(Ordering::SeqCst),
-        0,
-        "expected total bytes = 0 after dealloc"
-    );
+    assert_eq!(logger.load(Ordering::SeqCst), 0, "expected total bytes = 0 after dealloc");
 }
 
 #[test]
@@ -46,8 +45,8 @@ fn test_stats_str_logger() {
         *logger.get_log(),
         format!(
             "Successful initial allocation of 16 bytes with alignment 8 at {p:p}, and newly \
-                allocated bytes being uninitialized. (16 total bytes allocated)\nDeallocation of \
-                16 bytes with alignment 8 at {p:p}. (0 total bytes allocated)\n",
+             allocated bytes being uninitialized. (16 total bytes allocated)\nDeallocation of 16 \
+             bytes with alignment 8 at {p:p}. (0 total bytes allocated)\n",
             p = ptr
         )
     );

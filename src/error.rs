@@ -2,8 +2,8 @@ use {
     crate::Layout,
     core::{
         fmt::{Debug, Display, Formatter, Result as FmtResult},
-        ptr::NonNull,
-    },
+        ptr::NonNull
+    }
 };
 
 /// Errors for allocation operations.
@@ -38,7 +38,7 @@ pub enum AllocError {
     /// This error contains both sides of the operation and the operation itself.
     ArithmeticOverflow(ArithOverflow),
     /// Any other kind of error, in the form of a string.
-    Other(&'static str),
+    Other(&'static str)
 }
 
 impl AllocError {
@@ -49,7 +49,7 @@ impl AllocError {
     pub const fn dealloc_failed(
         p: NonNull<u8>,
         layout: Layout,
-        block_stat: crate::fallible_dealloc::BlockStatus,
+        block_stat: crate::fallible_dealloc::BlockStatus
     ) -> Result<(), AllocError> {
         Err(AllocError::DeallocFailed(p, layout, Cause::InvalidBlockStatus(block_stat)))
     }
@@ -67,7 +67,7 @@ impl AllocError {
     pub const fn inv_layout<Ret>(
         sz: usize,
         align: usize,
-        err: LayoutErr,
+        err: LayoutErr
     ) -> Result<Ret, InvLayout> {
         Err(InvLayout(sz, align, err))
     }
@@ -94,8 +94,14 @@ impl PartialEq for AllocError {
     #[inline]
     fn eq(&self, other: &AllocError) -> bool {
         use AllocError::{
-            AllocFailed, ArithmeticOverflow, GrowSmallerNewLayout, InvalidLayout, Other,
-            ShrinkLargerNewLayout, ZeroSizedLayout,
+            AllocFailed,
+            ArithmeticOverflow,
+            GrowSmallerNewLayout,
+            InvalidAlign,
+            InvalidLayout,
+            Other,
+            ShrinkLargerNewLayout,
+            ZeroSizedLayout
         };
 
         match (self, other) {
@@ -105,6 +111,7 @@ impl PartialEq for AllocError {
                 p1 == p2 && l1 == l2 && c1 == c2
             }
             (InvalidLayout(il1), InvalidLayout(il2)) => il1 == il2,
+            (InvalidAlign(ia1), InvalidAlign(ia2)) => ia1 == ia2,
             (ZeroSizedLayout(a), ZeroSizedLayout(b)) => a == b,
             (GrowSmallerNewLayout(old1, new1), GrowSmallerNewLayout(old2, new2))
             | (ShrinkLargerNewLayout(old1, new1), ShrinkLargerNewLayout(old2, new2)) => {
@@ -113,7 +120,7 @@ impl PartialEq for AllocError {
             (ArithmeticOverflow(e1), ArithmeticOverflow(e2)) => e1 == e2,
             (Other(a), Other(b)) => a == b,
 
-            _ => false,
+            _ => false
         }
     }
 }
@@ -141,8 +148,8 @@ impl Display for AllocError {
                     Cause::InvalidBlockStatus(BlockStatus::OwnedIncomplete(Some(l))) => {
                         write!(
                             f,
-                            "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: {}\n\t\t\
-                        align: {}\n\tcause: ",
+                            "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: \
+                             {}\n\t\talign: {}\n\tcause: ",
                             *ptr,
                             l.size(),
                             l.align()
@@ -156,13 +163,13 @@ impl Display for AllocError {
                     }
                     _ => write!(
                         f,
-                        "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: {}\n\t\
-                    \talign: {}\n\tcause: {}",
+                        "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: {}\n\t\talign: \
+                         {}\n\tcause: {}",
                         *ptr,
                         l.size(),
                         l.align(),
                         cause
-                    ),
+                    )
                 }
             }
             AllocError::InvalidLayout(inv_layout) => {
@@ -183,7 +190,7 @@ impl Display for AllocError {
             AllocError::ArithmeticOverflow(overflow) => {
                 write!(f, "{}", overflow)
             }
-            AllocError::Other(other) => write!(f, "{}", other),
+            AllocError::Other(other) => write!(f, "{}", other)
         }
     }
 }
@@ -210,7 +217,7 @@ pub enum Cause {
     /// The cause is described in the contained OS error.
     ///
     /// The error may or may not be accurate depending on the environment.
-    OSErr(std::io::Error),
+    OSErr(std::io::Error)
 }
 
 #[cfg(feature = "os_err_reporting")]
@@ -221,7 +228,7 @@ impl PartialEq for Cause {
             #[cfg(feature = "fallible_dealloc")]
             (Cause::InvalidBlockStatus(s1), Cause::InvalidBlockStatus(s2)) => s1 == s2,
             (Cause::OSErr(e1), Cause::OSErr(e2)) => e1.kind() == e2.kind(),
-            _ => false,
+            _ => false
         }
     }
 }
@@ -234,7 +241,7 @@ impl Display for Cause {
             #[cfg(feature = "fallible_dealloc")]
             Cause::InvalidBlockStatus(s) => write!(f, "invalid block status: {}", s),
             #[cfg(feature = "os_err_reporting")]
-            Cause::OSErr(e) => write!(f, "os error:\n\t{}", e),
+            Cause::OSErr(e) => write!(f, "os error:\n\t{}", e)
         }
     }
 }
@@ -250,20 +257,7 @@ pub enum RepeatLayoutError {
     /// The computed layout is invalid.
     InvalidLayout(InvLayout),
     /// An arithmetic operation would overflow.
-    ArithmeticOverflow(ArithOverflow),
-}
-
-impl RepeatLayoutError {
-    /// Converts this error into an [`AllocError`].
-    #[must_use]
-    pub const fn into_alloc_err(self) -> AllocError {
-        match self {
-            RepeatLayoutError::InvalidLayout(inv_layout) => AllocError::InvalidLayout(inv_layout),
-            RepeatLayoutError::ArithmeticOverflow(overflow) => {
-                AllocError::ArithmeticOverflow(overflow)
-            }
-        }
-    }
+    ArithmeticOverflow(ArithOverflow)
 }
 
 impl Display for RepeatLayoutError {
@@ -285,14 +279,6 @@ impl std::error::Error for RepeatLayoutError {}
 /// An invalid layout and the reason for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvLayout(pub usize, pub usize, pub LayoutErr);
-
-impl InvLayout {
-    /// Converts this error into an [`AllocError`].
-    #[must_use]
-    pub const fn into_alloc_err(self) -> AllocError {
-        AllocError::InvalidLayout(self)
-    }
-}
 
 impl Display for InvLayout {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -326,7 +312,7 @@ pub enum LayoutErr {
     /// alignment up to a multiple of [`usize::SZ`], but that arithmetic would overflow.
     ///
     /// The contained [`ArithOverflow`] records the exact operands and operation that overflowed.
-    MallocOverflow(ArithOverflow),
+    MallocOverflow(ArithOverflow)
 }
 
 impl Display for LayoutErr {
@@ -338,8 +324,8 @@ impl Display for LayoutErr {
                 write!(
                     f,
                     "computed size would overflow `Layout`'s max when rounded up to the alignment \
-                    after rounding the alignment to a malloc-compatible boundary \
-                    (pointer-sized alignment)"
+                     after rounding the alignment to a malloc-compatible boundary (pointer-sized \
+                     alignment)"
                 )
             }
             LayoutErr::MallocOverflow(o) => write!(
@@ -347,7 +333,7 @@ impl Display for LayoutErr {
                 "failed to compute a malloc-compatible alignment: arithmetic overflow while \
                  performing the operation {} {} {}",
                 o.0, o.1, o.2
-            ),
+            )
         }
     }
 }
@@ -362,7 +348,7 @@ pub enum AlignErr {
     /// The alignment is zero.
     ZeroAlign,
     /// The alignment isn't a power of two.
-    NonPowerOfTwoAlign(usize),
+    NonPowerOfTwoAlign(usize)
 }
 
 impl Display for AlignErr {
@@ -385,14 +371,6 @@ impl std::error::Error for AlignErr {}
 /// Contains both sides of the operation and the operation itself.
 pub struct ArithOverflow(pub usize, pub ArithOp, pub usize);
 
-impl ArithOverflow {
-    /// Converts this error into an [`AllocError`].
-    #[must_use]
-    pub const fn into_alloc_err(self) -> AllocError {
-        AllocError::ArithmeticOverflow(self)
-    }
-}
-
 impl Display for ArithOverflow {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "arithmetic operation would overflow: {} {} {}", self.0, self.1, self.2)
@@ -403,7 +381,7 @@ impl Display for ArithOverflow {
 impl std::error::Error for ArithOverflow {}
 
 /// An arithmetic operation.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
 pub enum ArithOp {
     /// Addition. (+)
@@ -415,7 +393,7 @@ pub enum ArithOp {
     /// Division. (/)
     Div,
     /// Modulo. (%)
-    Rem,
+    Rem
 }
 
 impl Display for ArithOp {
@@ -425,7 +403,7 @@ impl Display for ArithOp {
             ArithOp::Sub => write!(f, "-"),
             ArithOp::Mul => write!(f, "*"),
             ArithOp::Div => write!(f, "/"),
-            ArithOp::Rem => write!(f, "%"),
+            ArithOp::Rem => write!(f, "%")
         }
     }
 }

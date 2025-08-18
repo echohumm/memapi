@@ -1,8 +1,10 @@
 // miri is incompatible with malloc_defaultalloc
 #![cfg_attr(feature = "malloc_defaultalloc", cfg(not(miri)))]
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
-use core::ptr;
-use memapi::{type_props::SizedProps, Alloc, AllocExt, DefaultAlloc, Layout};
+use {
+    core::ptr,
+    memapi::{Alloc, AllocExt, DefaultAlloc, Layout}
+};
 
 #[test]
 #[allow(clippy::cast_possible_truncation)]
@@ -90,11 +92,8 @@ fn test_realloc_variants() {
 
     // realloc grow
     let ptr2 = allocator.zalloc(old).unwrap();
-    let rg = unsafe {
-        allocator
-            .rezalloc(ptr2, old, Layout::from_size_align(6, 1).unwrap())
-            .unwrap()
-    };
+    let rg =
+        unsafe { allocator.rezalloc(ptr2, old, Layout::from_size_align(6, 1).unwrap()).unwrap() };
     unsafe {
         for i in 0..old.size() {
             assert_eq!(*rg.as_ptr().add(i), 0);

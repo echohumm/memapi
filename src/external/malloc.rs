@@ -1,10 +1,23 @@
-use crate::{
-    external::ffi::libc::{alloc, dealloc, grow, realloc_helper, rezalloc, shrink, zalloc, zgrow},
-    Alloc, AllocError, Layout,
+use {
+    crate::{
+        Alloc,
+        AllocError,
+        Layout,
+        external::ffi::libc::{
+            alloc,
+            dealloc,
+            grow,
+            realloc_helper,
+            rezalloc,
+            shrink,
+            zalloc,
+            zgrow
+        }
+    },
+    core::ptr::NonNull
 };
-use core::ptr::NonNull;
 
-#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Handle to libc's allocation functions. This type implements the [`GlobalAlloc`] trait, allowing
 /// use as a global allocator, and [`Alloc`](Alloc).
 ///
@@ -41,25 +54,19 @@ unsafe impl alloc::alloc::GlobalAlloc for Malloc {
 
 impl Alloc for Malloc {
     #[inline]
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        alloc(layout)
-    }
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> { alloc(layout) }
 
     #[inline]
-    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        zalloc(layout)
-    }
+    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> { zalloc(layout) }
 
     #[inline]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        dealloc(ptr, layout);
-    }
+    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) { dealloc(ptr, layout); }
 
     unsafe fn grow(
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         grow(ptr, old_layout, new_layout)
     }
@@ -68,7 +75,7 @@ impl Alloc for Malloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         zgrow(ptr, old_layout, new_layout)
     }
@@ -77,7 +84,7 @@ impl Alloc for Malloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         shrink(ptr, old_layout, new_layout)
     }
@@ -86,7 +93,7 @@ impl Alloc for Malloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         realloc_helper(ptr, old_layout, new_layout)
     }
@@ -95,7 +102,7 @@ impl Alloc for Malloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         rezalloc(ptr, old_layout, new_layout)
     }

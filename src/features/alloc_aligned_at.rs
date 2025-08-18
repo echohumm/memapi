@@ -1,5 +1,7 @@
-use crate::{error::AllocError, Alloc, Layout};
-use core::ptr::{self, NonNull};
+use {
+    crate::{Alloc, Layout, error::AllocError},
+    core::ptr::{self, NonNull}
+};
 
 /// Trait for allocators that support allocating memory aligned at a specific offset.
 ///
@@ -46,7 +48,7 @@ pub trait AllocAlignedAt: Alloc {
     fn zalloc_at(
         &self,
         layout: Layout,
-        offset: usize,
+        offset: usize
     ) -> Result<(NonNull<u8>, Layout), AllocError> {
         let mem = tri!(do self.alloc_at(layout, offset));
 
@@ -60,9 +62,11 @@ pub trait AllocAlignedAt: Alloc {
 }
 
 #[cfg(feature = "alloc_ext")]
+/// This trait provides extensions for [`AllocAlignedAt`].
+#[allow(clippy::module_name_repetitions)]
 pub trait AllocAlignedAtExt: AllocAlignedAt {
     /// Attempts to allocate a block of memory fitting the given [`Layout`], aligned only after
-    /// `offset` bytes, then fill it according to [`sector`](SectorDescriptor).
+    /// `offset` bytes, then fill it according to [`sector`](AlignedAtSectorDescriptor).
     ///
     /// Note that the returned pointer itself will **not** be aligned to the layout's alignment.
     /// Instead, `ptr.add(offset)` will be.
@@ -82,7 +86,7 @@ pub trait AllocAlignedAtExt: AllocAlignedAt {
         &self,
         layout: Layout,
         offset: usize,
-        sector: SectorDescriptor,
+        sector: AlignedAtSectorDescriptor
     ) -> Result<(NonNull<u8>, Layout), AllocError> {
         match self.alloc_at(layout, offset) {
             Ok((p, act_layout)) => {
@@ -90,16 +94,16 @@ pub trait AllocAlignedAtExt: AllocAlignedAt {
                 // SAFETY: allocation returns at least `layout.size() + offset` bytes
                 unsafe {
                     match sector {
-                        SectorDescriptor::Header(b) => {
+                        AlignedAtSectorDescriptor::Header(b) => {
                             ptr::write_bytes(ptr, b, offset);
                         }
-                        SectorDescriptor::Data(b) => {
+                        AlignedAtSectorDescriptor::Data(b) => {
                             ptr::write_bytes(ptr.add(offset), b, act_layout.size() - offset);
                         }
-                        SectorDescriptor::Both(b) => {
+                        AlignedAtSectorDescriptor::Both(b) => {
                             ptr::write_bytes(ptr, b, act_layout.size());
                         }
-                        SectorDescriptor::Separate(h, d) => {
+                        AlignedAtSectorDescriptor::Separate(h, d) => {
                             ptr::write_bytes(ptr, h, offset);
                             ptr::write_bytes(ptr.add(offset), d, act_layout.size() - offset);
                         }
@@ -107,7 +111,7 @@ pub trait AllocAlignedAtExt: AllocAlignedAt {
                 }
                 Ok((p, act_layout))
             }
-            Err(e) => Err(e),
+            Err(e) => Err(e)
         }
     }
 }
@@ -115,9 +119,10 @@ pub trait AllocAlignedAtExt: AllocAlignedAt {
 // TODO: make this better, maybe use something similar elsewhere
 #[cfg(feature = "alloc_ext")]
 /// Which sector of the allocation to fill with what byte.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
-pub enum SectorDescriptor {
+// unfortunately, very verbose name because this gets re-exported at the root. (TOFIX)
+pub enum AlignedAtSectorDescriptor {
     /// Fill the header with the contained byte.
     Header(u8),
     /// Fill the data with the contained byte.
@@ -125,7 +130,7 @@ pub enum SectorDescriptor {
     /// Fill both the header and the data with the contained byte.
     Both(u8),
     /// Fill the header with the first byte and the data with the second byte.
-    Separate(u8, u8),
+    Separate(u8, u8)
 }
 
 #[cfg(feature = "alloc_ext")]

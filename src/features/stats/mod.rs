@@ -1,9 +1,14 @@
-use crate::{
-    error::AllocError,
-    stats::AllocRes::{Fail, Succ},
-    Alloc, AllocPattern, DefaultAlloc, Layout,
+use {
+    crate::{
+        Alloc,
+        AllocPattern,
+        DefaultAlloc,
+        Layout,
+        error::AllocError,
+        stats::AllocRes::{Fail, Succ}
+    },
+    core::ptr::{NonNull, null_mut}
 };
-use core::ptr::{null_mut, NonNull};
 
 mod stat_logger;
 pub use stat_logger::*;
@@ -11,10 +16,8 @@ pub use stat_logger::*;
 mod data;
 pub use data::*;
 
-#[cfg(feature = "stats_thread_safe_io")]
-mod lock;
-#[cfg(feature = "stats_thread_safe_io")]
-pub use lock::*;
+#[cfg(feature = "stats_thread_safe_io")] mod lock;
+#[cfg(feature = "stats_thread_safe_io")] pub use lock::*;
 
 pub(crate) mod minstring;
 
@@ -49,32 +52,24 @@ fn allocate<A: Alloc, L: StatsLogger, F: Fn(&A, Layout) -> Result<NonNull<u8>, A
     slf: &Stats<A, L>,
     allocate: F,
     layout: Layout,
-    kind: AllocPattern,
+    kind: AllocPattern
 ) -> Result<NonNull<u8>, AllocError> {
     let size = layout.size();
     match allocate(&slf.0, layout) {
         Ok(ptr) => {
             let total = slf.1.inc_total_bytes_allocated(size);
             slf.1.log(Succ(AllocStat::Alloc {
-                region: MemoryRegion {
-                    ptr: ptr.as_ptr(),
-                    size,
-                    align: layout.align(),
-                },
+                region: MemoryRegion { ptr: ptr.as_ptr(), size, align: layout.align() },
                 kind,
-                total,
+                total
             }));
             Ok(ptr)
         }
         Err(e) => {
             slf.1.log(Fail(AllocStat::Alloc {
-                region: MemoryRegion {
-                    ptr: null_mut(),
-                    size,
-                    align: layout.align(),
-                },
+                region: MemoryRegion { ptr: null_mut(), size, align: layout.align() },
                 kind,
-                total: slf.1.total(),
+                total: slf.1.total()
             }));
             Err(e)
         }
@@ -85,14 +80,14 @@ fn allocate<A: Alloc, L: StatsLogger, F: Fn(&A, Layout) -> Result<NonNull<u8>, A
 fn grow<
     A: Alloc,
     L: StatsLogger,
-    F: Fn(&A, NonNull<u8>, Layout, Layout) -> Result<NonNull<u8>, AllocError>,
+    F: Fn(&A, NonNull<u8>, Layout, Layout) -> Result<NonNull<u8>, AllocError>
 >(
     slf: &Stats<A, L>,
     grow: F,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    kind: AllocPattern,
+    kind: AllocPattern
 ) -> Result<NonNull<u8>, AllocError> {
     match grow(&slf.0, ptr, old_layout, new_layout) {
         Ok(new_ptr) => {
@@ -105,7 +100,7 @@ fn grow<
                 old_layout,
                 new_layout,
                 kind,
-                total,
+                total
             )));
             Ok(new_ptr)
         }
@@ -116,7 +111,7 @@ fn grow<
                 old_layout,
                 new_layout,
                 kind,
-                slf.1.total(),
+                slf.1.total()
             )));
             Err(e)
         }
@@ -143,12 +138,8 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         let size = layout.size();
         let total = self.1.dec_total_bytes_allocated(size);
         self.1.log(Succ(AllocStat::Free {
-            region: MemoryRegion {
-                ptr: ptr.as_ptr(),
-                size,
-                align: layout.align(),
-            },
-            total,
+            region: MemoryRegion { ptr: ptr.as_ptr(), size, align: layout.align() },
+            total
         }));
     }
 
@@ -157,7 +148,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         grow(
             self,
@@ -165,7 +156,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
             ptr,
             old_layout,
             new_layout,
-            AllocPattern::Uninitialized,
+            AllocPattern::Uninitialized
         )
     }
 
@@ -174,7 +165,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         grow(
             self,
@@ -182,7 +173,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
             ptr,
             old_layout,
             new_layout,
-            AllocPattern::Zeroed,
+            AllocPattern::Zeroed
         )
     }
 
@@ -191,7 +182,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         match self.0.shrink(ptr, old_layout, new_layout) {
             Ok(new_ptr) => {
@@ -204,7 +195,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
                     old_layout,
                     new_layout,
                     AllocPattern::Shrink,
-                    total,
+                    total
                 )));
                 Ok(new_ptr)
             }
@@ -215,7 +206,7 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
                     old_layout,
                     new_layout,
                     AllocPattern::Shrink,
-                    self.1.total(),
+                    self.1.total()
                 )));
                 Err(e)
             }
@@ -230,16 +221,12 @@ fn tryfree_err<A: Alloc, L: StatsLogger>(
     a: &Stats<A, L>,
     ptr: NonNull<u8>,
     layout: Layout,
-    status: crate::fallible_dealloc::BlockStatus,
+    status: crate::fallible_dealloc::BlockStatus
 ) {
     a.1.log(Fail(AllocStat::TryFree {
         status,
-        region: MemoryRegion {
-            ptr: ptr.as_ptr(),
-            size: layout.size(),
-            align: layout.align(),
-        },
-        total: a.1.total(),
+        region: MemoryRegion { ptr: ptr.as_ptr(), size: layout.size(), align: layout.align() },
+        total: a.1.total()
     }));
 }
 
@@ -254,12 +241,8 @@ impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
                 let total = self.1.dec_total_bytes_allocated(size);
                 self.1.log(Succ(AllocStat::TryFree {
                     status: crate::fallible_dealloc::BlockStatus::Owned,
-                    region: MemoryRegion {
-                        ptr: ptr.as_ptr(),
-                        size,
-                        align: layout.align(),
-                    },
-                    total,
+                    region: MemoryRegion { ptr: ptr.as_ptr(), size, align: layout.align() },
+                    total
                 }));
                 Ok(())
             }
@@ -277,7 +260,7 @@ impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
                             self,
                             ptr,
                             layout,
-                            crate::fallible_dealloc::BlockStatus::Unknown,
+                            crate::fallible_dealloc::BlockStatus::Unknown
                         );
                     }
                 }
@@ -290,7 +273,5 @@ impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
         self.0.status(ptr, layout)
     }
 
-    fn owns(&self, ptr: NonNull<u8>) -> bool {
-        self.0.owns(ptr)
-    }
+    fn owns(&self, ptr: NonNull<u8>) -> bool { self.0.owns(ptr) }
 }

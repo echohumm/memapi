@@ -14,9 +14,6 @@ pub(crate) mod resize_in_place;
 #[cfg(feature = "fallible_dealloc")]
 /// Fallible deallocation.
 pub mod fallible_dealloc;
-#[cfg(all(
-    feature = "stats",
-    any(not(feature = "no_alloc"), feature = "malloc_defaultalloc")
-))]
+#[cfg(all(feature = "stats", any(not(feature = "no_alloc"), feature = "malloc_defaultalloc")))]
 /// Allocation statistic gathering and reporting.
 pub mod stats;

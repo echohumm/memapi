@@ -1,7 +1,7 @@
 use crate::{
-    error::{AlignErr, LayoutErr},
-    type_props::USIZE_HIGH_BIT,
     Layout,
+    error::{AlignErr, LayoutErr},
+    type_props::USIZE_HIGH_BIT
 };
 
 #[cfg(feature = "metadata")]

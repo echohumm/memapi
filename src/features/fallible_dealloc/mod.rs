@@ -1,11 +1,12 @@
-use crate::{error::AllocError, Alloc, Layout};
-use core::{
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
-    ptr::NonNull,
+use {
+    crate::{Alloc, Layout, error::AllocError},
+    core::{
+        fmt::{Debug, Display, Formatter, Result as FmtResult},
+        ptr::NonNull
+    }
 };
 
-#[cfg(feature = "alloc_slice")]
-pub(crate) mod slice;
+#[cfg(feature = "alloc_slice")] pub(crate) mod slice;
 
 /// A trait for allocators to attempt deallocation.
 pub trait DeallocChecked: Alloc {
@@ -42,21 +43,19 @@ impl<D: DeallocChecked + ?Sized> DeallocChecked for &D {
     }
 
     #[inline(always)]
-    fn owns(&self, ptr: NonNull<u8>) -> bool {
-        (**self).owns(ptr)
-    }
+    fn owns(&self, ptr: NonNull<u8>) -> bool { (**self).owns(ptr) }
 }
 
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 pub fn base_try_dealloc_impl<
     T: ?Sized,
     D: DeallocChecked + ?Sized,
-    F: FnOnce(&D, NonNull<T>, Layout),
+    F: FnOnce(&D, NonNull<T>, Layout)
 >(
     d: &D,
     ptr: NonNull<T>,
     layout: Layout,
-    succ: F,
+    succ: F
 ) -> Result<(), AllocError> {
     let p = ptr.cast();
     match d.status(p, layout) {
@@ -65,7 +64,7 @@ pub fn base_try_dealloc_impl<
             succ(d, ptr, layout);
             Ok(())
         }
-        other => AllocError::dealloc_failed(p, layout, other),
+        other => AllocError::dealloc_failed(p, layout, other)
     }
 }
 
@@ -120,7 +119,7 @@ pub enum BlockStatus {
     OwnedMisaligned(Option<usize>),
 
     /// The block is owned by this allocator.
-    Owned,
+    Owned
 }
 
 impl Display for BlockStatus {

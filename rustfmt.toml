@@ -1,20 +1,24 @@
-imports_granularity = "One"
-merge_derives = true
+unstable_features = true
+
 group_imports = "StdExternalCrate"
-use_field_init_shorthand = true
-use_small_heuristics = "Max"
+imports_granularity = "One"
+imports_layout = "HorizontalVertical"
+
+merge_derives = true
 reorder_impl_items = true
-brace_style = "AlwaysNextLine"
-wrap_comments = true
+newline_style = "Unix"
+style_edition = "2024"
+
 comment_width = 100
+inline_attribute_width = 100
+normalize_comments = true
+wrap_comments = true
+
 fn_single_line = true
 format_strings = true
-hex_literal_case = "Upper"
-imports_layout = "HorizontalVertical"
-# might remove this or lower num
-inline_attribute_width = 100
-newline_style = "Unix"
-normalize_comments = true
-style_edition = "2024"
 trailing_comma = "Never"
 
+hex_literal_case = "Upper"
+use_small_heuristics = "Max"
+
+use_field_init_shorthand = true

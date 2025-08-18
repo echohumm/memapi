@@ -1,7 +1,13 @@
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg(not(miri))]
-use core::ptr;
-use memapi::{external::ffi::mim::mi_usable_size, external::mimalloc::MiMalloc, Alloc, Layout};
+use {
+    core::ptr,
+    memapi::{
+        Alloc,
+        Layout,
+        external::{ffi::mim::mi_usable_size, mimalloc::MiMalloc}
+    }
+};
 
 #[test]
 fn alloc_and_dealloc_basic() {
@@ -34,12 +40,7 @@ fn usable_size_at_least_requested() {
     let ptr = alloc.alloc(layout).unwrap();
     unsafe {
         let actual = mi_usable_size(ptr.as_ptr().cast());
-        assert!(
-            actual >= size,
-            "usable_size {} should be >= requested {}",
-            actual,
-            size
-        );
+        assert!(actual >= size, "usable_size {} should be >= requested {}", actual, size);
         alloc.dealloc(ptr, layout);
     }
 }
@@ -59,10 +60,7 @@ fn realloc_preserves_initial_contents() {
         // grow to twice the byte size
         let new_bytes = elem_layout.size() * 2;
         let new_layout = Layout::from_size_align(new_bytes, elem_layout.align()).unwrap();
-        let ptr1 = alloc
-            .realloc(ptr0.cast(), elem_layout, new_layout)
-            .unwrap()
-            .cast::<u32>();
+        let ptr1 = alloc.realloc(ptr0.cast(), elem_layout, new_layout).unwrap().cast::<u32>();
         // verify old data
         #[allow(clippy::cast_possible_truncation)]
         for i in 0..count {
@@ -82,13 +80,7 @@ fn allocations_are_properly_aligned() {
         let layout = Layout::from_size_align(size, align).unwrap();
         let ptr = alloc.alloc(layout).unwrap();
         let addr = ptr.as_ptr() as usize;
-        assert_eq!(
-            addr % align,
-            0,
-            "pointer {:#x} must be aligned to {} bytes",
-            addr,
-            align
-        );
+        assert_eq!(addr % align, 0, "pointer {:#x} must be aligned to {} bytes", addr, align);
         unsafe {
             alloc.dealloc(ptr, layout);
         }
@@ -100,7 +92,7 @@ fn allocations_are_properly_aligned() {
 fn error_reporting_works() {
     use memapi::{
         error::{AllocError, Cause},
-        type_props::{usize_bit, USIZE_MAX_NO_HIGH_BIT},
+        type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
     };
 
     let alloc = MiMalloc;
@@ -118,9 +110,9 @@ fn error_reporting_works() {
             Cause::OutOfMemory => panic!("how..?"),
             #[cfg(feature = "fallible_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
-            Cause::OSErr(e) => println!("{:?}", e),
+            Cause::OSErr(e) => println!("{:?}", e)
         },
-        _ => panic!("unexpected error: {}", err),
+        _ => panic!("unexpected error: {}", err)
     }
 
     let layout2 = unsafe { Layout::from_size_align_unchecked(1, usize_bit(1)) };
@@ -133,8 +125,8 @@ fn error_reporting_works() {
             Cause::OutOfMemory => panic!("how..?"),
             #[cfg(feature = "fallible_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
-            Cause::OSErr(e) => println!("{:?}", e),
+            Cause::OSErr(e) => println!("{:?}", e)
         },
-        _ => panic!("unexpected error: {}", err),
+        _ => panic!("unexpected error: {}", err)
     }
 }

@@ -1,13 +1,16 @@
 // genuinely no clue how to doc these unsafe blocks
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
-use crate::{
-    error::AllocError,
-    external::ffi::jem as ffi,
-    helpers::{nonnull_to_void, null_q_dyn, null_q_zsl_check},
-    Alloc, Layout,
+use {
+    crate::{
+        Alloc,
+        Layout,
+        error::AllocError,
+        external::ffi::jem as ffi,
+        helpers::{nonnull_to_void, null_q_dyn, null_q_zsl_check}
+    },
+    core::ptr::NonNull,
+    libc::c_void
 };
-use core::ptr::NonNull;
-use libc::c_void;
 
 macro_rules! assume {
     ($e:expr) => {
@@ -28,7 +31,7 @@ unsafe fn resize<F: Fn() -> *mut c_void>(
     old_layout: Layout,
     new_layout: Layout,
     is_grow: bool,
-    nq: fn(*mut c_void, Layout) -> Result<NonNull<u8>, AllocError>,
+    nq: fn(*mut c_void, Layout) -> Result<NonNull<u8>, AllocError>
 ) -> Result<NonNull<u8>, AllocError> {
     let new_align = new_layout.align();
     let old_align = old_layout.align();
@@ -51,7 +54,7 @@ unsafe fn resize<F: Fn() -> *mut c_void>(
 
 /// Handle to the Jemalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
 /// as a global allocator, and [`Alloc`](Alloc).
-#[derive(Copy, Clone, Default, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Jemalloc;
 
 fn alloc(layout: Layout) -> *mut c_void {
@@ -84,7 +87,7 @@ unsafe fn dealloc(ptr: *mut u8, layout: Layout) {
     ffi::sdallocx(
         ptr.cast::<c_void>(),
         layout.size(),
-        ffi::layout_to_flags(layout.size(), layout.align()),
+        ffi::layout_to_flags(layout.size(), layout.align())
     );
 }
 
@@ -102,19 +105,13 @@ unsafe fn raw_ralloc(ptr: NonNull<u8>, old_layout: Layout, new_layout: Layout) -
 #[cfg(not(feature = "no_alloc"))]
 unsafe impl alloc::alloc::GlobalAlloc for Jemalloc {
     #[inline]
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        alloc(layout).cast::<u8>()
-    }
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 { alloc(layout).cast::<u8>() }
 
     #[inline]
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        dealloc(ptr, layout);
-    }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) { dealloc(ptr, layout); }
 
     #[inline]
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
-        zalloc(layout).cast::<u8>()
-    }
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 { zalloc(layout).cast::<u8>() }
 
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: Layout, new_size: usize) -> *mut u8 {
@@ -122,7 +119,7 @@ unsafe impl alloc::alloc::GlobalAlloc for Jemalloc {
         raw_ralloc(
             NonNull::new_unchecked(ptr),
             layout,
-            Layout::from_size_align_unchecked(new_size, layout.align()),
+            Layout::from_size_align_unchecked(new_size, layout.align())
         )
         .cast::<u8>()
     }
@@ -150,7 +147,7 @@ impl Alloc for Jemalloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
             || raw_ralloc(ptr, old_layout, new_layout),
@@ -158,7 +155,7 @@ impl Alloc for Jemalloc {
             old_layout,
             new_layout,
             true,
-            null_q_dyn,
+            null_q_dyn
         )
     }
 
@@ -166,7 +163,7 @@ impl Alloc for Jemalloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         resize(
             || raw_ralloc(ptr, old_layout, new_layout),
@@ -174,7 +171,7 @@ impl Alloc for Jemalloc {
             old_layout,
             new_layout,
             false,
-            null_q_dyn,
+            null_q_dyn
         )
     }
 
@@ -183,7 +180,7 @@ impl Alloc for Jemalloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_layout: Layout,
+        new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
         null_q_dyn(raw_ralloc(ptr, old_layout, new_layout), new_layout)
     }
@@ -195,7 +192,7 @@ impl crate::ResizeInPlace for Jemalloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_size: usize,
+        new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
             Err(crate::features::resize_in_place::RESIZE_IP_ZS)
@@ -207,7 +204,7 @@ impl crate::ResizeInPlace for Jemalloc {
                 ptr.as_ptr().cast::<c_void>(),
                 new_size,
                 0,
-                ffi::layout_to_flags(new_size, old_layout.align()),
+                ffi::layout_to_flags(new_size, old_layout.align())
             ) >= new_size
             {
                 Ok(())
@@ -221,7 +218,7 @@ impl crate::ResizeInPlace for Jemalloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_size: usize,
+        new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
             Err(crate::features::resize_in_place::RESIZE_IP_ZS)

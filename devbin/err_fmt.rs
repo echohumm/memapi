@@ -1,9 +1,11 @@
 #![allow(clippy::vec_init_then_push)]
 
-use core::ptr::NonNull;
-use memapi::{
-    error::{AlignErr, AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr},
-    Layout,
+use {
+    core::ptr::NonNull,
+    memapi::{
+        Layout,
+        error::{AlignErr, AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr}
+    }
 };
 
 fn main() {
@@ -26,23 +28,23 @@ fn main() {
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::NotOwned),
+            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::NotOwned)
         ));
 
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
             Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::OwnedIncomplete(
-                Some(l2),
-            )),
+                Some(l2)
+            ))
         ));
 
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
             Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::OwnedMisaligned(
-                Some(1),
-            )),
+                Some(1)
+            ))
         ));
     }
 

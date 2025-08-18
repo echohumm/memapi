@@ -24,7 +24,7 @@ pub mod ffi {
     /// memory allocation APIs (e.g., `malloc`) are guaranteed to have.
     pub const MAX_GUARANTEED_ALIGN: usize = 4;
 
-    //noinspection DuplicatedCode
+    // noinspection DuplicatedCode
     #[cfg(any(
         target_arch = "x86",
         target_arch = "arm",
@@ -136,13 +136,15 @@ pub mod ffi {
     #[allow(clippy::module_name_repetitions)]
     /// Bindings to `libc`'s allocation functions and small helpers.
     pub mod libc {
-        use crate::{
-            error::AllocError,
-            external::ffi::MAX_GUARANTEED_ALIGN,
-            helpers::{null_q_dyn, null_q_zsl_check, preproc_layout},
-            Layout,
+        use {
+            crate::{
+                Layout,
+                error::AllocError,
+                external::ffi::MAX_GUARANTEED_ALIGN,
+                helpers::{null_q_dyn, null_q_zsl_check, preproc_layout}
+            },
+            core::ptr::{self, NonNull}
         };
-        use core::ptr::{self, NonNull};
 
         // making this made me feel bad for the libc devs
         unsafe fn set_errno(err: libc::c_int) {
@@ -246,7 +248,7 @@ pub mod ffi {
         pub(crate) unsafe fn raw_realloc(
             ptr: *mut u8,
             _old_layout: Layout,
-            new_size: usize,
+            new_size: usize
         ) -> *mut u8 {
             realloc(ptr.cast(), new_size).cast()
         }
@@ -264,8 +266,8 @@ pub mod ffi {
                 ptr.as_ptr(),
                 match preproc_layout(layout) {
                     Ok(l) => l,
-                    Err(e) => panic!("invalid layout: {}", e),
-                },
+                    Err(e) => panic!("invalid layout: {}", e)
+                }
             );
         }
 
@@ -276,7 +278,7 @@ pub mod ffi {
             zero_tail: bool,
             use_zalloc_for_new: bool,
             check_size: fn(&usize, &usize) -> bool,
-            inv_size_err: fn(usize, usize) -> AllocError,
+            inv_size_err: fn(usize, usize) -> AllocError
         ) -> Result<NonNull<u8>, AllocError> {
             let old_size = old_layout.size();
             let new_size = new_layout.size();
@@ -297,7 +299,7 @@ pub mod ffi {
                     ptr::write_bytes(
                         p.as_ptr().add(old_size),
                         0,
-                        new_size.saturating_sub(old_size),
+                        new_size.saturating_sub(old_size)
                     );
                 }
                 return Ok(p);
@@ -311,11 +313,7 @@ pub mod ffi {
                 raw_alloc
             }, null_q_dyn));
 
-            let copy_len = if new_size < old_size {
-                new_size
-            } else {
-                old_size
-            };
+            let copy_len = if new_size < old_size { new_size } else { old_size };
             ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), copy_len);
 
             if zero_tail && new_size > old_size && !use_zalloc_for_new {
@@ -329,7 +327,7 @@ pub mod ffi {
         pub(crate) unsafe fn grow(
             ptr: NonNull<u8>,
             old_layout: Layout,
-            new_layout: Layout,
+            new_layout: Layout
         ) -> Result<NonNull<u8>, AllocError> {
             resize_common(
                 ptr,
@@ -338,14 +336,14 @@ pub mod ffi {
                 false,
                 false,
                 core::cmp::PartialOrd::gt,
-                AllocError::grow_smaller,
+                AllocError::grow_smaller
             )
         }
 
         pub(crate) unsafe fn zgrow(
             ptr: NonNull<u8>,
             old_layout: Layout,
-            new_layout: Layout,
+            new_layout: Layout
         ) -> Result<NonNull<u8>, AllocError> {
             // zgrow must zero the new bytes. If we must allocate a new block due to alignment,
             // prefer raw_zalloc to get the zeroing for free.
@@ -356,14 +354,14 @@ pub mod ffi {
                 true,
                 true,
                 core::cmp::PartialOrd::gt,
-                AllocError::grow_smaller,
+                AllocError::grow_smaller
             )
         }
 
         pub(crate) unsafe fn shrink(
             ptr: NonNull<u8>,
             old_layout: Layout,
-            new_layout: Layout,
+            new_layout: Layout
         ) -> Result<NonNull<u8>, AllocError> {
             resize_common(
                 ptr,
@@ -372,7 +370,7 @@ pub mod ffi {
                 false,
                 false,
                 core::cmp::PartialOrd::lt,
-                AllocError::shrink_larger,
+                AllocError::shrink_larger
             )
         }
 
@@ -380,7 +378,7 @@ pub mod ffi {
         pub(crate) unsafe fn realloc_helper(
             ptr: NonNull<u8>,
             old_layout: Layout,
-            new_layout: Layout,
+            new_layout: Layout
         ) -> Result<NonNull<u8>, AllocError> {
             resize_common(ptr, old_layout, new_layout, false, false, fals, no_err)
         }
@@ -388,36 +386,25 @@ pub mod ffi {
         pub(crate) unsafe fn rezalloc(
             ptr: NonNull<u8>,
             old_layout: Layout,
-            new_layout: Layout,
+            new_layout: Layout
         ) -> Result<NonNull<u8>, AllocError> {
             resize_common(ptr, old_layout, new_layout, true, false, fals, no_err)
         }
 
         #[allow(clippy::trivially_copy_pass_by_ref)]
-        fn fals(_: &usize, _: &usize) -> bool {
-            false
-        }
+        fn fals(_: &usize, _: &usize) -> bool { false }
         fn no_err(_: usize, _: usize) -> AllocError {
             // SAFETY: this is unreachable because it's guarded by fals
             unsafe { core::hint::unreachable_unchecked() }
         }
 
+        #[cfg(unix)] pub use libc::posix_memalign;
+        #[cfg(all(target_os = "linux", not(target_env = "ohos")))] pub use libc::reallocarray;
+        #[cfg(windows)] pub use libc::{aligned_free, aligned_malloc};
         pub use libc::{calloc, free, malloc, realloc};
-
-        #[cfg(unix)]
-        pub use libc::posix_memalign;
-
-        #[cfg(all(target_os = "linux", not(target_env = "ohos")))]
-        pub use libc::reallocarray;
         #[cfg(target_os = "linux")]
         pub use libc::{fallocate, fallocate64, memalign, posix_fallocate, posix_fallocate64};
-        #[cfg(all(
-            target_os = "linux",
-            not(any(target_env = "musl", target_env = "ohos"))
-        ))]
+        #[cfg(all(target_os = "linux", not(any(target_env = "musl", target_env = "ohos"))))]
         pub use libc::{malloc_info, malloc_usable_size};
-
-        #[cfg(windows)]
-        pub use libc::{aligned_free, aligned_malloc};
     }
 }

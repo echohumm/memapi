@@ -1,5 +1,7 @@
-use crate::{error::AllocError, Alloc, Layout};
-use core::ptr::{self, NonNull};
+use {
+    crate::{Alloc, Layout, error::AllocError},
+    core::ptr::{self, NonNull}
+};
 
 /// Extension trait for [`Alloc`](Alloc) which provides interfaces to reallocate in-place.
 pub trait ResizeInPlace: Alloc {
@@ -21,7 +23,7 @@ pub trait ResizeInPlace: Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_size: usize,
+        new_size: usize
     ) -> Result<(), AllocError>;
 
     /// Grow the given block to a new, larger layout, zeroing newly allocated bytes.
@@ -42,7 +44,7 @@ pub trait ResizeInPlace: Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_size: usize,
+        new_size: usize
     ) -> Result<(), AllocError> {
         self.fgrow_in_place(ptr, old_layout, new_size, 0)
     }
@@ -66,14 +68,10 @@ pub trait ResizeInPlace: Alloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-        n: u8,
+        n: u8
     ) -> Result<(), AllocError> {
         tri!(do self.grow_in_place(ptr, old_layout, new_size));
-        ptr::write_bytes(
-            ptr.as_ptr().add(old_layout.size()),
-            n,
-            new_size - old_layout.size(),
-        );
+        ptr::write_bytes(ptr.as_ptr().add(old_layout.size()), n, new_size - old_layout.size());
         Ok(())
     }
 
@@ -96,7 +94,7 @@ pub trait ResizeInPlace: Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_size: usize,
+        new_size: usize
     ) -> Result<(), AllocError>;
 
     /// Reallocate a block, growing or shrinking as needed.
@@ -120,7 +118,7 @@ pub trait ResizeInPlace: Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_size: usize,
+        new_size: usize
     ) -> Result<(), AllocError> {
         if new_size > old_layout.size() {
             self.grow_in_place(ptr, old_layout, new_size)
@@ -150,7 +148,7 @@ pub trait ResizeInPlace: Alloc {
         &self,
         ptr: NonNull<u8>,
         old_layout: Layout,
-        new_size: usize,
+        new_size: usize
     ) -> Result<(), AllocError> {
         if new_size > old_layout.size() {
             self.zgrow_in_place(ptr, old_layout, new_size)
@@ -182,7 +180,7 @@ pub trait ResizeInPlace: Alloc {
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_size: usize,
-        n: u8,
+        n: u8
     ) -> Result<(), AllocError> {
         if new_size > old_layout.size() {
             self.fgrow_in_place(ptr, old_layout, new_size, n)

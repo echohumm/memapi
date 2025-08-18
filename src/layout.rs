@@ -2,7 +2,7 @@ use crate::{
     error::{ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
     helpers::{align_up_unchecked, checked_op, layout_or_err},
     type_props::{PtrProps, SizedProps},
-    unstable_util::lay_from_size_align,
+    unstable_util::lay_from_size_align
 };
 
 /// The layout of a block of memory in the form of its size and alignment in bytes.
@@ -14,7 +14,7 @@ use crate::{
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Layout {
     size: usize,
-    align: usize,
+    align: usize
 }
 
 impl Layout {
@@ -24,9 +24,7 @@ impl Layout {
     #[allow(clippy::inline_always)]
     #[inline(always)]
     #[must_use]
-    pub const fn new<T>() -> Layout {
-        T::LAYOUT
-    }
+    pub const fn new<T>() -> Layout { T::LAYOUT }
 
     /// Creates a layout representing an array of `n` `T`.
     ///
@@ -36,7 +34,7 @@ impl Layout {
     pub const fn array<T>(n: usize) -> Result<Layout, RepeatLayoutError> {
         match layout_or_err::<T>(n) {
             Ok(l) => Ok(l),
-            Err(e) => Err(RepeatLayoutError::InvalidLayout(e)),
+            Err(e) => Err(RepeatLayoutError::InvalidLayout(e))
         }
     }
 
@@ -62,16 +60,14 @@ impl Layout {
     /// - aligned
     #[allow(clippy::inline_always)]
     #[inline(always)]
-    pub unsafe fn for_value_raw<T: ?Sized>(val: *const T) -> Layout {
-        val.layout()
-    }
+    pub unsafe fn for_value_raw<T: ?Sized>(val: *const T) -> Layout { val.layout() }
 
     /// Creates a layout with the given size and alignment.
     ///
     /// # Errors
     ///
-    /// - `LayoutErr::Align(`[`AlignErr::ZeroAlign`](crate::error::AlignErr::ZeroAlign)`)` if
-    ///   `align == 0`.
+    /// - `LayoutErr::Align(`[`AlignErr::ZeroAlign`](crate::error::AlignErr::ZeroAlign)`)` if `align
+    ///   == 0`.
     /// - `LayoutErr::Align(`
     ///   [`AlignErr::NonPowerOfTwoAlign(align)`](crate::error::AlignErr::NonPowerOfTwoAlign)`)` if
     ///   `align` is non-zero, but not a power of two.
@@ -103,16 +99,12 @@ impl Layout {
     /// Returns the size of this layout.
     #[must_use]
     #[inline]
-    pub const fn size(&self) -> usize {
-        self.size
-    }
+    pub const fn size(&self) -> usize { self.size }
 
     /// Returns the alignment of this layout.
     #[must_use]
     #[inline]
-    pub const fn align(&self) -> usize {
-        self.align
-    }
+    pub const fn align(&self) -> usize { self.align }
 
     /// Returns the amount of padding necessary after `self` to ensure that the following address
     /// will satisfy `align`.
@@ -148,7 +140,7 @@ impl Layout {
         unsafe {
             Layout::from_size_align_unchecked(
                 align_up_unchecked(self.size(), self.align()),
-                self.align(),
+                self.align()
             )
         }
     }
@@ -162,14 +154,13 @@ impl Layout {
     /// # Errors
     ///
     /// - [`RepeatLayoutError::InvalidLayout`] if the computed layout is invalid.
-    /// - [`RepeatLayoutError::ArithmeticOverflow`] if an arithmetic operation
-    ///   would overflow.
+    /// - [`RepeatLayoutError::ArithmeticOverflow`] if an arithmetic operation would overflow.
     #[inline]
     pub const fn repeat(&self, count: usize) -> Result<(Layout, usize), RepeatLayoutError> {
         let padded = self.pad_to_align();
         match padded.repeat_packed(count) {
             Ok(repeated) => Ok((repeated, padded.size())),
-            Err(e) => Err(e),
+            Err(e) => Err(e)
         }
     }
 
@@ -192,12 +183,12 @@ impl Layout {
         #[allow(clippy::option_if_let_else)]
         let size = match checked_op(self.size(), ArithOp::Mul, count) {
             Ok(s) => s,
-            Err(e) => return Err(RepeatLayoutError::ArithmeticOverflow(e)),
+            Err(e) => return Err(RepeatLayoutError::ArithmeticOverflow(e))
         };
         let align = self.align();
         match Layout::from_size_align(size, align) {
             Ok(layout) => Ok(layout),
-            Err(e) => Err(RepeatLayoutError::InvalidLayout(InvLayout(size, align, e))),
+            Err(e) => Err(RepeatLayoutError::InvalidLayout(InvLayout(size, align, e)))
         }
     }
 
@@ -217,11 +208,7 @@ impl Layout {
     #[must_use = "this function returns a new layout, it doesn't modify the original one"]
     #[inline]
     pub const fn align_to(&self, align: usize) -> Result<Layout, LayoutErr> {
-        if align > self.align() {
-            Layout::from_size_align(self.size(), align)
-        } else {
-            Ok(*self)
-        }
+        if align > self.align() { Layout::from_size_align(self.size(), align) } else { Ok(*self) }
     }
 
     #[cfg(not(feature = "no_alloc"))]

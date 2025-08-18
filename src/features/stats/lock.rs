@@ -1,4 +1,4 @@
-use std::io::{stderr, stdout, Stderr, StderrLock, Stdout, StdoutLock, Write};
+use std::io::{Stderr, StderrLock, Stdout, StdoutLock, Write, stderr, stdout};
 
 /// A trait for locking an output stream in a thread-safe manner.
 pub trait WriteLock: Send + Sync {
@@ -34,17 +34,13 @@ macro_rules! impl_ref {
 impl WriteLock for Stdout {
     type Guard = StdoutLock<'static>;
 
-    fn lock(&self) -> StdoutLock<'static> {
-        stdout().lock()
-    }
+    fn lock(&self) -> StdoutLock<'static> { stdout().lock() }
 }
 
 impl WriteLock for Stderr {
     type Guard = StderrLock<'static>;
 
-    fn lock(&self) -> StderrLock<'static> {
-        stderr().lock()
-    }
+    fn lock(&self) -> StderrLock<'static> { stderr().lock() }
 }
 
 impl_ref!(Stdout, Stderr);
@@ -52,16 +48,12 @@ impl_ref!(Stdout, Stderr);
 impl<W: WriteLock> WriteLock for Box<W> {
     type Guard = W::Guard;
 
-    fn lock(&self) -> Self::Guard {
-        (**self).lock()
-    }
+    fn lock(&self) -> Self::Guard { (**self).lock() }
 }
 
 #[cfg(not(feature = "no_alloc"))]
 impl<W: WriteLock> WriteLock for alloc::sync::Arc<W> {
     type Guard = W::Guard;
 
-    fn lock(&self) -> W::Guard {
-        (**self).lock()
-    }
+    fn lock(&self) -> W::Guard { (**self).lock() }
 }
