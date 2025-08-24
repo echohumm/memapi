@@ -4,6 +4,7 @@
       <w>aarch</w>
       <w>allocs</w>
       <w>allz</w>
+      <w>cfgd</w>
       <w>clippy</w>
       <w>criter</w>
       <w>csky</w>
@@ -44,10 +45,13 @@
       <w>rezalloc</w>
       <w>rezsalloc</w>
       <w>rustflags</w>
+      <w>rustfmt</w>
       <w>salloc</w>
       <w>sgrow</w>
       <w>sptr</w>
       <w>superlint</w>
+      <w>supertrait</w>
+      <w>tryfree</w>
       <w>uarc</w>
       <w>ufcs</w>
       <w>usizes</w>

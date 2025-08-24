@@ -21,11 +21,11 @@ use {
 /// Handle to libc's allocation functions. This type implements the [`GlobalAlloc`] trait, allowing
 /// use as a global allocator, and [`Alloc`](Alloc).
 ///
-/// This is almost the same as [`System`](std::alloc::System).
+/// This is similar to [`System`](std::alloc::System).
 ///
 /// Note that, in addition to the usual requirement of alignments being a
 /// [power of two](usize::is_power_of_two), this allocator requires that `align` is a multiple of
-/// [`usize::SZ`](crate::type_props::SizedProps::SZ), AKA the size of C's *void.
+/// [`usize::SZ`](crate::data::type_props::SizedProps::SZ), AKA the size of C's *void.
 pub struct Malloc;
 
 #[cfg(not(feature = "no_alloc"))]

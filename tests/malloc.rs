@@ -7,10 +7,10 @@ use {
         slice
     },
     memapi::{
-        Alloc,
-        Layout,
-        external::{ffi::libc::malloc_usable_size, malloc::Malloc},
-        type_props::SizedProps
+		Alloc,
+		Layout,
+		external::{ffi::libc::malloc_usable_size, malloc::Malloc},
+		data::type_props::SizedProps
     }
 };
 
@@ -95,8 +95,8 @@ fn realloc_preserves_initial_contents() {
 #[test]
 fn error_reporting_works() {
     use memapi::{
-        error::{AllocError, Cause},
-        type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
+		error::{AllocError, Cause},
+		data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
     };
 
     let alloc = Malloc;
@@ -111,7 +111,7 @@ fn error_reporting_works() {
         AllocError::AllocFailed(_, ref c) => match c {
             Cause::Unknown => panic!("unexpected cause: {}", c),
             Cause::OutOfMemory => panic!("how..?"),
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
             Cause::OSErr(e) => println!("{:?}", e)
         },
@@ -126,7 +126,7 @@ fn error_reporting_works() {
         AllocError::AllocFailed(_, ref c) => match c {
             Cause::Unknown => panic!("unexpected cause: {}", c),
             Cause::OutOfMemory => panic!("how..?"),
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
             Cause::OSErr(e) => println!("{:?}", e)
         },

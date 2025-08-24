@@ -1,7 +1,7 @@
 use crate::{
     error::{ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
     helpers::{align_up_unchecked, checked_op, layout_or_err},
-    type_props::{PtrProps, SizedProps},
+    data::type_props::{PtrProps, SizedProps},
     unstable_util::lay_from_size_align
 };
 
@@ -72,7 +72,7 @@ impl Layout {
     ///   [`AlignErr::NonPowerOfTwoAlign(align)`](crate::error::AlignErr::NonPowerOfTwoAlign)`)` if
     ///   `align` is non-zero, but not a power of two.
     /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
-    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT).
+    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
     #[inline]
     pub const fn from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
         lay_from_size_align(size, align)
@@ -87,11 +87,11 @@ impl Layout {
     /// The caller must ensure:
     /// - `align` is a non-zero power of two.
     /// - `size` rounded up to `align` does not exceed
-    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT).
-    #[inline]
+    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
     #[must_use]
+    #[inline]
     pub const unsafe fn from_size_align_unchecked(size: usize, align: usize) -> Layout {
-        assume!(const crate::unstable_util::check_lay(size, align).is_ok());
+        assume!(crate::unstable_util::check_lay(size, align).is_ok());
 
         Layout { size, align }
     }
@@ -203,9 +203,9 @@ impl Layout {
     ///   [`AlignErr::NonPowerOfTwoAlign(align)`](crate::error::AlignErr::NonPowerOfTwoAlign)`)` if
     ///   `align` is larger than `self.align`, but not a power of two.
     /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
-    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT).
-    #[allow(clippy::double_must_use)]
+    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
     #[must_use = "this function returns a new layout, it doesn't modify the original one"]
+    #[allow(clippy::double_must_use)]
     #[inline]
     pub const fn align_to(&self, align: usize) -> Result<Layout, LayoutErr> {
         if align > self.align() { Layout::from_size_align(self.size(), align) } else { Ok(*self) }

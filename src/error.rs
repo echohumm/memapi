@@ -1,22 +1,36 @@
 use {
     crate::Layout,
     core::{
+        fmt,
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         ptr::NonNull
     }
 };
 
-/// Errors for allocation operations.
-#[derive(Debug)]
-#[cfg_attr(not(feature = "std"), derive(Clone, Copy))]
-#[repr(u8)]
+// TODO: use and implement this
+/// The result of an allocator operation.
+///
+/// This is a specialized version of [`Result`].
+#[cfg_attr(not(feature = "os_err_reporting"), derive(Copy))]
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum AllocRes<S> {
+    /// The operation succeeded and returned the contained value.
+    Succ(S),
+    /// The operation failed and returned the contained error.
+    Fail(AllocError)
+}
+
+/// Errors for allocator operations.
+#[cfg_attr(not(feature = "os_err_reporting"), derive(Copy))]
 #[allow(clippy::module_name_repetitions)]
+#[derive(Debug, Clone)]
+#[repr(u8)]
 pub enum AllocError {
     /// The underlying allocator failed to allocate using the given layout; see the contained cause.
     ///
     /// The cause may or may not be accurate depending on the type and environment.
     AllocFailed(Layout, Cause),
-    #[cfg(feature = "fallible_dealloc")]
+    #[cfg(feature = "checked_dealloc")]
     /// The underlying allocator failed to deallocate the given pointer using the given layout; see
     /// the contained cause.
     DeallocFailed(NonNull<u8>, Layout, Cause),
@@ -42,18 +56,22 @@ pub enum AllocError {
 }
 
 impl AllocError {
-    #[cfg(feature = "fallible_dealloc")]
+    #[cfg(feature = "checked_dealloc")]
+    /// Creates a new `DeallocFailed` error.
+    #[allow(clippy::missing_errors_doc)]
     #[cold]
     #[inline(never)]
     #[cfg_attr(not(feature = "dev"), doc(hidden))]
     pub const fn dealloc_failed(
         p: NonNull<u8>,
         layout: Layout,
-        block_stat: crate::fallible_dealloc::BlockStatus
+        block_stat: crate::checked_dealloc::BlockStatus
     ) -> Result<(), AllocError> {
         Err(AllocError::DeallocFailed(p, layout, Cause::InvalidBlockStatus(block_stat)))
     }
 
+    /// Creates a new `ArithmeticOverflow` error.
+    #[allow(clippy::missing_errors_doc)]
     #[cold]
     #[inline(never)]
     #[cfg_attr(not(feature = "dev"), doc(hidden))]
@@ -61,6 +79,8 @@ impl AllocError {
         Err(ArithOverflow(l, op, r))
     }
 
+    /// Creates a new `InvLayout` error.
+    #[allow(clippy::missing_errors_doc)]
     #[cold]
     #[inline(never)]
     #[cfg_attr(not(feature = "dev"), doc(hidden))]
@@ -72,6 +92,7 @@ impl AllocError {
         Err(InvLayout(sz, align, err))
     }
 
+    /// Creates a new `GrowSmallerNewLayout` error.
     #[cold]
     #[inline(never)]
     #[cfg_attr(not(feature = "dev"), doc(hidden))]
@@ -80,6 +101,7 @@ impl AllocError {
         AllocError::GrowSmallerNewLayout(old, new)
     }
 
+    /// Creates a new `ShrinkLargerNewLayout` error.
     #[cold]
     #[inline(never)]
     #[cfg_attr(not(feature = "dev"), doc(hidden))]
@@ -106,7 +128,7 @@ impl PartialEq for AllocError {
 
         match (self, other) {
             (AllocFailed(l1, c1), AllocFailed(l2, c2)) => l1 == l2 && c1 == c2,
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             (AllocError::DeallocFailed(p1, l1, c1), AllocError::DeallocFailed(p2, l2, c2)) => {
                 p1 == p2 && l1 == l2 && c1 == c2
             }
@@ -129,8 +151,19 @@ impl Eq for AllocError {}
 
 impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        use AllocError::{
+            AllocFailed,
+            ArithmeticOverflow,
+            GrowSmallerNewLayout,
+            InvalidAlign,
+            InvalidLayout,
+            Other,
+            ShrinkLargerNewLayout,
+            ZeroSizedLayout
+        };
+
         match self {
-            AllocError::AllocFailed(l, cause) => {
+            AllocFailed(l, cause) => {
                 write!(
                     f,
                     "allocation failed:\n\tlayout:\n\t\tsize: {}\n\t\talign: {}\n\tcause: {}",
@@ -139,9 +172,9 @@ impl Display for AllocError {
                     cause
                 )
             }
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             AllocError::DeallocFailed(ptr, l, cause) => {
-                use crate::fallible_dealloc::BlockStatus;
+                use crate::checked_dealloc::BlockStatus;
 
                 // i hate this
                 match cause {
@@ -172,25 +205,25 @@ impl Display for AllocError {
                     )
                 }
             }
-            AllocError::InvalidLayout(inv_layout) => {
+            InvalidLayout(inv_layout) => {
                 write!(f, "{}", inv_layout)
             }
-            AllocError::InvalidAlign(inv_align) => {
+            InvalidAlign(inv_align) => {
                 write!(f, "{}", inv_align)
             }
-            AllocError::ZeroSizedLayout(_) => {
+            ZeroSizedLayout(_) => {
                 write!(f, "received a zero-sized layout")
             }
-            AllocError::GrowSmallerNewLayout(old, new) => {
+            GrowSmallerNewLayout(old, new) => {
                 write!(f, "attempted to grow from a size of {} to a smaller size of {}", old, new)
             }
-            AllocError::ShrinkLargerNewLayout(old, new) => {
+            ShrinkLargerNewLayout(old, new) => {
                 write!(f, "attempted to shrink from a size of {} to a larger size of {}", old, new)
             }
-            AllocError::ArithmeticOverflow(overflow) => {
+            ArithmeticOverflow(overflow) => {
                 write!(f, "{}", overflow)
             }
-            AllocError::Other(other) => write!(f, "{}", other)
+            Other(other) => write!(f, "{}", other)
         }
     }
 }
@@ -199,20 +232,23 @@ impl Display for AllocError {
 impl std::error::Error for AllocError {}
 
 /// The cause of an error.
+#[cfg_attr(not(feature = "os_err_reporting"), derive(Copy))]
 #[derive(Debug)]
-#[cfg_attr(not(feature = "os_err_reporting"), derive(Clone, Copy, PartialEq, Eq))]
 #[repr(u8)]
 pub enum Cause {
     /// The cause is unknown.
+    ///
+    /// This most commonly means an [`OSErr`](Cause::OSErr) occurred, but `os_err_reporting` is
+    /// disabled.
     Unknown,
     /// The allocator ran out of memory.
     ///
     /// This should only be used when the __allocator__ runs out of memory and doesn't grow. Use
     /// [`OSErr`](Cause::OSErr) if the system runs out of memory.
     OutOfMemory,
-    #[cfg(feature = "fallible_dealloc")]
+    #[cfg(feature = "checked_dealloc")]
     /// The block status is invalid.
-    InvalidBlockStatus(crate::fallible_dealloc::BlockStatus),
+    InvalidBlockStatus(crate::checked_dealloc::BlockStatus),
     #[cfg(feature = "os_err_reporting")]
     /// The cause is described in the contained OS error.
     ///
@@ -220,25 +256,27 @@ pub enum Cause {
     OSErr(std::io::Error)
 }
 
-#[cfg(feature = "os_err_reporting")]
 impl PartialEq for Cause {
     fn eq(&self, other: &Cause) -> bool {
         match (self, other) {
             (Cause::Unknown, Cause::Unknown) | (Cause::OutOfMemory, Cause::OutOfMemory) => true,
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             (Cause::InvalidBlockStatus(s1), Cause::InvalidBlockStatus(s2)) => s1 == s2,
+            #[cfg(feature = "os_err_reporting")]
             (Cause::OSErr(e1), Cause::OSErr(e2)) => e1.kind() == e2.kind(),
             _ => false
         }
     }
 }
 
+impl Eq for Cause {}
+
 impl Display for Cause {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             Cause::Unknown => write!(f, "unknown"),
             Cause::OutOfMemory => write!(f, "out of memory"),
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             Cause::InvalidBlockStatus(s) => write!(f, "invalid block status: {}", s),
             #[cfg(feature = "os_err_reporting")]
             Cause::OSErr(e) => write!(f, "os error:\n\t{}", e)
@@ -246,13 +284,31 @@ impl Display for Cause {
     }
 }
 
+impl Clone for Cause {
+    fn clone(&self) -> Cause {
+        match self {
+            &Cause::Unknown => Cause::Unknown,
+            &Cause::OutOfMemory => Cause::OutOfMemory,
+            #[cfg(feature = "checked_dealloc")]
+            &Cause::InvalidBlockStatus(s) => Cause::InvalidBlockStatus(s),
+            #[cfg(feature = "os_err_reporting")]
+            Cause::OSErr(e) => {
+                Cause::OSErr(std::io::Error::from_raw_os_error(e.raw_os_error().unwrap()))
+            }
+        }
+    }
+
+    // rust update broke my ide and made it think this is needed
+    fn clone_from(&mut self, source: &Cause) { *self = source.clone(); }
+}
+
 #[cfg(feature = "std")]
 impl std::error::Error for Cause {}
 
 /// An error that can occur when creating a layout for repeated instances of a type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
 #[allow(clippy::module_name_repetitions)]
+#[repr(u8)]
 pub enum RepeatLayoutError {
     /// The computed layout is invalid.
     InvalidLayout(InvLayout),
@@ -300,8 +356,8 @@ pub enum LayoutErr {
     /// The alignment was invalid.
     Align(AlignErr),
     /// The requested size was greater than
-    /// [`USIZE_MAX_NO_HIGH_BIT`](crate::type_props::USIZE_MAX_NO_HIGH_BIT) when rounded up to the
-    /// nearest multiple of the requested alignment.
+    /// [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT) when
+    /// rounded up to the nearest multiple of the requested alignment.
     ExceedsMax,
     /// When attempting to make a layout `malloc`-compatible, the requested alignment was rounded up
     /// to a multiple of [`usize::SZ`].
@@ -365,10 +421,10 @@ impl Display for AlignErr {
 #[cfg(feature = "std")]
 impl std::error::Error for AlignErr {}
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 /// An arithmetic operation that would overflow.
 ///
 /// Contains both sides of the operation and the operation itself.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub struct ArithOverflow(pub usize, pub ArithOp, pub usize);
 
 impl Display for ArithOverflow {

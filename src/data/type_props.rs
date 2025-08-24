@@ -280,8 +280,6 @@ unsafe impl VarSized for std::path::Path {
 
 // not associated to reduce clutter, and so they can be const
 
-// TODO: use const_if! (cant rn because it doesnt support relaxed bounds or multiple bounds
-
 const_if! {
     "const_extras",
     "Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.",

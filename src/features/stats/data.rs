@@ -3,10 +3,7 @@ use {
     crate::{
         AllocPattern,
         Layout,
-        stats::{
-            AllocRes::{Fail, Succ},
-            minstring::String
-        }
+        stats::AllocRes::{Fail, Succ}
     },
     core::{
         fmt::{self, Display, Formatter},
@@ -25,6 +22,18 @@ pub enum AllocRes {
     Fail(AllocStat)
 }
 
+fn alloc_kind_str(kind: AllocPattern) -> &'static str {
+    match kind {
+        AllocPattern::Uninitialized => "uninitialized",
+        AllocPattern::Zeroed => "zeroed",
+        #[cfg(feature = "alloc_ext")]
+        // SAFETY: we map Fill to Uninitialized
+        AllocPattern::Filled(_) => unsafe { unreachable_unchecked() },
+        // SAFETY: only realloc can shrink, not alloc
+        AllocPattern::Shrink => unsafe { unreachable_unchecked() }
+    }
+}
+
 impl Display for AllocRes {
     // its long, but simple so we dont care
     #[allow(clippy::too_many_lines)]
@@ -39,17 +48,7 @@ impl Display for AllocRes {
                         region.size,
                         region.align,
                         region.ptr,
-                        match kind {
-                            AllocPattern::Uninitialized => String::from_str("uninitialized"),
-                            AllocPattern::Zeroed => String::from_str("zeroed"),
-                            #[cfg(feature = "alloc_ext")]
-                            // TODO: use this again
-                            // SAFETY: we map Fill to Uninitialized until this is used consistently
-                            //  again
-                            AllocPattern::Filled(_) => unsafe { unreachable_unchecked() },
-                            // SAFETY: Only a reallocation can be a shrink, not an allocation.
-                            AllocPattern::Shrink => unsafe { unreachable_unchecked() }
-                        },
+                        alloc_kind_str(*kind),
                         total
                     )
                 }
@@ -66,15 +65,12 @@ impl Display for AllocRes {
                         info.new.ptr,
                         match kind {
                             AllocPattern::Uninitialized =>
-                                String::from_str("newly allocated bytes were uninitialized"),
-                            AllocPattern::Zeroed =>
-                                String::from_str("newly allocated bytes were zeroed"),
+                                "newly allocated bytes were uninitialized",
+                            AllocPattern::Zeroed => "newly allocated bytes were zeroed",
                             #[cfg(feature = "alloc_ext")]
-                            // SAFETY: we map Fill to Uninitialized until this is used consistently
-                            //  again
+                            // SAFETY: we map Fill to Uninitialized
                             AllocPattern::Filled(_) => unsafe { unreachable_unchecked() },
-                            AllocPattern::Shrink =>
-                                String::from_str("there were no newly allocated bytes"),
+                            AllocPattern::Shrink => "there were no newly allocated bytes"
                         },
                         total
                     )
@@ -87,13 +83,28 @@ impl Display for AllocRes {
                         region.size, region.align, region.ptr, total
                     )
                 }
-                #[cfg(feature = "fallible_dealloc")]
+                #[cfg(feature = "checked_dealloc")]
                 AllocStat::TryFree { region, total, .. } => {
                     write!(
                         f,
                         "Successful fallible deallocation of {} bytes with alignment {} at {:p}. \
                          ({} total bytes allocated)",
                         region.size, region.align, region.ptr, total
+                    )
+                }
+                // TODO: use effective_layout
+                #[cfg(feature = "alloc_aligned_at")]
+                AllocStat::AllocAlignedAt { region, offset, kind, total, .. } => {
+                    write!(
+                        f,
+                        "Successful offset-aligned allocation of {} bytes with alignment {} at \
+                         {:p}+{} and {}. ({} total bytes allocated)",
+                        region.size,
+                        region.align,
+                        region.ptr,
+                        offset,
+                        alloc_kind_str(*kind),
+                        total
                     )
                 }
             },
@@ -116,13 +127,22 @@ impl Display for AllocRes {
                 }
                 // SAFETY: free is "infallible"
                 AllocStat::Free { .. } => unsafe { unreachable_unchecked() },
-                #[cfg(feature = "fallible_dealloc")]
+                #[cfg(feature = "checked_dealloc")]
                 AllocStat::TryFree { status, region, total } => {
                     write!(
                         f,
                         "Failed fallible deallocation of {} bytes with alignment {} at {:p}. ({} \
                          total bytes allocated). Block status: {}",
                         region.size, region.align, region.ptr, total, status
+                    )
+                }
+                #[cfg(feature = "alloc_aligned_at")]
+                AllocStat::AllocAlignedAt { region, offset, .. } => {
+                    write!(
+                        f,
+                        "Failed offset-aligned allocation of {} bytes with alignment {} at offset \
+                         {}",
+                        region.size, region.align, offset,
                     )
                 }
             }
@@ -159,13 +179,27 @@ pub enum AllocStat {
         /// The total number of bytes allocated after this call.
         total: usize
     },
-    #[cfg(feature = "fallible_dealloc")]
+    #[cfg(feature = "checked_dealloc")]
     /// A fallible deallocation operation.
     TryFree {
         /// The block status of the memory region.
-        status: crate::fallible_dealloc::BlockStatus,
+        status: crate::checked_dealloc::BlockStatus,
         /// The memory region that was freed.
         region: MemoryRegion,
+        /// The total number of bytes allocated after this call.
+        total: usize
+    },
+    #[cfg(feature = "alloc_aligned_at")]
+    /// An offset-aligned allocation operation.
+    AllocAlignedAt {
+        /// The memory region that was allocated.
+        region: MemoryRegion,
+        /// The offset after which the allocation is aligned.
+        offset: usize,
+        /// The effective layout of the allocation.
+        effective_layout: Layout,
+        /// The kind of allocation.
+        kind: AllocPattern,
         /// The total number of bytes allocated after this call.
         total: usize
     }

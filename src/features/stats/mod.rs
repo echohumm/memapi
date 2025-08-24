@@ -19,8 +19,6 @@ pub use data::*;
 #[cfg(feature = "stats_thread_safe_io")] mod lock;
 #[cfg(feature = "stats_thread_safe_io")] pub use lock::*;
 
-pub(crate) mod minstring;
-
 /// A wrapper that delegates all `Alloc` calls to `A` and logs
 /// each result via `L`.
 pub struct Stats<A, L: StatsLogger>(pub A, pub L);
@@ -48,9 +46,9 @@ impl<A, L: StatsLogger> Stats<A, L> {
 }
 
 #[track_caller]
-fn allocate<A: Alloc, L: StatsLogger, F: Fn(&A, Layout) -> Result<NonNull<u8>, AllocError>>(
+fn allocate<A: Alloc, L: StatsLogger>(
     slf: &Stats<A, L>,
-    allocate: F,
+    allocate: fn(&A, Layout) -> Result<NonNull<u8>, AllocError>,
     layout: Layout,
     kind: AllocPattern
 ) -> Result<NonNull<u8>, AllocError> {
@@ -214,14 +212,14 @@ impl<A: Alloc, L: StatsLogger> Alloc for Stats<A, L> {
     }
 }
 
-#[cfg(feature = "fallible_dealloc")]
+#[cfg(feature = "checked_dealloc")]
 #[cold]
 #[inline(never)]
 fn tryfree_err<A: Alloc, L: StatsLogger>(
     a: &Stats<A, L>,
     ptr: NonNull<u8>,
     layout: Layout,
-    status: crate::fallible_dealloc::BlockStatus
+    status: crate::checked_dealloc::BlockStatus
 ) {
     a.1.log(Fail(AllocStat::TryFree {
         status,
@@ -230,9 +228,9 @@ fn tryfree_err<A: Alloc, L: StatsLogger>(
     }));
 }
 
-#[cfg(feature = "fallible_dealloc")]
-impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
-    crate::fallible_dealloc::DeallocChecked for Stats<A, L>
+#[cfg(feature = "checked_dealloc")]
+impl<A: crate::checked_dealloc::CheckedDealloc, L: StatsLogger>
+    crate::checked_dealloc::CheckedDealloc for Stats<A, L>
 {
     fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), AllocError> {
         match self.0.try_dealloc(ptr, layout) {
@@ -240,7 +238,7 @@ impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
                 let size = layout.size();
                 let total = self.1.dec_total_bytes_allocated(size);
                 self.1.log(Succ(AllocStat::TryFree {
-                    status: crate::fallible_dealloc::BlockStatus::Owned,
+                    status: crate::checked_dealloc::BlockStatus::Owned,
                     region: MemoryRegion { ptr: ptr.as_ptr(), size, align: layout.align() },
                     total
                 }));
@@ -252,7 +250,7 @@ impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
                         if let crate::error::Cause::InvalidBlockStatus(s) = c {
                             tryfree_err(self, p, l, *s);
                         } else {
-                            tryfree_err(self, p, l, crate::fallible_dealloc::BlockStatus::Unknown);
+                            tryfree_err(self, p, l, crate::checked_dealloc::BlockStatus::Unknown);
                         }
                     }
                     _ => {
@@ -260,7 +258,7 @@ impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
                             self,
                             ptr,
                             layout,
-                            crate::fallible_dealloc::BlockStatus::Unknown
+                            crate::checked_dealloc::BlockStatus::Unknown
                         );
                     }
                 }
@@ -269,9 +267,62 @@ impl<A: crate::fallible_dealloc::DeallocChecked, L: StatsLogger>
         }
     }
 
-    fn status(&self, ptr: NonNull<u8>, layout: Layout) -> crate::fallible_dealloc::BlockStatus {
+    fn status(&self, ptr: NonNull<u8>, layout: Layout) -> crate::checked_dealloc::BlockStatus {
         self.0.status(ptr, layout)
     }
 
     fn owns(&self, ptr: NonNull<u8>) -> bool { self.0.owns(ptr) }
+}
+
+#[cfg(feature = "alloc_aligned_at")]
+#[allow(clippy::type_complexity)]
+fn alloc_at<A: Alloc, L: StatsLogger>(
+    slf: &Stats<A, L>,
+    allocate: fn(&A, Layout, usize) -> Result<(NonNull<u8>, Layout), AllocError>,
+    layout: Layout,
+    kind: AllocPattern,
+    offset: usize
+) -> Result<(NonNull<u8>, Layout), AllocError> {
+    let size = layout.size();
+    match allocate(&slf.0, layout, offset) {
+        Ok((ptr, effective_layout)) => {
+            let total = slf.1.inc_total_bytes_allocated(size);
+            slf.1.log(Succ(AllocStat::AllocAlignedAt {
+                region: MemoryRegion { ptr: ptr.as_ptr(), size, align: layout.align() },
+                kind,
+                offset,
+                effective_layout,
+                total
+            }));
+            Ok((ptr, effective_layout))
+        }
+        Err(e) => {
+            slf.1.log(Fail(AllocStat::AllocAlignedAt {
+                region: MemoryRegion { ptr: null_mut(), size, align: layout.align() },
+                kind,
+                offset,
+                // SAFETY: these are valid values for a layout.
+                effective_layout: unsafe { Layout::from_size_align_unchecked(0, 1) },
+                total: slf.1.total()
+            }));
+            Err(e)
+        }
+    }
+}
+
+#[cfg(feature = "alloc_aligned_at")]
+impl<A: crate::alloc_aligned_at::AllocAlignedAt, L: StatsLogger>
+    crate::alloc_aligned_at::AllocAlignedAt for Stats<A, L>
+{
+    fn alloc_at(&self, layout: Layout, offset: usize) -> Result<(NonNull<u8>, Layout), AllocError> {
+        alloc_at(self, A::alloc_at, layout, AllocPattern::Uninitialized, offset)
+    }
+
+    fn zalloc_at(
+        &self,
+        layout: Layout,
+        offset: usize
+    ) -> Result<(NonNull<u8>, Layout), AllocError> {
+        alloc_at(self, A::zalloc_at, layout, AllocPattern::Zeroed, offset)
+    }
 }

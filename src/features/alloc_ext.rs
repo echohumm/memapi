@@ -22,7 +22,8 @@ pub trait AllocExt: Alloc {
     fn alloc_clone<T: Clone>(&self, data: &T) -> Result<NonNull<T>, AllocError> {
         // clone the data before allocating to avoid needing a guard
         let dup = data.clone();
-        let mem = tri!(do self.alloc(<T as crate::type_props::SizedProps>::LAYOUT)).cast();
+        let mem =
+            tri!(do self.alloc(<T as crate::data::type_props::SizedProps>::LAYOUT)).cast();
         // SAFETY: the pointer will have at least enough space for a `T`
         unsafe {
             ptr::write(mem.as_ptr(), dup);
@@ -49,14 +50,19 @@ pub trait AllocExt: Alloc {
         //  the pointer was just allocated by this allocator, is valid for writes of at
         //  least `data`'s size, and aligned.
         unsafe {
-            alloc_then(self, crate::type_props::PtrProps::layout(&data), data, |p, data| {
-                let guard = crate::helpers::AllocGuard::new(
-                    NonNull::new_unchecked(crate::unstable_util::with_meta(p.as_ptr(), data)),
-                    self
-                );
-                data.clone_to_uninit(guard.as_ptr().cast::<u8>());
-                guard.release()
-            })
+            alloc_then(
+                self,
+                crate::data::type_props::PtrProps::layout(&data),
+                data,
+                |p, data| {
+                    let guard = crate::helpers::AllocGuard::new(
+                        NonNull::new_unchecked(crate::unstable_util::with_meta(p.as_ptr(), data)),
+                        self
+                    );
+                    data.clone_to_uninit(guard.as_ptr().cast::<u8>());
+                    guard.release()
+                }
+            )
         }
     }
 
@@ -69,7 +75,9 @@ pub trait AllocExt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `data.sz() == 0`.
     #[track_caller]
-    fn alloc_clone<T: core::clone::CloneToUninit + crate::type_props::VarSized + ?Sized>(
+    fn alloc_clone<
+        T: core::clone::CloneToUninit + crate::data::type_props::VarSized + ?Sized
+    >(
         &self,
         data: &T
     ) -> Result<NonNull<T>, AllocError> {
@@ -79,13 +87,13 @@ pub trait AllocExt: Alloc {
         unsafe {
             alloc_then::<NonNull<T>, Self, &T, _>(
                 self,
-                crate::type_props::PtrProps::layout(&data),
+                crate::data::type_props::PtrProps::layout(&data),
                 data,
                 |p, data| {
                     let guard = crate::helpers::AllocGuard::new(
-                        crate::type_props::varsized_nonnull_from_raw_parts::<T>(
+                        crate::data::type_props::varsized_nonnull_from_raw_parts::<T>(
                             p,
-                            crate::type_props::PtrProps::sz(&data)
+                            crate::data::type_props::PtrProps::sz(&data)
                         ),
                         self
                     );

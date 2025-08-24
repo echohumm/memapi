@@ -3,9 +3,11 @@ use {
     core::ptr::{self, NonNull}
 };
 
+// TODO: reallocation
+
 /// Trait for allocators that support allocating memory aligned at a specific offset.
 ///
-/// This trait provides functions which perform actual allocations with an unspecified alignment,
+/// This trait provides functions that perform actual allocations with an unspecified alignment,
 /// including extra `offset` bytes before the requested allocation to align the request.
 ///
 /// This is space-inefficient, but can be faster or provide space before the requested allocation
@@ -45,6 +47,7 @@ pub trait AllocAlignedAt: Alloc {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ZeroSizedLayout`] if `layout` has a size of zero.
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
+    #[cfg_attr(miri, track_caller)]
     fn zalloc_at(
         &self,
         layout: Layout,
@@ -61,12 +64,31 @@ pub trait AllocAlignedAt: Alloc {
     }
 }
 
+#[allow(clippy::inline_always)]
+impl<A: AllocAlignedAt + ?Sized> AllocAlignedAt for &A {
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    fn alloc_at(&self, layout: Layout, offset: usize) -> Result<(NonNull<u8>, Layout), AllocError> {
+        (**self).alloc_at(layout, offset)
+    }
+
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    fn zalloc_at(
+        &self,
+        layout: Layout,
+        offset: usize
+    ) -> Result<(NonNull<u8>, Layout), AllocError> {
+        (**self).zalloc_at(layout, offset)
+    }
+}
+
 #[cfg(feature = "alloc_ext")]
 /// This trait provides extensions for [`AllocAlignedAt`].
 #[allow(clippy::module_name_repetitions)]
 pub trait AllocAlignedAtExt: AllocAlignedAt {
     /// Attempts to allocate a block of memory fitting the given [`Layout`], aligned only after
-    /// `offset` bytes, then fill it according to [`sector`](AlignedAtSectorDescriptor).
+    /// `offset` bytes, then fill it according to [`sector`](SectorDescriptor).
     ///
     /// Note that the returned pointer itself will **not** be aligned to the layout's alignment.
     /// Instead, `ptr.add(offset)` will be.
@@ -86,7 +108,7 @@ pub trait AllocAlignedAtExt: AllocAlignedAt {
         &self,
         layout: Layout,
         offset: usize,
-        sector: AlignedAtSectorDescriptor
+        sector: SectorDescriptor
     ) -> Result<(NonNull<u8>, Layout), AllocError> {
         match self.alloc_at(layout, offset) {
             Ok((p, act_layout)) => {
@@ -94,16 +116,16 @@ pub trait AllocAlignedAtExt: AllocAlignedAt {
                 // SAFETY: allocation returns at least `layout.size() + offset` bytes
                 unsafe {
                     match sector {
-                        AlignedAtSectorDescriptor::Header(b) => {
+                        SectorDescriptor::Header(b) => {
                             ptr::write_bytes(ptr, b, offset);
                         }
-                        AlignedAtSectorDescriptor::Data(b) => {
+                        SectorDescriptor::Data(b) => {
                             ptr::write_bytes(ptr.add(offset), b, act_layout.size() - offset);
                         }
-                        AlignedAtSectorDescriptor::Both(b) => {
+                        SectorDescriptor::Both(b) => {
                             ptr::write_bytes(ptr, b, act_layout.size());
                         }
-                        AlignedAtSectorDescriptor::Separate(h, d) => {
+                        SectorDescriptor::Separate(h, d) => {
                             ptr::write_bytes(ptr, h, offset);
                             ptr::write_bytes(ptr.add(offset), d, act_layout.size() - offset);
                         }
@@ -121,8 +143,7 @@ pub trait AllocAlignedAtExt: AllocAlignedAt {
 /// Which sector of the allocation to fill with what byte.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
-// unfortunately, very verbose name because this gets re-exported at the root. (TOFIX)
-pub enum AlignedAtSectorDescriptor {
+pub enum SectorDescriptor {
     /// Fill the header with the contained byte.
     Header(u8),
     /// Fill the data with the contained byte.

@@ -3,7 +3,7 @@ use {
         Alloc,
         Layout,
         error::{AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr},
-        type_props::{
+        data::type_props::{
             PtrProps,
             SizedProps,
             USIZE_MAX_NO_HIGH_BIT,
@@ -18,54 +18,6 @@ use {
         ptr::{self, NonNull}
     }
 };
-
-// TODO: sort this file
-
-/// Preprocesses a [`Layout`] to get its `Malloc`-compatible form (rounds the alignment up to the
-/// nearest multiple of [`usize::SZ`], AKA `size_of::<*const c_void>()`).
-///
-/// If the layout is already compatible, does nothing.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub fn preproc_layout(layout: Layout) -> Result<Layout, InvLayout> {
-    let sz = layout.size();
-    let align = tri!(do round_to_ptr_align(sz, layout.align()));
-    match crate::unstable_util::lay_from_size_align(sz, align) {
-        Ok(l) => Ok(l),
-        Err(LayoutErr::ExceedsMax) => {
-            AllocError::inv_layout(sz, align, LayoutErr::MallocExceedsMax)
-        }
-        // SAFETY: the only other error which can occur is Align, but since the alignment came from
-        //  a valid layout and round_to_ptr_align cannot make it zero or a non-power-of-two, it will
-        //  still be valid, so that error cannot occur.
-        _ => unsafe { core::hint::unreachable_unchecked() }
-    }
-}
-
-pub(crate) fn round_to_ptr_align(sz: usize, align: usize) -> Result<usize, InvLayout> {
-    let mask = usize::SZ - 1;
-    if align & mask == 0 {
-        return Ok(align);
-    }
-    match checked_op(align, ArithOp::Add, mask) {
-        Ok(v) => Ok(v & !mask),
-        Err(e) => AllocError::inv_layout(sz, align, LayoutErr::MallocOverflow(e))
-    }
-}
-
-/// Converts a reference into a [`NonNull`].
-pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
-    // SAFETY: all references are valid non-null pointers
-    unsafe { NonNull::new_unchecked(r as *const T as *mut T) }
-}
-
-#[cfg(feature = "extern_alloc")]
-/// Helper to convert a NonNull<u8> to a *mut c_void.
-#[allow(dead_code)]
-#[must_use]
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub const fn nonnull_to_void(ptr: NonNull<u8>) -> *mut libc::c_void {
-    ptr.as_ptr().cast::<libc::c_void>()
-}
 
 /// Performs a checked arithmetic operation on two `usize`s.
 ///
@@ -106,9 +58,9 @@ pub fn checked_op_panic(l: usize, op: ArithOp, r: usize) -> usize {
 /// # Panics
 ///
 /// Panics with a generic message if the operation would overflow.
-#[must_use]
 #[allow(unknown_lints)]
 #[allow(clippy::incompatible_msrv)]
+#[must_use]
 pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
     match checked_op(l, op, r) {
         Ok(v) => v,
@@ -130,122 +82,6 @@ pub fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
     match checked_op(l, op, r) {
         Ok(v) => v,
         Err(..) => panic!("An arithmetic operation overflowed")
-    }
-}
-
-/// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
-///
-/// This is intended for initializing the memory and/or mapping the success value to another.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
-    a: &A,
-    layout: Layout,
-    e: E,
-    then: F
-) -> Result<Ret, AllocError> {
-    match a.alloc(layout) {
-        Ok(ptr) => Ok(then(ptr, e)),
-        Err(e) => Err(e)
-    }
-}
-
-const_if! {
-    "const_extras",
-    "Creates a `NonNull<[T]>` from a pointer and a length.\n\nThis is a helper used in place of
-    [`NonNull::slice_from_raw_parts`], which was stabilized after this crate's MSRV.",
-    #[must_use]
-    pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
-        varsized_nonnull_from_raw_parts(p.cast(), len)
-    }
-}
-
-const_if! {
-    "const_extras",
-    "Creates a `*mut [T]` from a pointer and a length.\n\nThis is a helper used in place of \
-    [`ptr::slice_from_raw_parts_mut`], which was const-stabilized after this crate's MSRV.",
-        #[must_use]
-        pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
-            varsized_pointer_from_raw_parts(p.cast(), len)
-        }
-}
-
-const_if! {
-    "const_max",
-    "Returns the length of a [`NonNull`] slice pointer.\n\nThis is a helper used in place of \
-    [`NonNull::len`], which was stabilized after this crate's MSRV.\n\n# Safety\n\nCallers must \
-    ensure `ptr` is aligned and non-dangling.",
-    #[must_use]
-    #[inline]
-    pub const unsafe fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
-        (&*ptr.as_ptr()).len()
-    }
-}
-
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-/// Checks layout for being zero-sized, returning an error if it is, otherwise attempting
-/// allocation using `f(layout)`.
-pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
-    layout: Layout,
-    f: F,
-    nq: fn(*mut T, Layout) -> Result<NonNull<u8>, AllocError>
-) -> Result<NonNull<u8>, AllocError> {
-    zsl_check(layout, |layout: Layout| nq(f(layout), layout))
-}
-
-#[cfg(feature = "os_err_reporting")]
-/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
-///
-/// Currently set to call `null_q_oserr`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-#[allow(dead_code)]
-pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-    null_q_oserr(ptr, layout)
-}
-
-#[cfg(not(feature = "os_err_reporting"))]
-/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
-///
-/// Currently set to call `null_q`.
-#[allow(dead_code)]
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-    null_q(ptr, layout)
-}
-
-#[cfg(feature = "os_err_reporting")]
-/// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-    if ptr.is_null() {
-        Err(AllocError::AllocFailed(layout, Cause::OSErr(std::io::Error::last_os_error())))
-    } else {
-        // SAFETY: we just checked that the pointer is non-null
-        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
-    }
-}
-
-/// Converts a possibly null pointer into a [`NonNull`] result.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-    if ptr.is_null() {
-        Err(AllocError::AllocFailed(layout, Cause::Unknown))
-    } else {
-        // SAFETY: we just checked that the pointer is non-null
-        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
-    }
-}
-
-/// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
-/// result of `f(layout)`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
-    layout: Layout,
-    f: F
-) -> Result<Ret, AllocError> {
-    if layout.size() == 0 {
-        Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
-    } else {
-        f(layout)
     }
 }
 
@@ -277,11 +113,10 @@ pub const unsafe fn align_up_unchecked(sz: usize, align: usize) -> usize {
     (sz + m1) & !m1
 }
 
-/// Returns a valid, dangling [`NonNull`] for the given layout.
-#[must_use]
-pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
-    // SAFETY: Layout guarantees the alignment is a valid power of 2
-    unsafe { dangling_nonnull(layout.align()) }
+/// Converts a reference into a [`NonNull`].
+pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
+    // SAFETY: all references are valid non-null pointers
+    unsafe { NonNull::new_unchecked(r as *const T as *mut T) }
 }
 
 /// Returns a [`NonNull`] which has the given alignment as its address.
@@ -295,15 +130,42 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
     transmute::<NonZeroUsize, NonNull<u8>>(NonZeroUsize::new_unchecked(align))
 }
 
-#[cfg(any(feature = "alloc_slice", feature = "no_alloc"))]
-/// Gets either a valid layout with space for `n` count of `T`, or an
-/// `AllocError::LayoutError(sz, aln)`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
-    match layout_or_sz_align::<T>(n) {
-        Ok(l) => Ok(l),
-        Err((sz, aln, r)) => Err(InvLayout(sz, aln, r))
+/// Returns a valid, dangling [`NonNull`] for the given layout.
+#[must_use]
+pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
+    // SAFETY: Layout guarantees the alignment is a valid power of 2
+    unsafe { dangling_nonnull(layout.align()) }
+}
+
+/// Returns the maximum alignment satisfied by a non-null pointer.
+#[cfg_attr(miri, track_caller)]
+#[must_use]
+#[inline]
+pub fn ptr_max_align(ptr: NonNull<u8>) -> usize {
+    let p = ptr.as_ptr() as usize;
+    p & p.wrapping_neg()
+}
+
+/// Checks if two pointers of to data of size `sz` overlap.
+#[must_use]
+#[inline]
+pub fn check_ptr_overlap(a: NonNull<u8>, b: NonNull<u8>, sz: usize) -> bool {
+    if sz == 0 {
+        return false;
     }
+
+    let a = a.as_ptr() as usize;
+    let b = b.as_ptr() as usize;
+
+    if a <= b { (b - a) < sz } else { (a - b) < sz }
+}
+
+#[cfg(feature = "extern_alloc")]
+/// Helper to convert a NonNull<u8> to a *mut c_void.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[must_use]
+pub const fn nonnull_to_void(ptr: NonNull<u8>) -> *mut libc::c_void {
+    ptr.as_ptr().cast::<libc::c_void>()
 }
 
 /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
@@ -322,6 +184,174 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, La
     // SAFETY: we just validated that a layout with a size of `sz * n` and alignment of `align` will
     //  not overflow.
     unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
+}
+
+#[cfg(any(feature = "alloc_slice", feature = "no_alloc"))]
+/// Gets either a valid layout with space for `n` count of `T`, or an
+/// `AllocError::LayoutError(sz, aln)`.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+pub const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
+    match layout_or_sz_align::<T>(n) {
+        Ok(l) => Ok(l),
+        Err((sz, aln, r)) => Err(InvLayout(sz, aln, r))
+    }
+}
+
+/// Preprocesses a [`Layout`] to get its `Malloc`-compatible form (rounds the alignment up to the
+/// nearest multiple of [`usize::SZ`], AKA `size_of::<*const c_void>()`).
+///
+/// If the layout is already compatible, does nothing.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+pub fn preproc_layout(layout: Layout) -> Result<Layout, InvLayout> {
+    let sz = layout.size();
+    let align = tri!(do round_to_ptr_align(sz, layout.align()));
+    match crate::unstable_util::lay_from_size_align(sz, align) {
+        Ok(l) => Ok(l),
+        Err(LayoutErr::ExceedsMax) => {
+            AllocError::inv_layout(sz, align, LayoutErr::MallocExceedsMax)
+        }
+        // SAFETY: the only other error which can occur is Align, but since the alignment came from
+        //  a valid layout and round_to_ptr_align cannot make it zero or a non-power-of-two, it will
+        //  still be valid, so that error cannot occur.
+        _ => unsafe { core::hint::unreachable_unchecked() }
+    }
+}
+
+pub(crate) fn round_to_ptr_align(sz: usize, align: usize) -> Result<usize, InvLayout> {
+    let mask = usize::SZ - 1;
+    if align & mask == 0 {
+        return Ok(align);
+    }
+    match checked_op(align, ArithOp::Add, mask) {
+        Ok(v) => Ok(v & !mask),
+        Err(e) => AllocError::inv_layout(sz, align, LayoutErr::MallocOverflow(e))
+    }
+}
+
+const_if! {
+    "const_extras",
+    "Creates a `NonNull<[T]>` from a pointer and a length.\n\nThis is a helper used in place of
+    [`NonNull::slice_from_raw_parts`], which was stabilized after this crate's MSRV.",
+    #[must_use]
+    pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
+        varsized_nonnull_from_raw_parts(p.cast(), len)
+    }
+}
+
+const_if! {
+    "const_extras",
+    "Creates a `*mut [T]` from a pointer and a length.\n\nThis is a helper used in place of \
+    [`ptr::slice_from_raw_parts_mut`], which was const-stabilized after this crate's MSRV.",
+    #[must_use]
+    pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
+        varsized_pointer_from_raw_parts(p.cast(), len)
+    }
+}
+
+const_if! {
+    "const_max",
+    "Returns the length of a [`NonNull`] slice pointer.\n\nThis is a helper used in place of \
+    [`NonNull::len`], which was stabilized after this crate's MSRV.\n\n# Safety\n\nCallers must \
+    ensure `ptr` is aligned and non-dangling.",
+    #[must_use]
+    #[inline]
+    pub const unsafe fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
+        (&*ptr.as_ptr()).len()
+    }
+}
+
+// Allocation/Result helpers
+
+/// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
+/// result of `f(layout)`.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
+    layout: Layout,
+    f: F
+) -> Result<Ret, AllocError> {
+    if layout.size() == 0 {
+        Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
+    } else {
+        f(layout)
+    }
+}
+
+#[cfg(feature = "os_err_reporting")]
+/// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    if ptr.is_null() {
+        Err(AllocError::AllocFailed(layout, Cause::OSErr(std::io::Error::last_os_error())))
+    } else {
+        // SAFETY: we just checked that the pointer is non-null
+        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
+    }
+}
+
+/// Converts a possibly null pointer into a [`NonNull`] result.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    if ptr.is_null() {
+        Err(AllocError::AllocFailed(layout, Cause::Unknown))
+    } else {
+        // SAFETY: we just checked that the pointer is non-null
+        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
+    }
+}
+
+#[cfg(feature = "os_err_reporting")]
+/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
+///
+/// Currently set to call `null_q_oserr`.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+#[allow(dead_code)]
+pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    null_q_oserr(ptr, layout)
+}
+
+#[cfg(not(feature = "os_err_reporting"))]
+/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
+///
+/// Currently set to call `null_q`.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(dead_code)]
+pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+    null_q(ptr, layout)
+}
+
+/// Checks layout for being zero-sized, returning an error if it is, otherwise attempting
+/// allocation using `f(layout)`.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
+    layout: Layout,
+    f: F,
+    nq: fn(*mut T, Layout) -> Result<NonNull<u8>, AllocError>
+) -> Result<NonNull<u8>, AllocError> {
+    zsl_check(layout, |layout: Layout| nq(f(layout), layout))
+}
+
+/// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
+///
+/// This is intended for initializing the memory and/or mapping the success value to another.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
+    a: &A,
+    layout: Layout,
+    e: E,
+    then: F
+) -> Result<Ret, AllocError> {
+    match a.alloc(layout) {
+        Ok(ptr) => Ok(then(ptr, e)),
+        Err(e) => Err(e)
+    }
 }
 
 /// A RAII guard that owns a single allocation and ensures it is deallocated unless explicitly
@@ -438,7 +468,7 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// #  helpers::SliceAllocGuard,
 /// #  Alloc,
 /// #  DefaultAlloc,
-/// #  type_props::SizedProps,
+/// #  data::type_props::SizedProps,
 /// #  Layout
 /// # };
 /// # let alloc = DefaultAlloc;
@@ -576,7 +606,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "const_max",
         "Initializes the next element of the slice with `elem`.\n\n# Errors\n\nReturns \
         `Err(elem)` if the slice is at capacity.",
-       #[inline]
+        #[inline]
         pub const fn init(&mut self, elem: T) -> Result<(), T> {
             if self.init == self.full {
                 return Err(elem);
@@ -640,6 +670,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         }
     }
 
+    // TODO: dedup these
     const_if! {
         "const_max",
         "Copies as many elements from `slice` as will fit.\n\nOn success, all elements are \
@@ -674,6 +705,36 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         }
     }
 
+    /// Clones as many elements from `slice` as will fit.
+    ///
+    /// On success, all elements are cloned and `Ok(())` is returned. If
+    /// `slice.len() > remaining_capacity`, it clones as many elements as will fit, advances the
+    /// initialized count to full, and returns `Err(excess)`.
+    ///
+    /// # Errors
+    ///
+    /// `excess` if `slice.len() > remaining_capacity`.
+    pub fn clone_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
+                            where
+                                T: Clone
+    {
+        let lim = self.full - self.init;
+        let to_clone = if slice.len() < lim { slice.len() } else { lim };
+
+        // SAFETY: `self.init` and `to_clone` will disallow oob access unless there was improper
+        //  usage of unsafe setter methods
+        unsafe {
+            for elem in &slice[..to_clone] {
+                self.as_ptr().add(self.init).write(elem.clone());
+                self.init += 1;
+            }
+        }
+
+        self.init += to_clone;
+        let uncloned = slice.len() - to_clone;
+        if uncloned == 0 { Ok(()) } else { Err(uncloned) }
+    }
+
     /// Initializes the next elements of the slice with the elements from `iter`.
     ///
     /// # Errors
@@ -696,8 +757,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
             }
         }
     }
-
-    // TODO: other *_from_slice_* methods
 }
 
 impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {

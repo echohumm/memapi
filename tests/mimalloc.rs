@@ -91,8 +91,8 @@ fn allocations_are_properly_aligned() {
 #[test]
 fn error_reporting_works() {
     use memapi::{
-        error::{AllocError, Cause},
-        type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
+		error::{AllocError, Cause},
+		data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
     };
 
     let alloc = MiMalloc;
@@ -108,7 +108,7 @@ fn error_reporting_works() {
         AllocError::AllocFailed(_, ref c) => match c {
             Cause::Unknown => panic!("unexpected cause: {}", c),
             Cause::OutOfMemory => panic!("how..?"),
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
             Cause::OSErr(e) => println!("{:?}", e)
         },
@@ -123,7 +123,7 @@ fn error_reporting_works() {
         AllocError::AllocFailed(_, ref c) => match c {
             Cause::Unknown => panic!("unexpected cause: {}", c),
             Cause::OutOfMemory => panic!("how..?"),
-            #[cfg(feature = "fallible_dealloc")]
+            #[cfg(feature = "checked_dealloc")]
             Cause::InvalidBlockStatus(_) => panic!("what"),
             Cause::OSErr(e) => println!("{:?}", e)
         },

@@ -1,3 +1,5 @@
+use crate::error::AllocError;
+
 #[cfg(feature = "jemalloc")]
 /// Module for [Jemalloc](https://jemalloc.net/) support.
 pub mod jemalloc;
@@ -9,6 +11,14 @@ pub mod mimalloc;
 #[cfg(feature = "malloc")]
 /// Module for [libc](https://crates.io/crates/libc) malloc support.
 pub mod malloc;
+
+#[allow(clippy::trivially_copy_pass_by_ref, dead_code)]
+pub(crate) fn fals(_: &usize, _: &usize) -> bool { false }
+#[allow(dead_code)]
+pub(crate) fn no_err(_: usize, _: usize) -> AllocError {
+    // SAFETY: this is unreachable because it's guarded by fals
+    unsafe { core::hint::unreachable_unchecked() }
+}
 
 /// FFI bindings to allocation libraries.
 pub mod ffi {
@@ -234,7 +244,6 @@ pub mod ffi {
                     free(ptr.cast());
                 }
                 #[cfg(windows)]
-                #[allow(clippy::used_underscore_binding)]
                 {
                     aligned_free(ptr.cast());
                 }
@@ -391,13 +400,6 @@ pub mod ffi {
             resize_common(ptr, old_layout, new_layout, true, false, fals, no_err)
         }
 
-        #[allow(clippy::trivially_copy_pass_by_ref)]
-        fn fals(_: &usize, _: &usize) -> bool { false }
-        fn no_err(_: usize, _: usize) -> AllocError {
-            // SAFETY: this is unreachable because it's guarded by fals
-            unsafe { core::hint::unreachable_unchecked() }
-        }
-
         #[cfg(unix)] pub use libc::posix_memalign;
         #[cfg(all(target_os = "linux", not(target_env = "ohos")))] pub use libc::reallocarray;
         #[cfg(windows)] pub use libc::{aligned_free, aligned_malloc};
@@ -406,5 +408,7 @@ pub mod ffi {
         pub use libc::{fallocate, fallocate64, memalign, posix_fallocate, posix_fallocate64};
         #[cfg(all(target_os = "linux", not(any(target_env = "musl", target_env = "ohos"))))]
         pub use libc::{malloc_info, malloc_usable_size};
+
+        use crate::external::{fals, no_err};
     }
 }

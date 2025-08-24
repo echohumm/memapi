@@ -3,6 +3,7 @@ use {
         Alloc,
         AllocPattern,
         Layout,
+        data::type_props::SizedProps,
         error::{AllocError, ArithOp},
         grow,
         helpers::{
@@ -12,8 +13,7 @@ use {
             nonnull_slice_len
         },
         ralloc,
-        shrink,
-        type_props::SizedProps
+        shrink
     },
     core::ptr::NonNull
 };
@@ -21,8 +21,6 @@ use {
 // TODO: review usage and make small semantic adjustments, like making functions take
 //  [MaybeUninit<T>] and an extra `init` count instead of just [T] for ease of use.
 // TODO: check docs like did with alloc_ext
-#[cfg(feature = "fallible_dealloc")]
-pub use crate::features::fallible_dealloc::slice::DeallocCheckedSlice;
 
 #[cfg(feature = "alloc_ext")]
 const INSUF_GROW_SRC: AllocError =
@@ -428,7 +426,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         unsafe {
             crate::helpers::alloc_then(
                 self,
-                crate::type_props::PtrProps::layout(&data),
+                crate::data::type_props::PtrProps::layout(&data),
                 data,
                 |p, data| {
                     let mut guard =
@@ -918,7 +916,36 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
             Ok(new_ptr)
         }
     }
+
     // TODO: realloc variants which drop removed elements using truncate
+    /// Placeholder docs
+    #[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
+    unsafe fn resalloc_truncate<T>(
+        &self,
+        ptr: NonNull<[T]>,
+        init: usize,
+        new_len: usize
+    ) -> Result<NonNull<[T]>, AllocError> {
+        self.realloc_truncate_raw(ptr.cast::<T>(), nonnull_slice_len(ptr), init, new_len)
+            .map(|p| nonnull_slice_from_raw_parts(p, new_len))
+    }
+
+    /// Placeholder docs
+    #[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
+    unsafe fn realloc_truncate_raw<T>(
+        &self,
+        ptr: NonNull<T>,
+        len: usize,
+        init: usize,
+        
+        new_len: usize
+    ) -> Result<NonNull<T>, AllocError> {
+        if len > new_len {
+            self.truncate_raw(ptr, len, init, new_len)
+        } else { 
+            self.grow_raw(ptr, len, new_len)
+        }
+    }
 }
 
 #[cfg(feature = "alloc_ext")]

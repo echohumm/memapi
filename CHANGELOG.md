@@ -8,12 +8,13 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Current low-priority to-dos](#current-low-priority-to-dos)
 - [Version 0.18.0](#version-0180)
-  - [Commit 7](#commit-7-2025-8-16-1855)
-  - [Commit 6](#commit-6-2025-8-16-1519)
-  - [Commit 5](#commit-5-2025-8-16-1519)
-  - [Commit 4](#commit-4-2025-8-16-834)
-  - [Commit 3](#commit-3-2025-8-15-2341)
-  - [Commit 2](#commit-2-2025-8-14-1926)
+  - [Commit 8](#commit-8-2025-8-20)
+  - [Commit 7](#commit-7-2025-8-16-1255)
+  - [Commit 6](#commit-6-2025-8-16-919)
+  - [Commit 5](#commit-5-2025-8-16-919)
+  - [Commit 4](#commit-4-2025-8-16-234)
+  - [Commit 3](#commit-3-2025-8-15-1741)
+  - [Commit 2](#commit-2-2025-8-14-1326)
   - [Commit 1](#commit-1-2025-8-13)
 - [Version 0.17.0](#version-0170-2025-8-10)
   - [Commit 2](#commit-2-2025-8-10)
@@ -46,9 +47,9 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 ## Entry format
 
 ```markdown
-## Version <MAJOR>.<MINOR>.<PATCH> [[<META_NOTE>] &| (<PUBLISH_DATE> <PUBLISH_MST_TIME>)]
+## Version <MAJOR>.<MINOR>.<PATCH> [[<META_NOTE>] &| (<PUBLISH_DATE> <PUBLISH_TIME>)]
 
-### Commit <COMMIT_NUMBER> {on release: (<DATE> <MST_TIME>)}
+### Commit <COMMIT_NUMBER> {on release: (<DATE> <TIME>)}
 
 - <CHANGE MESSAGE> [(<NOTE>)
   [- <SUBCHANGE_NOTE>]
@@ -64,12 +65,18 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - Performance and binary size improvements
   - make as many sections as possible `const` [perf]
-  - use helpers for repetitive code [size] (~60% done, maybe?)
+  - use helpers for repetitive code [size]
 - Proper tests for many untested methods and features
 
 ## Version 0.18.0
 
-### Commit 7 (2025-8-16 18:55)
+### Commit 8 (2025-8-20)
+
+- Switch changelog timestamps to UTC
+- Rename `fallible_dealloc` feature to `checked_dealloc`
+- Remove unnecessary `unsafe` blocks
+
+### Commit 7 (2025-8-16 12:55)
 
 i'm almost ready to release this version finally, just need to check that everything is correct
 
@@ -78,7 +85,7 @@ i'm almost ready to release this version finally, just need to check that everyt
 - Formatting
 - Small fixes
 
-### Commit 6 (2025-8-16 15:19)
+### Commit 6 (2025-8-16 9:19)
 
 - Add rustfmt config
 - Add more cold error constructors
@@ -86,7 +93,7 @@ i'm almost ready to release this version finally, just need to check that everyt
 - Add missing `falloc_at` method to `AllocAlignedAt`
 - Add missing `repr(u8)` attrs to some enums
 
-### Commit 5 (2025-8-16 15:19)
+### Commit 5 (2025-8-16 9:19)
 
 - Update README.md
 - Somewhat fix module structure
@@ -96,11 +103,11 @@ i'm almost ready to release this version finally, just need to check that everyt
 - Add tests for `Malloc`
 - Small fixes and improvements
 
-### Commit 4 (2025-8-16 8:34)
+### Commit 4 (2025-8-16 2:34)
 
 - Start working on module structure (WIP)
 
-### Commit 3 (2025-8-15 23:41)
+### Commit 3 (2025-8-15 17:41)
 
 - Remove feature bundles
 - Make compatible with `no_std::no_alloc` with `no_alloc` feature
@@ -112,7 +119,7 @@ i'm almost ready to release this version finally, just need to check that everyt
   functions when `no_alloc` is on
 - Shorten more method names (e.g., `alloc_slice` -> `salloc`, `alloc_copy_slice_to` -> `salloc_copy`)
 
-### Commit 2 (2025-8-14 19:26)
+### Commit 2 (2025-8-14 13:26)
 
 Haven't tested this fully yet
 

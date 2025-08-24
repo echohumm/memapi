@@ -6,12 +6,12 @@
 //! - [`Alloc`]: a trait defining basic allocation, deallocation, grow, and shrink operations.
 //! - [`DefaultAlloc`]: a zero-cost wrapper delegating to the global allocator.
 //! - [`AllocError`]: an enum representing allocation failure cases.
-//! - [`PtrProps`](type_props::PtrProps): property getters for pointers to values.
-//! - [`SizedProps`](type_props::SizedProps): properties for sized types, similar to the unstable,
+//! - [`PtrProps`](data::type_props::PtrProps): property getters for pointers to values.
+//! - [`SizedProps`](data::type_props::SizedProps): properties for sized types, similar to the unstable,
 //!   hidden [`SizedTypeProperties`](core::mem::SizedTypeProperties).
-//! - [`VarSized`](type_props::VarSized): a marker trait for types with `usize` metadata.
-//! - [`UnsizedCopy`](marker::UnsizedCopy): a marker trait for safe copying of unsized values.
-//! - [`Thin`](marker::Thin): a marker trait for pointers without metadata.
+//! - [`VarSized`](data::type_props::VarSized): a marker trait for types with `usize` metadata.
+//! - [`UnsizedCopy`](data::marker::UnsizedCopy): a marker trait for safe copying of unsized values.
+//! - [`Thin`](data::marker::Thin): a marker trait for pointers without metadata.
 //!
 //! # Features
 //!
@@ -38,10 +38,8 @@
 //!     [lockable](stats::WriteLock) writers. (MSRV ≥ 1.61.0)
 //!   - (With `stats_parking_lot`) Usage of [`parking_lot::Mutex`] instead of [`std::sync::Mutex`].
 //!
-//! - **`fallible_dealloc`**: Adds [`DeallocChecked`], a trait for fallible deallocations.
-//!   - (With `alloc_ext`): [`DeallocCheckedExt`], a trait for ergonomic fallible deallocation
-//!     abstractions.
-//!   - (With `alloc_slice`): [`DeallocCheckedSlice`], a trait for slice-based fallible deallocation
+//! - **`fallible_dealloc`**: Adds [`CheckedDealloc`], a trait for fallible deallocations.
+//!   - (With `alloc_slice`): [`CheckedDeallocSlice`], a trait for slice-based fallible deallocation
 //!     extensions.
 //!
 //! - **`alloc_aligned_at`**: Adds [`AllocAlignedAt`](AllocAlignedAt), a trait for allocating such
@@ -71,17 +69,18 @@
 //!
 //! - **`nightly`**: Enables using the unstable `allocator_api`.
 //!
-//! - **`metadata`, `clone_to_uninit`, `specialization`, `sized_hierarchy`**: Enable using the
-//!   nightly Rust feature of the same name.
+//! - **`metadata`, `clone_to_uninit`, `sized_hierarchy`**: Enable using the nightly Rust feature of
+//!   the same name.
 //!
-//! - **`const_panic`**: Enables use of `debug_assert!` and `core::hint::unreachable_unchecked()` in
-//!   certain `const` functions for safety and optimizations. (MSRV ≥ 1.57.0)
+//! - **`assumptions`**: Enables use of `debug_assert!` and `core::hint::unreachable_unchecked()` in
+//!   certain functions to "assume" a condition is true, for safety and optimizations. 
+//!   (MSRV ≥ 1.57.0)
 //!
-//! - **`extra_const`**: Enables additional `const` methods (MSRV ≥ 1.61.0).
+//! - **`const_extras`**: Enables additional `const` methods (MSRV ≥ 1.61.0).
 //!
 //! - **`c_str`**: Implements `UnsizedCopy` for `core::ffi::CStr` (MSRV ≥ 1.64.0).
 //!
-//! - **`extra_extra_const`**: Further expands `const` support (MSRV ≥ 1.83.0).
+//! - **`const_max`**: Further expands `const` support (MSRV ≥ 1.83.0).
 //!
 //! All other features are bindings to `MiMalloc`/`Jemalloc`'s features. Consult their documentation
 //! for more information.
@@ -90,15 +89,12 @@
 
 // TODO: reduce compilation times (see stdlib's versions of our stuff like layout)
 
-// TODO: ensure consistent semantics like with MAXIMUM_GUARANTEED_ALIGNMENT and alignments below the
-//  existing ones
-
 // TODO: add more tests
 
 // TODO: test on other platforms/targets
 
 #![allow(unknown_lints)]
-#![warn(clippy::all, clippy::pedantic, clippy::undocumented_unsafe_blocks)]
+#![warn(clippy::all, clippy::pedantic, clippy::borrow_as_ptr, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
 #![allow(
     unsafe_op_in_unsafe_fn,
@@ -112,14 +108,9 @@
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
-#![cfg_attr(feature = "specialization", feature(min_specialization))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
-// TODO: create fewer scopes (particularly with unsafe)
-
 // TODO: generally add more helpers and dedup to reduce bin size
-
-// TODO: run tests which are cfgd out on no_alloc always
 
 // TODO: add missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
 
@@ -254,18 +245,9 @@ macro_rules! tri {
 
 #[allow(unused_macros)]
 macro_rules! assume {
+    // TODO: dont need both of these if i just remove one's usages
     ($e:expr) => {
-        let res = $e;
-        #[cfg(debug_assertions)]
-        {
-            assert!(res, concat!("assertion failed: ", stringify!($e)));
-        }
-        if !res {
-            core::hint::unreachable_unchecked();
-        }
-    };
-    (const $e:expr) => {
-        #[cfg(feature = "const_panic")]
+        #[cfg(feature = "assumptions")]
         {
             let res = $e;
 
@@ -273,12 +255,37 @@ macro_rules! assume {
             {
                 assert!(res, concat!("assertion failed: ", stringify!($e)));
             }
-            if !res {
-                #[allow(clippy::incompatible_msrv)]
-                core::hint::unreachable_unchecked();
-            }
+            crate::assert_unreachable(res);
         }
     };
+    (u_pre $e:expr, $msg:literal) => {
+        #[cfg(feature = "assumptions")]
+        {
+            let res = $e;
+            #[cfg(debug_assertions)]
+            {
+                assert!(
+                    res,
+                    concat!("unsafe precondition `", stringify!($e), "` violated: ", $msg)
+                );
+            }
+            crate::assert_unreachable(res);
+        }
+    };
+}
+
+/// Asserts a boolean value to be true, and the false condition to be unreachable.
+///
+/// # Safety
+///
+/// This is only safe to call if `cond` is `true`. See
+/// [`unreachable_unchecked`](core::hint::unreachable_unchecked) for more details.
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
+pub const unsafe fn assert_unreachable(cond: bool) {
+    if !cond {
+        #[allow(clippy::incompatible_msrv)]
+        core::hint::unreachable_unchecked();
+    }
 }
 
 // TODO: dedup docs with some macros
@@ -306,26 +313,21 @@ pub mod external;
     feature = "resize_in_place",
     feature = "alloc_aligned_at",
     feature = "stats",
-    feature = "fallible_dealloc",
+    feature = "checked_dealloc",
 ))]
 mod features;
 
-#[cfg(feature = "alloc_aligned_at")] pub use features::alloc_aligned_at::AllocAlignedAt;
-#[cfg(all(feature = "alloc_aligned_at", feature = "alloc_ext"))]
-pub use features::alloc_aligned_at::{AlignedAtSectorDescriptor, AllocAlignedAtExt};
 #[cfg(feature = "alloc_ext")] pub use features::alloc_ext::*;
 #[cfg(feature = "alloc_slice")] pub use features::alloc_slice::*;
+#[cfg(feature = "checked_dealloc")] pub use features::checked_dealloc;
 #[cfg(feature = "resize_in_place")] pub use features::resize_in_place::*;
-#[cfg(any(
-    all(feature = "stats", any(not(feature = "no_alloc"), feature = "malloc_defaultalloc")),
-    feature = "fallible_dealloc"
-))]
-pub use features::*;
+#[cfg(any(feature = "stats", feature = "alloc_aligned_at",))] pub use features::*;
 
-/// Marker traits.
-pub mod marker;
-/// Sized type properties as constants and property getters for pointers.
-pub mod type_props;
+// TODO: better docs and name
+/// Module for anything related specifically to data.
+/// 
+/// This includes marker traits, type properties, and miscellaneous data-handling traits.
+pub mod data;
 
 /// Small alternatives to Rust functions that are unstable as of the most recent release.
 pub mod unstable_util;
@@ -513,6 +515,7 @@ unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
     }
 }
 
+#[cfg(any(not(feature = "no_alloc"), feature = "malloc_defaultalloc"))]
 default_alloc_impl!(DefaultAlloc);
 
 // MAYBEDO: split this trait into multiple:
@@ -825,8 +828,9 @@ impl Alloc for std::alloc::System {
 
 /// Internal helper to grow the allocation at `ptr` by deallocating using `old_layout` and
 /// reallocating using `new_layout`, filling new bytes using `pattern.`
-#[cfg_attr(miri, track_caller)]
+#[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[cfg_attr(miri, track_caller)]
 pub unsafe fn grow<A: Alloc + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
@@ -849,8 +853,9 @@ pub unsafe fn grow<A: Alloc + ?Sized>(
 
 /// Internal helper to shrink the allocation at `ptr` by deallocating using `old_layout` and
 /// reallocating using `new_layout`.
-#[cfg_attr(miri, track_caller)]
+#[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[cfg_attr(miri, track_caller)]
 pub unsafe fn shrink<A: Alloc + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
@@ -932,8 +937,9 @@ unsafe fn shrink_unchecked<A: Alloc + ?Sized>(
 }
 
 /// Helper for realloc to reduce repetition.
-#[cfg_attr(miri, track_caller)]
+#[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[cfg_attr(miri, track_caller)]
 pub unsafe fn ralloc<A: Alloc + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
@@ -957,8 +963,8 @@ pub unsafe fn ralloc<A: Alloc + ?Sized>(
 /// A byte pattern.
 ///
 /// This is used to determine or represent the pattern new bytes will be or were filled with.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[repr(u8)]
 pub enum AllocPattern {
     /// Uninitialized bytes.

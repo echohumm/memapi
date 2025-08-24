@@ -240,13 +240,13 @@ impl crate::ResizeInPlace for MiMalloc {
         new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(crate::features::resize_in_place::RESIZE_IP_ZS)
+            Err(crate::resize_in_place::RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
             Err(AllocError::grow_smaller(old_layout.size(), new_size))
         } else {
             // this would be, though
             if ffi::mi_expand(ptr.as_ptr().cast::<c_void>(), new_size).is_null() {
-                Err(crate::features::resize_in_place::CANNOT_RESIZE_IP)
+                Err(crate::resize_in_place::CANNOT_RESIZE_IP)
             } else {
                 Ok(())
             }
@@ -274,7 +274,7 @@ impl crate::ResizeInPlace for MiMalloc {
 }
 
 #[cfg(feature = "alloc_aligned_at")]
-impl crate::features::alloc_aligned_at::AllocAlignedAt for MiMalloc {
+impl crate::alloc_aligned_at::AllocAlignedAt for MiMalloc {
     fn alloc_at(&self, layout: Layout, offset: usize) -> Result<(NonNull<u8>, Layout), AllocError> {
         zsl_check_alloc(layout, |s, a| unsafe { ffi::mi_malloc_aligned_at(s, a, offset) })
             .map(|ptr| (ptr, layout))
@@ -290,16 +290,16 @@ impl crate::features::alloc_aligned_at::AllocAlignedAt for MiMalloc {
     }
 }
 
-#[cfg(feature = "fallible_dealloc")]
-impl crate::features::fallible_dealloc::DeallocChecked for MiMalloc {
+#[cfg(feature = "checked_dealloc")]
+impl crate::checked_dealloc::CheckedDealloc for MiMalloc {
     fn status(
         &self,
         ptr: NonNull<u8>,
         layout: Layout
-    ) -> crate::features::fallible_dealloc::BlockStatus {
-        use crate::features::fallible_dealloc::BlockStatus;
+    ) -> crate::checked_dealloc::BlockStatus {
+        use crate::checked_dealloc::BlockStatus;
 
-        let align = crate::features::fallible_dealloc::ptr_max_align(ptr);
+        let align = crate::helpers::ptr_max_align(ptr);
 
         if self.owns(ptr) {
             if unsafe {

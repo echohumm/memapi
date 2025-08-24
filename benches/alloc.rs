@@ -4,12 +4,12 @@ extern crate criterion;
 use {
     core::{hint::black_box, time::Duration},
     criterion::{Criterion, criterion_main},
-    memapi::{Alloc, AllocExt, DefaultAlloc, Layout, type_props::SizedProps},
+    memapi::{Alloc, AllocExt, DefaultAlloc, Layout, data::type_props::SizedProps},
     std::ptr
 };
 
 fn bench_alloc_dealloc(c: &mut Criterion) {
-    c.bench_function("allod_dealloc", |b| {
+    c.bench_function("alloc_dealloc", |b| {
         b.iter(|| unsafe {
             let alloc = black_box(DefaultAlloc);
             let layout = black_box(Layout::from_size_align_unchecked(

@@ -23,28 +23,28 @@ fn main() {
     items.push(AllocError::AllocFailed(l2, Cause::OutOfMemory));
 
     // DeallocFailed
-    #[cfg(feature = "fallible_dealloc")]
+    #[cfg(feature = "checked_dealloc")]
     {
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::NotOwned)
+            Cause::InvalidBlockStatus(memapi::checked_dealloc::BlockStatus::NotOwned)
         ));
 
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::OwnedIncomplete(
-                Some(l2)
-            ))
+            Cause::InvalidBlockStatus(memapi::checked_dealloc::BlockStatus::OwnedIncomplete(Some(
+                l2
+            )))
         ));
 
         items.push(AllocError::DeallocFailed(
             dangling,
             l1,
-            Cause::InvalidBlockStatus(memapi::fallible_dealloc::BlockStatus::OwnedMisaligned(
-                Some(1)
-            ))
+            Cause::InvalidBlockStatus(memapi::checked_dealloc::BlockStatus::OwnedMisaligned(Some(
+                1
+            )))
         ));
     }
 

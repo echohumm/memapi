@@ -1,14 +1,15 @@
 // genuinely no clue how to doc these unsafe blocks
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+
 use {
     crate::{
         Alloc,
         Layout,
         error::AllocError,
-        external::ffi::jem as ffi,
+        external::{fals, ffi::jem as ffi, no_err},
         helpers::{nonnull_to_void, null_q_dyn, null_q_zsl_check}
     },
-    core::ptr::NonNull,
+    core::{ptr, ptr::NonNull},
     libc::c_void
 };
 
@@ -24,32 +25,36 @@ macro_rules! assume {
     };
 }
 
-// TODO: make consistent with malloc's method
-unsafe fn resize<F: Fn() -> *mut c_void>(
-    ralloc: F,
+unsafe fn resize_common(
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    is_grow: bool,
-    nq: fn(*mut c_void, Layout) -> Result<NonNull<u8>, AllocError>
+    zero_tail: bool,
+    check_size: fn(&usize, &usize) -> bool,
+    inv_size_err: fn(usize, usize) -> AllocError
 ) -> Result<NonNull<u8>, AllocError> {
+    let old_size = old_layout.size();
+    let new_size = new_layout.size();
     let new_align = new_layout.align();
     let old_align = old_layout.align();
 
-    let old_size = old_layout.size();
-    let new_size = new_layout.size();
+    let same_align = old_align == new_align;
 
-    if new_size == old_size && new_align == old_align {
+    if same_align && old_size == new_size {
         return Ok(ptr);
-    } else if is_grow {
-        if new_size < old_size {
-            return Err(AllocError::grow_smaller(old_size, new_size));
-        }
-    } else if new_size > old_size {
-        return Err(AllocError::shrink_larger(old_size, new_size));
+    } else if check_size(&old_size, &new_size) {
+        return Err(inv_size_err(old_size, new_size));
     }
 
-    nq(ralloc(), new_layout)
+    let p = tri!(
+        do null_q_dyn(raw_ralloc(ptr, old_layout, new_layout), new_layout)
+    );
+    if zero_tail && new_size > old_size {
+        ptr::write_bytes(p.as_ptr().add(old_size), 0, new_size.saturating_sub(old_size));
+    }
+
+    dealloc(ptr.as_ptr(), old_layout);
+    Ok(p)
 }
 
 /// Handle to the Jemalloc allocator. This type implements the [`GlobalAlloc`] trait, allowing use
@@ -60,12 +65,9 @@ pub struct Jemalloc;
 fn alloc(layout: Layout) -> *mut c_void {
     unsafe {
         assume!(layout.size() != 0);
-    }
-    let flags = ffi::layout_to_flags(layout.size(), layout.align());
-    if flags == 0 {
-        unsafe { ffi::malloc(layout.size()) }
-    } else {
-        unsafe { ffi::mallocx(layout.size(), flags) }
+
+        let flags = ffi::layout_to_flags(layout.size(), layout.align());
+        if flags == 0 { ffi::malloc(layout.size()) } else { ffi::mallocx(layout.size(), flags) }
     }
 }
 
@@ -149,13 +151,29 @@ impl Alloc for Jemalloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
-        resize(
-            || raw_ralloc(ptr, old_layout, new_layout),
+        resize_common(
+            ptr,
+            old_layout,
+            new_layout,
+            false,
+            core::cmp::PartialOrd::gt,
+            AllocError::grow_smaller
+        )
+    }
+
+    unsafe fn zgrow(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, AllocError> {
+        resize_common(
             ptr,
             old_layout,
             new_layout,
             true,
-            null_q_dyn
+            core::cmp::PartialOrd::gt,
+            AllocError::grow_smaller
         )
     }
 
@@ -165,13 +183,13 @@ impl Alloc for Jemalloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
-        resize(
-            || raw_ralloc(ptr, old_layout, new_layout),
+        resize_common(
             ptr,
             old_layout,
             new_layout,
             false,
-            null_q_dyn
+            core::cmp::PartialOrd::lt,
+            AllocError::shrink_larger
         )
     }
 
@@ -182,7 +200,16 @@ impl Alloc for Jemalloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, AllocError> {
-        null_q_dyn(raw_ralloc(ptr, old_layout, new_layout), new_layout)
+        resize_common(ptr, old_layout, new_layout, false, fals, no_err)
+    }
+
+    unsafe fn rezalloc(
+        &self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, AllocError> {
+        resize_common(ptr, old_layout, new_layout, true, fals, no_err)
     }
 }
 
@@ -195,7 +222,7 @@ impl crate::ResizeInPlace for Jemalloc {
         new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(crate::features::resize_in_place::RESIZE_IP_ZS)
+            Err(crate::resize_in_place::RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
             Err(AllocError::grow_smaller(old_layout.size(), new_size))
         } else {
@@ -209,7 +236,7 @@ impl crate::ResizeInPlace for Jemalloc {
             {
                 Ok(())
             } else {
-                Err(crate::features::resize_in_place::CANNOT_RESIZE_IP)
+                Err(crate::resize_in_place::CANNOT_RESIZE_IP)
             }
         }
     }
@@ -221,7 +248,7 @@ impl crate::ResizeInPlace for Jemalloc {
         new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(crate::features::resize_in_place::RESIZE_IP_ZS)
+            Err(crate::resize_in_place::RESIZE_IP_ZS)
         } else if new_size > old_layout.size() {
             Err(AllocError::shrink_larger(old_layout.size(), new_size))
         } else if new_size == old_layout.size() {
@@ -229,7 +256,7 @@ impl crate::ResizeInPlace for Jemalloc {
             Ok(())
         } else {
             let flags = ffi::layout_to_flags(new_size, old_layout.align());
-            let usable_size = ffi::xallocx(ptr.as_ptr().cast::<libc::c_void>(), new_size, 0, flags);
+            let usable_size = ffi::xallocx(ptr.as_ptr().cast::<c_void>(), new_size, 0, flags);
 
             if usable_size < old_layout.size() {
                 Ok(())
@@ -242,7 +269,7 @@ impl crate::ResizeInPlace for Jemalloc {
                 Ok(())
             } else {
                 // is this even possible?
-                Err(crate::features::resize_in_place::CANNOT_RESIZE_IP)
+                Err(crate::resize_in_place::CANNOT_RESIZE_IP)
             }
         }
     }

@@ -1,7 +1,7 @@
 use crate::{
     Layout,
     error::{AlignErr, LayoutErr},
-    type_props::USIZE_HIGH_BIT
+    data::type_props::USIZE_HIGH_BIT
 };
 
 #[cfg(feature = "metadata")]
@@ -18,6 +18,11 @@ pub const fn with_meta_const<T: ?Sized, U: ?Sized>(ptr: *const T, meta: *const U
     core::ptr::from_raw_parts(ptr.cast::<()>(), core::ptr::metadata(meta))
 }
 
+/// Creates a [`Layout`] from the given size and alignment after checking their validity.
+///
+/// # Errors
+///
+/// See [`check_lay`].
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 pub const fn lay_from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
     tri!(do check_lay(size, align));
@@ -26,6 +31,15 @@ pub const fn lay_from_size_align(size: usize, align: usize) -> Result<Layout, La
     Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
 }
 
+/// Checks the validity of a size and alignment for being used in a [`Layout`]
+///
+/// # Errors
+///
+/// - [`LayoutErr::Align`]`(`[`AlignErr::ZeroAlign`]`)` if `align == 0`.
+/// - [`LayoutErr::Align`]`(`[`AlignErr::NonPowerOfTwoAlign`]`)` if `!align.is_power_of_two`.
+/// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` would be
+///   greater than
+///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 pub const fn check_lay(size: usize, align: usize) -> Result<(), LayoutErr> {
     if align == 0 {

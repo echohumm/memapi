@@ -82,23 +82,20 @@ memapi = "0.15.0"
 
 ## Benchmarks
 
+Performance on my device (Ryzen 7745HX, 16 GB RAM, Linux Zen 6.16.1)
+
 | Benchmark               | Base (ns) | Crate (ns) |  Ratio  |     Δ vs base |
 |-------------------------|----------:|-----------:|:-------:|--------------:|
 | alloc                   |    4.2217 |     4.3979 | 1.0417× |  4.17% slower |
-| alloc_default<u64>      |    3.9590 |     4.4648 | 1.1277× | 12.77% slower |
-| alloc_write<u128>       |    7.5617 |     4.2021 | 0.5557× | 44.43% faster |
 | alloc_filled_1k         |   23.2630 |    28.5900 | 1.2288× | 22.88% slower |
 | grow_filled_1k_to_4k    |  104.9400 |    93.9140 | 0.8950× | 10.50% faster |
 | realloc_filled_4k_to_1k |   81.0100 |    72.2300 | 0.8918× | 10.82% faster |
-| dealloc_typed<usize>    |    4.1694 |     4.5512 | 1.0916× |  9.16% slower |
-| zero_and_dealloc_8k     |  102.8900 |   151.5100 | 1.4727× | 47.27% slower |
 
 ### Notes
 
-- Numbers are medians reported by Criterion as can be seen in [bench.rs](./benches/bench.rs).
+- Numbers are medians reported by Criterion as can be seen in [alloc.rs](./benches/alloc.rs).
 - Ratios < 1.0 mean the crate is faster than the base; > 1.0 means slower.
-- Any faster results are most likely error. I tried to use `black_box` everywhere to minimize optimizer tomfoolery, but
-  this is inevitable.
+- Any faster results are most likely error. Slower may be due to a number of factors.
 
 ---
 
@@ -182,9 +179,11 @@ memapi = "0.15.0"
 
 [//]: # (* `UnsizedCopy` – Marker trait for safely copying raw memory)
 
-[//]: # (* `SizedProps` – Compile-time constants &#40;`SZ`, `ALIGN`, `LAYOUT`, `IS_ZST`, `MAX_SLICE_LEN`&#41; for sized types)
+[//]: # (* `SizedProps` – Compile-time constants &#40;`SZ`, `ALIGN`, `LAYOUT`, `IS_ZST`, `MAX_SLICE_LEN`&#41; for sized
+ types)
 
-[//]: # (* `PtrProps<T: ?Sized>` – Query size, alignment, layout, ZST-status, max slice length, and metadata of pointers)
+[//]: # (* `PtrProps<T: ?Sized>` – Query size, alignment, layout, ZST-status, max slice length, and metadata of 
+ pointers)
 
 [//]: # ()
 

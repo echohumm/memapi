@@ -6,16 +6,15 @@ use {
     }
 };
 
-#[cfg(feature = "alloc_slice")] pub(crate) mod slice;
-
 /// A trait for allocators to attempt deallocation.
-pub trait DeallocChecked: Alloc {
+pub trait CheckedDealloc: Alloc {
     /// Attempts to deallocate a previously allocated block.
     ///
     /// # Errors
     ///
     /// Implementations may return `Err` on deallocation failure, when the provided block is
     /// [invalid](BlockStatus), or if the provided layout is zero-sized.
+    #[cfg_attr(miri, track_caller)]
     fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), AllocError> {
         // SAFETY: the pointer is owned by us, and the layout is valid and non-zero-sized.
         base_try_dealloc_impl(self, ptr, layout, |d, p, l| unsafe {
@@ -31,25 +30,35 @@ pub trait DeallocChecked: Alloc {
 }
 
 #[allow(clippy::inline_always)]
-impl<D: DeallocChecked + ?Sized> DeallocChecked for &D {
+impl<D: CheckedDealloc + ?Sized> CheckedDealloc for &D {
+    #[cfg_attr(miri, track_caller)]
     #[inline(always)]
     fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), AllocError> {
         (**self).try_dealloc(ptr, layout)
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline(always)]
     fn status(&self, ptr: NonNull<u8>, layout: Layout) -> BlockStatus {
         (**self).status(ptr, layout)
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline(always)]
     fn owns(&self, ptr: NonNull<u8>) -> bool { (**self).owns(ptr) }
 }
 
+/// Checks the validity of the given allocation relative to `d`, then runs `succ`.
+///
+/// # Errors
+///
+/// [`AllocError::DeallocFailed`] if the provided allocation's data is invalid.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
+#[cfg_attr(miri, track_caller)]
 pub fn base_try_dealloc_impl<
     T: ?Sized,
-    D: DeallocChecked + ?Sized,
+    D: CheckedDealloc + ?Sized,
     F: FnOnce(&D, NonNull<T>, Layout)
 >(
     d: &D,
@@ -66,15 +75,6 @@ pub fn base_try_dealloc_impl<
         }
         other => AllocError::dealloc_failed(p, layout, other)
     }
-}
-
-/// Returns the maximum alignment satisfied by a non-null pointer.
-#[must_use]
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub fn ptr_max_align(ptr: NonNull<u8>) -> usize {
-    let p = ptr.as_ptr() as usize;
-
-    p & p.wrapping_neg()
 }
 
 /// The status of a block.
@@ -159,3 +159,30 @@ impl Display for BlockStatus {
         }
     }
 }
+
+#[cfg(feature = "alloc_slice")]
+/// Slice-specific extension methods for [`CheckedDealloc`].
+#[allow(clippy::module_name_repetitions)]
+pub trait CheckedDeallocSlice: CheckedDealloc {
+    /// Attempts to deallocate a previously allocated block.
+    ///
+    /// # Errors
+    ///
+    /// Implementations may return `Err` on deallocation failure, when the provided block is
+    /// [invalid](super::BlockStatus), or if the provided layout is zero-sized.
+    #[cfg_attr(miri, track_caller)]
+    fn try_dealloc_n<T>(&self, ptr: NonNull<T>, n: usize) -> Result<(), AllocError> {
+        let sz = tri!(AllocError::ArithmeticOverflow(crate::helpers::checked_op(
+            <T as crate::data::type_props::SizedProps>::SZ,
+            crate::error::ArithOp::Mul,
+            n
+        )));
+        self.try_dealloc(
+            ptr.cast::<u8>(),
+            tri!(lay, sz, <T as crate::data::type_props::SizedProps>::ALN)
+        )
+    }
+}
+
+#[cfg(feature = "alloc_slice")]
+impl<A: CheckedDealloc + ?Sized> CheckedDeallocSlice for A {}

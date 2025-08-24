@@ -22,7 +22,6 @@ unsafe impl UnsizedCopy for std::ffi::OsStr {}
 // SAFETY: `Path == OsStr == [u8]`
 unsafe impl UnsizedCopy for std::path::Path {}
 
-// TODO: add derive macros or smth for these
 // TODO: better solution than making them all unsafe
 
 #[cfg(all(not(feature = "metadata"), not(feature = "sized_hierarchy")))]
@@ -37,7 +36,10 @@ unsafe impl UnsizedCopy for std::path::Path {}
 /// # Example
 ///
 /// ```
-/// # use memapi::{type_props::SizedProps, marker::Thin};
+/// # use memapi::data::{
+/// # marker::Thin,
+/// # type_props::SizedProps
+/// # };
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -52,14 +54,14 @@ pub unsafe trait Thin {}
 ///
 /// # Safety
 ///
-/// This is safe to implement in this configuration; however, because the actually-unsafe
+/// This is safe to implement in this configuration; however, because the actually unsafe
 /// version exists when both `metadata` and `sized_hierarchy` are disabled, this trait
 /// must still be marked `unsafe` for consistency across configurations.
 ///
 /// # Example
 ///
 /// ```
-/// # use memapi::{type_props::SizedProps, marker::Thin};
+/// # use memapi::{data::type_props::SizedProps, data::marker::Thin};
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -72,14 +74,14 @@ pub unsafe trait Thin: core::ptr::Pointee<Metadata = ()> {}
 ///
 /// # Safety
 ///
-/// This is safe to implement in this configuration; however, because the actually-unsafe
+/// This is safe to implement in this configuration; however, because the actually unsafe
 /// version exists when both `metadata` and `sized_hierarchy` are disabled, this trait
 /// must still be marked `unsafe` for consistency across configurations.
 ///
 /// # Example
 ///
 /// ```
-/// # use memapi::{type_props::SizedProps, marker::Thin};
+/// # use memapi::{data::type_props::SizedProps, data::marker::Thin};
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -100,7 +102,7 @@ pub unsafe trait Thin:
 /// # Example
 ///
 /// ```
-/// # use memapi::{type_props::SizedProps, marker::SizeMeta};
+/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -118,7 +120,7 @@ pub unsafe trait SizeMeta {}
 /// # Example
 ///
 /// ```
-/// # use memapi::{type_props::SizedProps, marker::SizeMeta};
+/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -131,14 +133,14 @@ pub unsafe trait SizeMeta: core::marker::MetaSized {}
 ///
 /// # Safety
 ///
-/// This is safe to implement in this configuration; however, because the actually-unsafe version
+/// This is safe to implement in this configuration; however, because the actually unsafe version
 /// exists when `metadata` is disabled, this trait must still be marked `unsafe` for consistency
 /// across configurations.
 ///
 /// # Example
 ///
 /// ```
-/// # use memapi::{type_props::SizedProps, marker::SizeMeta};
+/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -151,14 +153,14 @@ pub unsafe trait SizeMeta: core::ptr::Pointee<Metadata = usize> {}
 ///
 /// # Safety
 ///
-/// This is safe to implement in this configuration; however, because the actually-unsafe version
+/// This is safe to implement in this configuration; however, because the actually unsafe version
 /// exists when `metadata` is disabled, this trait must still be marked `unsafe` for consistency
 /// across configurations.
 ///
 /// # Example
 ///
 /// ```
-/// # use memapi::{type_props::SizedProps, marker::SizeMeta};
+/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ * 2)

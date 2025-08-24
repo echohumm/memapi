@@ -4,7 +4,7 @@ version = "0.17.0"
 edition = "2018"
 rust-version = "1.56.0"
 authors = ["echohumm"]
-description = "A no_std-friendly memory allocation interface for raw buffers, with improved error reporting."
+description = "A no_std/no-alloc-friendly memory allocation interface for raw buffers, with improved error reporting."
 readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/echohumm/memapi"
@@ -52,7 +52,7 @@ incremental = false
 
 
 [features]
-default = ["const_panic"]
+default = ["assumptions"]
 
 # meta features
 dev = []
@@ -61,8 +61,8 @@ malloc_defaultalloc = ["extern_alloc"]
 
 # msrv-changing features
 ## that make small changes
-const_panic = []
-const_extras = []
+assumptions = []
+const_extras = ["assumptions"]
 const_max = ["const_extras"]
 c_str = []
 
@@ -75,11 +75,10 @@ nightly = []
 metadata = ["nightly"]
 sized_hierarchy = ["nightly"]
 clone_to_uninit = ["nightly"]
-specialization = ["nightly"]
 
-all_nightly = ["metadata", "clone_to_uninit", "specialization"]
+all_nightly = ["metadata", "clone_to_uninit"]
 
-default_nightly = ["metadata", "clone_to_uninit", "specialization"]
+default_nightly = ["metadata", "clone_to_uninit"]
 
 # std support
 std = []
@@ -89,12 +88,14 @@ std_libc = ["std", "libc/std"]
 os_err_reporting = ["std"]
 
 # main extensions
-fallible_dealloc = []
+checked_dealloc = []
 alloc_aligned_at = []
 
 alloc_ext = []
 alloc_slice = []
 resize_in_place = []
+
+misc_traits = []
 
 # stats
 stats = []
@@ -111,6 +112,23 @@ malloc = ["extern_alloc"]
 mimalloc_err_reporting = ["mimalloc", "mim_dbg", "os_err_reporting"]
 mimalloc_global_err = ["mimalloc_err_reporting"]
 mimalloc_err_output = ["mimalloc_err_reporting"]
+
+full = [
+    "mimalloc_global_err",
+    "jemalloc",
+    "malloc",
+    "stats_parking_lot",
+    "stats_file_lock",
+    "stats_thread_safe_io",
+    "alloc_ext",
+    "alloc_slice",
+    "resize_in_place",
+    "misc_traits",
+    "alloc_aligned_at",
+    "checked_dealloc",
+    "const_max",
+    "c_str"
+]
 
 # jemalloc feature bindings
 jem_bg_threads_rt = ["memapi-jemalloc-sys/background_threads_runtime_support"]
@@ -206,12 +224,20 @@ either = "=1.13.0"
 os_str_bytes = "=6.1.0"
 unicode-width = "=0.1.12"
 
+
+
 [[bench]]
 # MSRV 1.66.0 bc of black_box
-name = "bench"
-path = "benches/bench.rs"
+name = "base"
+path = "benches/alloc.rs"
 harness = false
 required-features = ["alloc_ext"]
+
+[[bench]]
+name = "jem"
+path = "benches/jemalloc.rs"
+harness = false
+required-features = ["jemalloc"]
 
 
 
