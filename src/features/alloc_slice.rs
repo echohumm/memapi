@@ -1,21 +1,15 @@
 use {
     crate::{
-        Alloc,
-        AllocPattern,
-        Layout,
+        Alloc, AllocPattern, Layout,
         data::type_props::SizedProps,
         error::{AllocError, ArithOp},
         grow,
         helpers::{
-            checked_op_panic,
-            layout_or_err,
-            nonnull_slice_from_raw_parts,
-            nonnull_slice_len
+            checked_op_panic, layout_or_err, nonnull_slice_from_raw_parts, nonnull_slice_len,
         },
-        ralloc,
-        shrink
+        ralloc, shrink,
     },
-    core::ptr::NonNull
+    core::ptr::NonNull,
 };
 
 // TODO: review usage and make small semantic adjustments, like making functions take
@@ -76,7 +70,7 @@ unsafe fn fill_new_elems_with<T, A: Alloc + ?Sized, F: Fn(usize) -> T>(
     p: NonNull<T>,
     len: usize,
     new_len: usize,
-    f: F
+    f: F,
 ) -> NonNull<T> {
     let mut guard = crate::helpers::SliceAllocGuard::new_with_init(p, a, len, new_len);
 
@@ -88,14 +82,10 @@ unsafe fn fill_new_elems_with<T, A: Alloc + ?Sized, F: Fn(usize) -> T>(
 
 /// Small helper to allocate a slice using a given allocation function.
 #[cfg_attr(miri, track_caller)]
-pub(crate) fn alloc_slice<
-    T,
-    A: Alloc + ?Sized,
-    F: Fn(&A, Layout) -> Result<NonNull<u8>, AllocError>
->(
+fn alloc_slice<T, A: Alloc + ?Sized, F: Fn(&A, Layout) -> Result<NonNull<u8>, AllocError>>(
     a: &A,
     len: usize,
-    alloc: F
+    alloc: F,
 ) -> Result<NonNull<[T]>, AllocError> {
     alloc(a, tri!(AllocError::InvalidLayout(layout_or_err::<T>(len))))
         .map(|ptr| nonnull_slice_from_raw_parts(ptr.cast(), len))
@@ -142,7 +132,7 @@ pub trait AllocSlice: Alloc {
         // Here, we assume the layout is valid as it was presumably used to allocate previously.
         self.dealloc(
             ptr.cast(),
-            Layout::from_size_align_unchecked(checked_op_panic(T::SZ, ArithOp::Mul, n), T::ALN)
+            Layout::from_size_align_unchecked(checked_op_panic(T::SZ, ArithOp::Mul, n), T::ALN),
         );
     }
 
@@ -163,7 +153,7 @@ pub trait AllocSlice: Alloc {
     unsafe fn sgrow<T>(
         &self,
         slice: NonNull<[T]>,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.grow_raw(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -191,7 +181,7 @@ pub trait AllocSlice: Alloc {
         &self,
         ptr: NonNull<T>,
         len: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         realloc!(grow, self, ptr, len, new_len, T, Uninitialized)
     }
@@ -212,7 +202,7 @@ pub trait AllocSlice: Alloc {
     unsafe fn zsgrow<T>(
         &self,
         slice: NonNull<[T]>,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.zgrow_raw(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -237,7 +227,7 @@ pub trait AllocSlice: Alloc {
         &self,
         ptr: NonNull<T>,
         len: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         realloc!(grow, self, ptr, len, new_len, T, Zeroed)
     }
@@ -258,7 +248,7 @@ pub trait AllocSlice: Alloc {
     unsafe fn shrink_slice<T>(
         &self,
         slice: NonNull<[T]>,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.shrink_raw(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -283,7 +273,7 @@ pub trait AllocSlice: Alloc {
         &self,
         ptr: NonNull<T>,
         len: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         realloc!(shrink, self, ptr, len, new_len, T)
     }
@@ -305,7 +295,7 @@ pub trait AllocSlice: Alloc {
     unsafe fn resalloc<T>(
         &self,
         slice: NonNull<[T]>,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.realloc_raw(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -332,7 +322,7 @@ pub trait AllocSlice: Alloc {
         &self,
         ptr: NonNull<T>,
         len: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         realloc!(ralloc, self, ptr, len, new_len, T, Uninitialized)
     }
@@ -356,7 +346,7 @@ pub trait AllocSlice: Alloc {
     unsafe fn rezsalloc<T>(
         &self,
         slice: NonNull<[T]>,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.rezalloc_raw(slice.cast::<T>(), nonnull_slice_len(slice), new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -385,7 +375,7 @@ pub trait AllocSlice: Alloc {
         &self,
         ptr: NonNull<T>,
         len: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         realloc!(ralloc, self, ptr, len, new_len, T, Zeroed)
     }
@@ -435,7 +425,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
                         guard.init_unchecked(elem.clone());
                     }
                     guard.release()
-                }
+                },
             )
         }
     }
@@ -452,7 +442,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     fn salloc_with<T, F: Fn(usize) -> T>(
         &self,
         len: usize,
-        f: F
+        f: F,
     ) -> Result<NonNull<[T]>, AllocError> {
         // SAFETY: we just allocated the slice using `self` with space for at least `len` elements
         crate::helpers::alloc_then(
@@ -465,7 +455,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
                     guard.init_unchecked(f(i));
                 }
                 guard.release()
-            }
+            },
         )
     }
 
@@ -486,7 +476,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-        n: u8
+        n: u8,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.fgrow_raw(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -512,7 +502,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-        n: u8
+        n: u8,
     ) -> Result<NonNull<T>, AllocError> {
         realloc!(grow, self, ptr, len, new_len, T, Filled(n))
     }
@@ -535,7 +525,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-        f: F
+        f: F,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.grow_raw_with(slice.cast::<T>(), nonnull_slice_len(slice), new_len, f)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -562,14 +552,15 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-        f: F
+        f: F,
     ) -> Result<NonNull<T>, AllocError> {
         match self.grow_raw(ptr, len, new_len) {
             Ok(p) => Ok(fill_new_elems_with(&self, p, len, new_len, f)),
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 
+    //noinspection LongLine
     /// Grows a slice to a new length and clones elements from `src` into the newly allocated
     /// region.
     ///
@@ -584,25 +575,25 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice has a size of zero.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < slice.len()`.
-    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
-    ///   `src_len < new_len - len`.
+    /// - <code>[AllocError::Other]("source slice length is insufficient to fill new elements")</code> if `src_len < new_len - len`.
     #[track_caller]
     unsafe fn sgrow_clone_from<T: Clone>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-        src: NonNull<[T]>
+        src: NonNull<[T]>,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.grow_raw_clone_from(
             slice.cast::<T>(),
             nonnull_slice_len(slice),
             new_len,
             src.cast::<T>(),
-            nonnull_slice_len(src)
+            nonnull_slice_len(src),
         )
         .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
+    //noinspection LongLine
     /// Grows a slice to a new length given the pointer to its first element, current length,
     /// and requested length, then clones elements from `src` into the newly allocated region.
     ///
@@ -618,8 +609,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_len < len`.
-    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
-    ///   `src_len < new_len - len`.
+    /// - <code>[AllocError::Other]("source slice length is insufficient to fill new elements")</code> if `src_len < new_len - len`.
     #[track_caller]
     unsafe fn grow_raw_clone_from<T: Clone>(
         &self,
@@ -628,7 +618,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         new_len: usize,
 
         src: NonNull<T>,
-        src_len: usize
+        src_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         if new_len == len {
             return Ok(ptr);
@@ -643,7 +633,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
             tri!(do self.grow_raw(ptr, len, new_len)),
             self,
             len,
-            new_len
+            new_len,
         );
 
         for i in 0..to_add {
@@ -653,6 +643,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         Ok(guard.release_first())
     }
 
+    //noinspection LongLine
     /// Shrinks a slice to a new length, dropping any removed elements.
     ///
     /// # Safety
@@ -665,19 +656,19 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::Other`]`("attempted to truncate a slice to a larger size")` if `new_len >
-    ///   slice.len()`.
+    /// - <code>[AllocError::Other]("attempted to truncate a slice to a larger size")</code> if `new_len > slice.len()`.
     #[cfg_attr(miri, track_caller)]
     unsafe fn truncate<T>(
         &self,
         slice: NonNull<[T]>,
         init: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.truncate_raw(slice.cast::<T>(), nonnull_slice_len(slice), init, new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
+    //noinspection LongLine
     /// Shrinks a slice to a new length given the pointer to its first element, current length, and
     /// requested length. This drops any removed elements.
     ///
@@ -692,15 +683,14 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::Other`]`("attempted to truncate a slice to a larger size")` if `new_len >
-    ///   len`.
+    /// - <code>[AllocError::Other]("attempted to truncate a slice to a larger size")</code> if `new_len > len`.
     #[track_caller]
     unsafe fn truncate_raw<T>(
         &self,
         ptr: NonNull<T>,
         len: usize,
         init: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         if new_len > len {
             return Err(AllocError::Other("attempted to truncate a slice to a larger size"));
@@ -710,7 +700,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
             let to_drop = init - new_len;
             core::ptr::drop_in_place(crate::helpers::slice_ptr_from_raw_parts(
                 ptr.as_ptr().add(new_len),
-                to_drop
+                to_drop,
             ));
         }
 
@@ -735,7 +725,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-        n: u8
+        n: u8,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.refalloc_raw(slice.cast::<T>(), nonnull_slice_len(slice), new_len, n)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -762,7 +752,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-        n: u8
+        n: u8,
     ) -> Result<NonNull<T>, AllocError> {
         realloc!(ralloc, self, ptr, len, new_len, T, Filled(n))
     }
@@ -787,7 +777,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-        f: F
+        f: F,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.realloc_raw_with(slice.cast::<T>(), nonnull_slice_len(slice), new_len, f)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -816,7 +806,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         ptr: NonNull<T>,
         len: usize,
         new_len: usize,
-        f: F
+        f: F,
     ) -> Result<NonNull<T>, AllocError> {
         match self.realloc_raw(ptr, len, new_len) {
             Ok(p) => {
@@ -826,10 +816,11 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
                     Ok(p)
                 }
             }
-            Err(e) => Err(e)
+            Err(e) => Err(e),
         }
     }
 
+    //noinspection LongLine
     /// Reallocates a slice to a new length and clones elements from `src` into any newly allocated
     /// region.
     ///
@@ -847,25 +838,25 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
-    ///   `src_len < new_len - len`.
+    /// - <code>[AllocError::Other]("source slice length is insufficient to fill new elements")</code> if `src_len < new_len - len`.
     #[track_caller]
     unsafe fn resalloc_clone_from<T: Clone>(
         &self,
         slice: NonNull<[T]>,
         new_len: usize,
-        src: NonNull<[T]>
+        src: NonNull<[T]>,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.realloc_raw_clone_from(
             slice.cast::<T>(),
             nonnull_slice_len(slice),
             new_len,
             src.cast::<T>(),
-            nonnull_slice_len(src)
+            nonnull_slice_len(src),
         )
         .map(|p| nonnull_slice_from_raw_parts(p, new_len))
     }
 
+    //noinspection LongLine
     /// Reallocates a slice to a new length given the pointer to its first element, current length,
     /// and requested length, then clones elements from `src` into any newly allocated region.
     ///
@@ -884,8 +875,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::InvalidLayout`] if the computed layout is invalid.
     /// - [`AllocError::ZeroSizedLayout`] if the computed slice would be zero-sized.
-    /// - [`AllocError::Other`]`("source slice length is insufficient to fill new elements")` if
-    ///   `src_len < new_len - len`.
+    /// - <code>[AllocError::Other]("source slice length is insufficient to fill new elements")</code> if `src_len < new_len - len`.
     #[track_caller]
     unsafe fn realloc_raw_clone_from<T: Clone>(
         &self,
@@ -894,7 +884,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         new_len: usize,
 
         src: NonNull<T>,
-        src_len: usize
+        src_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         let new_ptr = tri!(do self.realloc_raw(ptr, len, new_len));
 
@@ -924,7 +914,7 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         &self,
         ptr: NonNull<[T]>,
         init: usize,
-        new_len: usize
+        new_len: usize,
     ) -> Result<NonNull<[T]>, AllocError> {
         self.realloc_truncate_raw(ptr.cast::<T>(), nonnull_slice_len(ptr), init, new_len)
             .map(|p| nonnull_slice_from_raw_parts(p, new_len))
@@ -937,12 +927,12 @@ pub trait AllocSliceExt: AllocSlice + crate::AllocExt {
         ptr: NonNull<T>,
         len: usize,
         init: usize,
-        
-        new_len: usize
+
+        new_len: usize,
     ) -> Result<NonNull<T>, AllocError> {
         if len > new_len {
             self.truncate_raw(ptr, len, init, new_len)
-        } else { 
+        } else {
             self.grow_raw(ptr, len, new_len)
         }
     }

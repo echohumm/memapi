@@ -91,8 +91,8 @@ fn allocations_are_properly_aligned() {
 #[test]
 fn error_reporting_works() {
     use memapi::{
-		error::{AllocError, Cause},
-		data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
+        data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit},
+        error::{AllocError, Cause}
     };
 
     let alloc = MiMalloc;

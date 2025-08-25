@@ -4,7 +4,7 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use {
     core::ptr,
-    memapi::{Alloc, DefaultAlloc, Layout, error::AllocError, data::type_props::SizedProps}
+    memapi::{Alloc, DefaultAlloc, Layout, data::type_props::SizedProps, error::AllocError}
 };
 
 #[test]

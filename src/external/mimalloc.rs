@@ -159,7 +159,7 @@ fn zsl_check_alloc<F: Fn(usize, usize) -> *mut c_void>(
                 } else {
                     AllocError::AllocFailed(
                         l,
-                        crate::error::Cause::OSErr(std::io::Error::from_raw_os_error(code))
+                        crate::error::Cause::OSErr(code)
                     )
                 })
             }
@@ -240,13 +240,13 @@ impl crate::ResizeInPlace for MiMalloc {
         new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(crate::resize_in_place::RESIZE_IP_ZS)
+            Err(crate::features::resize_in_place::RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
             Err(AllocError::grow_smaller(old_layout.size(), new_size))
         } else {
             // this would be, though
             if ffi::mi_expand(ptr.as_ptr().cast::<c_void>(), new_size).is_null() {
-                Err(crate::resize_in_place::CANNOT_RESIZE_IP)
+                Err(crate::features::resize_in_place::CANNOT_RESIZE_IP)
             } else {
                 Ok(())
             }
@@ -259,7 +259,7 @@ impl crate::ResizeInPlace for MiMalloc {
     ///
     /// # Errors
     ///
-    /// - [`AllocError::Other`]`("unsupported operation: attempted to shrink in place")`.
+    /// - <code>[AllocError::Other]("unsupported operation: attempted to shrink in place")</code>.
     // it just returns an error, no reason not to inline it.
     #[allow(clippy::inline_always)]
     #[inline(always)]
@@ -292,11 +292,7 @@ impl crate::alloc_aligned_at::AllocAlignedAt for MiMalloc {
 
 #[cfg(feature = "checked_dealloc")]
 impl crate::checked_dealloc::CheckedDealloc for MiMalloc {
-    fn status(
-        &self,
-        ptr: NonNull<u8>,
-        layout: Layout
-    ) -> crate::checked_dealloc::BlockStatus {
+    fn status(&self, ptr: NonNull<u8>, layout: Layout) -> crate::checked_dealloc::BlockStatus {
         use crate::checked_dealloc::BlockStatus;
 
         let align = crate::helpers::ptr_max_align(ptr);

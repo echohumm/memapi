@@ -2,10 +2,10 @@
 extern crate criterion;
 
 use {
-	core::{hint::black_box, time::Duration},
-	criterion::{Criterion, criterion_main},
-	memapi::{Alloc, AllocExt, Layout, external::jemalloc::Jemalloc, data::type_props::SizedProps},
-	std::ptr
+    core::{hint::black_box, time::Duration},
+    criterion::{Criterion, criterion_main},
+    memapi::{Alloc, AllocExt, Layout, data::type_props::SizedProps, external::jemalloc::Jemalloc},
+    std::ptr
 };
 
 fn bench_alloc_dealloc(c: &mut Criterion) {

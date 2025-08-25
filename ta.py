@@ -16,20 +16,21 @@ FEATURES = [
 
     "os_err_reporting",
 
+    "assumptions",
     "const_extras",
     "const_max",
     "c_str",
 
     "metadata",
     "clone_to_uninit",
-    "specialization",
     "sized_hierarchy",
 
-    "fallible_dealloc",
+    "checked_dealloc",
     "alloc_aligned_at",
     "alloc_ext",
     "alloc_slice",
     "resize_in_place",
+    "misc_traits",
 
     "stats",
     "stats_file_lock",
@@ -49,7 +50,7 @@ NIGHTLY_FEATURES = {
     "metadata",
     "sized_hierarchy",
     "clone_to_uninit",
-    "specialization",
+
 }
 
 def all_feature_combinations(features):

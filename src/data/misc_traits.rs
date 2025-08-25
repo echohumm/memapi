@@ -1,5 +1,5 @@
 use {
-    crate::{data::marker::UnsizedCopy, data::type_props::PtrProps},
+    crate::data::{marker::UnsizedCopy, type_props::PtrProps},
     core::ptr::{self, NonNull}
 };
 
@@ -10,8 +10,8 @@ pub trait CopyToUninit: UnsizedCopy {
     /// # Safety
     ///
     /// The caller must ensure `dst` is:
-    /// - valid for writes for `self.`[`sz`](PtrProps::sz)`()` bytes.
-    /// - properly aligned to `self.`[`aln`](PtrProps::aln)`()`.
+    /// - valid for writes for <code>self.[sz](PtrProps::sz)()</code> bytes.
+    /// - properly aligned to <code>self.[aln](PtrProps::aln)()</code>.
     /// - uninitialized, or its data doesn't need to be dropped.
     unsafe fn copy_to(&self, dst: NonNull<u8>) {
         assume!(u_pre
@@ -27,10 +27,11 @@ pub trait CopyToUninit: UnsizedCopy {
     /// # Safety
     ///
     /// The caller must ensure `dst`:
-    /// - is valid for writes for `self.`[`sz`](PtrProps::sz)`()` bytes.
-    /// - is properly aligned to `self.`[`aln`](PtrProps::aln)`()`.
+    /// - is valid for writes for <code>self.[sz](PtrProps::sz)()</code> bytes.
+    /// - is properly aligned to <code>self.[aln](PtrProps::aln)()</code>.
     /// - is uninitialized, or its data doesn't need to be dropped.
     /// - doesn't overlap with `self`.
+    #[allow(unknown_lints, clippy::ptr_as_ptr, clippy::borrow_as_ptr)]
     unsafe fn copy_to_nonoverlapping(&self, dst: NonNull<u8>) {
         assume!(u_pre
             crate::helpers::ptr_max_align(dst) >= self.aln(),

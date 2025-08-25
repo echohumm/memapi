@@ -222,7 +222,7 @@ impl crate::ResizeInPlace for Jemalloc {
         new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(crate::resize_in_place::RESIZE_IP_ZS)
+            Err(crate::features::resize_in_place::RESIZE_IP_ZS)
         } else if new_size < old_layout.size() {
             Err(AllocError::grow_smaller(old_layout.size(), new_size))
         } else {
@@ -236,7 +236,7 @@ impl crate::ResizeInPlace for Jemalloc {
             {
                 Ok(())
             } else {
-                Err(crate::resize_in_place::CANNOT_RESIZE_IP)
+                Err(crate::features::resize_in_place::CANNOT_RESIZE_IP)
             }
         }
     }
@@ -248,7 +248,7 @@ impl crate::ResizeInPlace for Jemalloc {
         new_size: usize
     ) -> Result<(), AllocError> {
         if new_size == 0 {
-            Err(crate::resize_in_place::RESIZE_IP_ZS)
+            Err(crate::features::resize_in_place::RESIZE_IP_ZS)
         } else if new_size > old_layout.size() {
             Err(AllocError::shrink_larger(old_layout.size(), new_size))
         } else if new_size == old_layout.size() {
@@ -269,7 +269,7 @@ impl crate::ResizeInPlace for Jemalloc {
                 Ok(())
             } else {
                 // is this even possible?
-                Err(crate::resize_in_place::CANNOT_RESIZE_IP)
+                Err(crate::features::resize_in_place::CANNOT_RESIZE_IP)
             }
         }
     }

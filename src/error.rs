@@ -1,18 +1,18 @@
 use {
     crate::Layout,
     core::{
-        fmt,
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         ptr::NonNull
     }
 };
 
 // TODO: use and implement this
+// hidden until implemented
+#[doc(hidden)]
 /// The result of an allocator operation.
 ///
 /// This is a specialized version of [`Result`].
-#[cfg_attr(not(feature = "os_err_reporting"), derive(Copy))]
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum AllocRes<S> {
     /// The operation succeeded and returned the contained value.
     Succ(S),
@@ -21,9 +21,8 @@ pub enum AllocRes<S> {
 }
 
 /// Errors for allocator operations.
-#[cfg_attr(not(feature = "os_err_reporting"), derive(Copy))]
 #[allow(clippy::module_name_repetitions)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum AllocError {
     /// The underlying allocator failed to allocate using the given layout; see the contained cause.
@@ -111,44 +110,6 @@ impl AllocError {
     }
 }
 
-// manual implementations because of Cause, which can't be PEq if os_err_reporting is enabled
-impl PartialEq for AllocError {
-    #[inline]
-    fn eq(&self, other: &AllocError) -> bool {
-        use AllocError::{
-            AllocFailed,
-            ArithmeticOverflow,
-            GrowSmallerNewLayout,
-            InvalidAlign,
-            InvalidLayout,
-            Other,
-            ShrinkLargerNewLayout,
-            ZeroSizedLayout
-        };
-
-        match (self, other) {
-            (AllocFailed(l1, c1), AllocFailed(l2, c2)) => l1 == l2 && c1 == c2,
-            #[cfg(feature = "checked_dealloc")]
-            (AllocError::DeallocFailed(p1, l1, c1), AllocError::DeallocFailed(p2, l2, c2)) => {
-                p1 == p2 && l1 == l2 && c1 == c2
-            }
-            (InvalidLayout(il1), InvalidLayout(il2)) => il1 == il2,
-            (InvalidAlign(ia1), InvalidAlign(ia2)) => ia1 == ia2,
-            (ZeroSizedLayout(a), ZeroSizedLayout(b)) => a == b,
-            (GrowSmallerNewLayout(old1, new1), GrowSmallerNewLayout(old2, new2))
-            | (ShrinkLargerNewLayout(old1, new1), ShrinkLargerNewLayout(old2, new2)) => {
-                old1 == old2 && new1 == new2
-            }
-            (ArithmeticOverflow(e1), ArithmeticOverflow(e2)) => e1 == e2,
-            (Other(a), Other(b)) => a == b,
-
-            _ => false
-        }
-    }
-}
-
-impl Eq for AllocError {}
-
 impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         use AllocError::{
@@ -232,8 +193,7 @@ impl Display for AllocError {
 impl std::error::Error for AllocError {}
 
 /// The cause of an error.
-#[cfg_attr(not(feature = "os_err_reporting"), derive(Copy))]
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Cause {
     /// The cause is unknown.
@@ -253,23 +213,8 @@ pub enum Cause {
     /// The cause is described in the contained OS error.
     ///
     /// The error may or may not be accurate depending on the environment.
-    OSErr(std::io::Error)
+    OSErr(i32)
 }
-
-impl PartialEq for Cause {
-    fn eq(&self, other: &Cause) -> bool {
-        match (self, other) {
-            (Cause::Unknown, Cause::Unknown) | (Cause::OutOfMemory, Cause::OutOfMemory) => true,
-            #[cfg(feature = "checked_dealloc")]
-            (Cause::InvalidBlockStatus(s1), Cause::InvalidBlockStatus(s2)) => s1 == s2,
-            #[cfg(feature = "os_err_reporting")]
-            (Cause::OSErr(e1), Cause::OSErr(e2)) => e1.kind() == e2.kind(),
-            _ => false
-        }
-    }
-}
-
-impl Eq for Cause {}
 
 impl Display for Cause {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
@@ -282,24 +227,6 @@ impl Display for Cause {
             Cause::OSErr(e) => write!(f, "os error:\n\t{}", e)
         }
     }
-}
-
-impl Clone for Cause {
-    fn clone(&self) -> Cause {
-        match self {
-            &Cause::Unknown => Cause::Unknown,
-            &Cause::OutOfMemory => Cause::OutOfMemory,
-            #[cfg(feature = "checked_dealloc")]
-            &Cause::InvalidBlockStatus(s) => Cause::InvalidBlockStatus(s),
-            #[cfg(feature = "os_err_reporting")]
-            Cause::OSErr(e) => {
-                Cause::OSErr(std::io::Error::from_raw_os_error(e.raw_os_error().unwrap()))
-            }
-        }
-    }
-
-    // rust update broke my ide and made it think this is needed
-    fn clone_from(&mut self, source: &Cause) { *self = source.clone(); }
 }
 
 #[cfg(feature = "std")]

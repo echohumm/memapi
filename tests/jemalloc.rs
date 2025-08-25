@@ -6,10 +6,10 @@ use {
         slice
     },
     memapi::{
-		Alloc,
-		Layout,
-		external::{ffi::jem::malloc_usable_size, jemalloc::Jemalloc},
-		data::type_props::SizedProps
+        Alloc,
+        Layout,
+        data::type_props::SizedProps,
+        external::{ffi::jem::malloc_usable_size, jemalloc::Jemalloc}
     }
 };
 
@@ -91,8 +91,8 @@ fn realloc_preserves_initial_contents() {
 #[test]
 fn error_reporting_works() {
     use memapi::{
-		error::{AllocError, Cause},
-		data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
+        data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit},
+        error::{AllocError, Cause}
     };
 
     let alloc = Jemalloc;

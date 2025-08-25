@@ -7,10 +7,10 @@ use {
         slice
     },
     memapi::{
-		Alloc,
-		Layout,
-		external::{ffi::libc::malloc_usable_size, malloc::Malloc},
-		data::type_props::SizedProps
+        Alloc,
+        Layout,
+        data::type_props::SizedProps,
+        external::{ffi::libc::malloc_usable_size, malloc::Malloc}
     }
 };
 
@@ -95,8 +95,8 @@ fn realloc_preserves_initial_contents() {
 #[test]
 fn error_reporting_works() {
     use memapi::{
-		error::{AllocError, Cause},
-		data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit}
+        data::type_props::{USIZE_MAX_NO_HIGH_BIT, usize_bit},
+        error::{AllocError, Cause}
     };
 
     let alloc = Malloc;

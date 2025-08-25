@@ -1,3 +1,4 @@
+#![allow(unknown_lints, clippy::redundant_pub_crate)]
 #[cfg(feature = "alloc_ext")]
 /// Allocator abstractions.
 pub(crate) mod alloc_ext;

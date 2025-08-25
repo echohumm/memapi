@@ -1,22 +1,18 @@
 use {
     crate::{
-        Alloc,
-        Layout,
-        error::{AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr},
+        Alloc, Layout,
         data::type_props::{
-            PtrProps,
-            SizedProps,
-            USIZE_MAX_NO_HIGH_BIT,
-            varsized_nonnull_from_raw_parts,
-            varsized_pointer_from_raw_parts
-        }
+            PtrProps, SizedProps, USIZE_MAX_NO_HIGH_BIT, varsized_nonnull_from_raw_parts,
+            varsized_pointer_from_raw_parts,
+        },
+        error::{AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr},
     },
     core::{
         mem::{forget, transmute},
         num::NonZeroUsize,
         ops::Deref,
-        ptr::{self, NonNull}
-    }
+        ptr::{self, NonNull},
+    },
 };
 
 /// Performs a checked arithmetic operation on two `usize`s.
@@ -30,12 +26,12 @@ pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithO
         ArithOp::Sub => l.checked_sub(r),
         ArithOp::Mul => l.checked_mul(r),
         ArithOp::Div => l.checked_div(r),
-        ArithOp::Rem => l.checked_rem(r)
+        ArithOp::Rem => l.checked_rem(r),
     };
 
     match res {
         Some(v) => Ok(v),
-        None => AllocError::arith_overflow(l, op, r)
+        None => AllocError::arith_overflow(l, op, r),
     }
 }
 
@@ -48,7 +44,7 @@ pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithO
 pub fn checked_op_panic(l: usize, op: ArithOp, r: usize) -> usize {
     match checked_op(l, op, r) {
         Ok(v) => v,
-        Err(e) => panic!("{}", e)
+        Err(e) => panic!("{}", e),
     }
 }
 
@@ -64,7 +60,7 @@ pub fn checked_op_panic(l: usize, op: ArithOp, r: usize) -> usize {
 pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
     match checked_op(l, op, r) {
         Ok(v) => v,
-        Err(_) => panic!("An arithmetic operation overflowed")
+        Err(_) => panic!("An arithmetic operation overflowed"),
     }
 }
 
@@ -81,7 +77,7 @@ pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
 pub fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
     match checked_op(l, op, r) {
         Ok(v) => v,
-        Err(..) => panic!("An arithmetic operation overflowed")
+        Err(..) => panic!("An arithmetic operation overflowed"),
     }
 }
 
@@ -161,7 +157,7 @@ pub fn check_ptr_overlap(a: NonNull<u8>, b: NonNull<u8>, sz: usize) -> bool {
 }
 
 #[cfg(feature = "extern_alloc")]
-/// Helper to convert a NonNull<u8> to a *mut c_void.
+/// Helper to convert a `NonNull<u8>` to a `*mut c_void`.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[must_use]
 pub const fn nonnull_to_void(ptr: NonNull<u8>) -> *mut libc::c_void {
@@ -194,7 +190,7 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, La
 pub const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
     match layout_or_sz_align::<T>(n) {
         Ok(l) => Ok(l),
-        Err((sz, aln, r)) => Err(InvLayout(sz, aln, r))
+        Err((sz, aln, r)) => Err(InvLayout(sz, aln, r)),
     }
 }
 
@@ -215,18 +211,18 @@ pub fn preproc_layout(layout: Layout) -> Result<Layout, InvLayout> {
         // SAFETY: the only other error which can occur is Align, but since the alignment came from
         //  a valid layout and round_to_ptr_align cannot make it zero or a non-power-of-two, it will
         //  still be valid, so that error cannot occur.
-        _ => unsafe { core::hint::unreachable_unchecked() }
+        _ => unsafe { core::hint::unreachable_unchecked() },
     }
 }
 
-pub(crate) fn round_to_ptr_align(sz: usize, align: usize) -> Result<usize, InvLayout> {
+pub(crate) const fn round_to_ptr_align(sz: usize, align: usize) -> Result<usize, InvLayout> {
     let mask = usize::SZ - 1;
     if align & mask == 0 {
         return Ok(align);
     }
     match checked_op(align, ArithOp::Add, mask) {
         Ok(v) => Ok(v & !mask),
-        Err(e) => AllocError::inv_layout(sz, align, LayoutErr::MallocOverflow(e))
+        Err(e) => AllocError::inv_layout(sz, align, LayoutErr::MallocOverflow(e)),
     }
 }
 
@@ -270,7 +266,7 @@ const_if! {
 #[allow(clippy::missing_errors_doc)]
 pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
     layout: Layout,
-    f: F
+    f: F,
 ) -> Result<Ret, AllocError> {
     if layout.size() == 0 {
         Err(AllocError::ZeroSizedLayout(dangling_nonnull_for(layout)))
@@ -285,7 +281,17 @@ pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     if ptr.is_null() {
-        Err(AllocError::AllocFailed(layout, Cause::OSErr(std::io::Error::last_os_error())))
+        Err(AllocError::AllocFailed(
+            layout,
+            // SAFETY: last_os_error is guaranteed to return a real os error
+            Cause::OSErr(unsafe {
+                #[allow(clippy::option_if_let_else)]
+                match std::io::Error::last_os_error().raw_os_error() {
+                    Some(e) => e,
+                    None => core::hint::unreachable_unchecked(),
+                }
+            }),
+        ))
     } else {
         // SAFETY: we just checked that the pointer is non-null
         Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
@@ -320,6 +326,7 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocEr
 ///
 /// Currently set to call `null_q`.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
+#[allow(clippy::missing_errors_doc)]
 #[allow(dead_code)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     null_q(ptr, layout)
@@ -332,7 +339,7 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocEr
 pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F,
-    nq: fn(*mut T, Layout) -> Result<NonNull<u8>, AllocError>
+    nq: fn(*mut T, Layout) -> Result<NonNull<u8>, AllocError>,
 ) -> Result<NonNull<u8>, AllocError> {
     zsl_check(layout, |layout: Layout| nq(f(layout), layout))
 }
@@ -346,11 +353,11 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
     a: &A,
     layout: Layout,
     e: E,
-    then: F
+    then: F,
 ) -> Result<Ret, AllocError> {
     match a.alloc(layout) {
         Ok(ptr) => Ok(then(ptr, e)),
-        Err(e) => Err(e)
+        Err(e) => Err(e),
     }
 }
 
@@ -386,7 +393,7 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
 /// ```
 pub struct AllocGuard<'a, T: ?Sized, A: Alloc + ?Sized> {
     ptr: NonNull<T>,
-    alloc: &'a A
+    alloc: &'a A,
 }
 
 impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
@@ -445,7 +452,9 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
     type Target = NonNull<T>;
 
     #[inline]
-    fn deref(&self) -> &NonNull<T> { &self.ptr }
+    fn deref(&self) -> &NonNull<T> {
+        &self.ptr
+    }
 }
 
 /// A RAII guard for a heap‐allocated slice that tracks how many elements have been initialized.
@@ -493,7 +502,7 @@ pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
     ptr: NonNull<T>,
     alloc: &'a A,
     pub(crate) init: usize,
-    full: usize
+    full: usize,
 }
 
 impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
@@ -715,8 +724,8 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// `excess` if `slice.len() > remaining_capacity`.
     pub fn clone_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
-                            where
-                                T: Clone
+    where
+        T: Clone,
     {
         let lim = self.full - self.init;
         let to_clone = if slice.len() < lim { slice.len() } else { lim };
@@ -753,7 +762,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
                     ptr::write(self.ptr.as_ptr().add(self.init), elem);
                     self.init += 1;
                 },
-                None => return Ok(())
+                None => return Ok(()),
             }
         }
     }
@@ -767,7 +776,7 @@ impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
             ptr::drop_in_place(slice_ptr_from_raw_parts(self.ptr.as_ptr(), self.init));
             self.alloc.dealloc(
                 self.ptr.cast(),
-                Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN)
+                Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN),
             );
         }
     }
@@ -777,5 +786,7 @@ impl<T, A: Alloc + ?Sized> Deref for SliceAllocGuard<'_, T, A> {
     type Target = NonNull<T>;
 
     #[inline]
-    fn deref(&self) -> &NonNull<T> { &self.ptr }
+    fn deref(&self) -> &NonNull<T> {
+        &self.ptr
+    }
 }

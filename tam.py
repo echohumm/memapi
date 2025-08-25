@@ -11,13 +11,16 @@ FEATURES = [
 
     "std",
 
+    # todo: libc?
+
     "os_err_reporting",
 
-    "fallible_dealloc",
+    "checked_dealloc",
     "alloc_aligned_at",
     "alloc_ext",
     "alloc_slice",
     "resize_in_place",
+    "misc_traits",
 
     "stats",
     "stats_parking_lot",

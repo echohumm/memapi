@@ -1,7 +1,7 @@
 use crate::{
     Layout,
-    error::{AlignErr, LayoutErr},
-    data::type_props::USIZE_HIGH_BIT
+    data::type_props::USIZE_HIGH_BIT,
+    error::{AlignErr, LayoutErr}
 };
 
 #[cfg(feature = "metadata")]
@@ -35,11 +35,10 @@ pub const fn lay_from_size_align(size: usize, align: usize) -> Result<Layout, La
 ///
 /// # Errors
 ///
-/// - [`LayoutErr::Align`]`(`[`AlignErr::ZeroAlign`]`)` if `align == 0`.
-/// - [`LayoutErr::Align`]`(`[`AlignErr::NonPowerOfTwoAlign`]`)` if `!align.is_power_of_two`.
+/// - <code>[LayoutErr::Align]([AlignErr::ZeroAlign])</code> if `align == 0`.
+/// - <code>[LayoutErr::Align]([AlignErr::NonPowerOfTwoAlign])</code> if `!align.is_power_of_two`.
 /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` would be
-///   greater than
-///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
+///   greater than [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 pub const fn check_lay(size: usize, align: usize) -> Result<(), LayoutErr> {
     if align == 0 {

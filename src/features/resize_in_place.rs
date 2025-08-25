@@ -9,6 +9,7 @@ use {
 /// # Errors
 ///
 /// See [`ResizeInPlace::grow_in_place`].
+#[allow(clippy::missing_safety_doc)]
 pub unsafe fn fgrow_ip<A: ResizeInPlace + ?Sized>(
     a: &A,
     ptr: NonNull<u8>,
@@ -23,6 +24,7 @@ pub unsafe fn fgrow_ip<A: ResizeInPlace + ?Sized>(
 
 /// Extension trait for [`Alloc`](Alloc) which provides interfaces to reallocate in-place.
 pub trait ResizeInPlace: Alloc {
+    //noinspection LongLine
     /// Grow the given block to a new, larger layout.
     ///
     /// # Safety
@@ -33,9 +35,8 @@ pub trait ResizeInPlace: Alloc {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_size < old_layout.size()`.
-    /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
-    /// - [`AllocError::Other`]`("cannot resize in place")` if the growth operation could not be
-    ///   completed in-place.
+    /// - <code>[AllocError::Other]("zero-sized resize in place was requested")</code> if `new_size` is zero.
+    /// - <code>[AllocError::Other]("cannot resize in place")</code> if the growth operation could not be completed in-place.
     #[cfg_attr(miri, track_caller)]
     unsafe fn grow_in_place(
         &self,
@@ -44,6 +45,7 @@ pub trait ResizeInPlace: Alloc {
         new_size: usize
     ) -> Result<(), AllocError>;
 
+    //noinspection LongLine
     /// Grow the given block to a new, larger layout, zeroing newly allocated bytes.
     ///
     /// # Safety
@@ -54,9 +56,8 @@ pub trait ResizeInPlace: Alloc {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_size < old_layout.size()`.
-    /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
-    /// - [`AllocError::Other`]`("cannot resize in place")` if the growth operation could not be
-    ///   completed in-place.
+    /// - <code>[AllocError::Other]("zero-sized resize in place was requested")</code> if `new_size` is zero.
+    /// - <code>[AllocError::Other]("cannot resize in place")</code> if the growth operation could not be completed in-place.
     #[cfg_attr(miri, track_caller)]
     unsafe fn zgrow_in_place(
         &self,
@@ -67,6 +68,7 @@ pub trait ResizeInPlace: Alloc {
         fgrow_ip(self, ptr, old_layout, new_size, 0)
     }
 
+    //noinspection LongLine
     /// Shrink the given block to a new, smaller layout.
     ///
     /// # Safety
@@ -78,9 +80,8 @@ pub trait ResizeInPlace: Alloc {
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::ShrinkLargerNewLayout`] if `new_size > old_layout.size()`.
-    /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
-    /// - [`AllocError::Other`]`("cannot resize in place")` if the shrink operation could not be
-    ///   completed in-place.
+    /// - <code>[AllocError::Other]("zero-sized resize in place was requested")</code> if `new_size` is zero.
+    /// - <code>[AllocError::Other]("cannot resize in place")</code> if the growth operation could not be completed in-place.
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink_in_place(
         &self,
@@ -89,6 +90,7 @@ pub trait ResizeInPlace: Alloc {
         new_size: usize
     ) -> Result<(), AllocError>;
 
+    //noinspection LongLine
     /// Reallocate a block, growing or shrinking as needed.
     ///
     /// On grow, preserves existing contents up to `old_layout.size()`, and
@@ -102,9 +104,8 @@ pub trait ResizeInPlace: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
-    /// - [`AllocError::Other`]`("cannot resize in place")` if the reallocation operation could not
-    ///   be completed in-place.
+    /// - <code>[AllocError::Other]("zero-sized resize in place was requested")</code> if `new_size` is zero.
+    /// - <code>[AllocError::Other]("cannot resize in place")</code> if the growth operation could not be completed in-place.
     #[cfg_attr(miri, track_caller)]
     unsafe fn realloc_in_place(
         &self,
@@ -119,6 +120,7 @@ pub trait ResizeInPlace: Alloc {
         }
     }
 
+    //noinspection LongLine
     /// Reallocate a block, growing or shrinking as needed, zeroing any newly allocated bytes.
     ///
     /// On grow, preserves existing contents up to `old_layout.size()`, and
@@ -132,9 +134,8 @@ pub trait ResizeInPlace: Alloc {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
-    /// - [`AllocError::Other`]`("cannot resize in place")` if the reallocation operation could not
-    ///   be completed in-place.
+    /// - <code>[AllocError::Other]("zero-sized resize in place was requested")</code> if `new_size` is zero.
+    /// - <code>[AllocError::Other]("cannot resize in place")</code> if the growth operation could not be completed in-place.
     #[cfg_attr(miri, track_caller)]
     unsafe fn rezalloc_in_place(
         &self,
@@ -176,6 +177,7 @@ impl<A: ResizeInPlace> ResizeInPlace for &A {
 #[cfg(feature = "alloc_ext")]
 /// Extension trait for [`ResizeInPlace`] which provides additional methods.
 pub trait ResizeInPlaceExt: ResizeInPlace {
+    //noinspection LongLine
     /// Grow the given block to a new, larger layout, filling any newly allocated bytes with `n`.
     ///
     /// # Safety
@@ -186,9 +188,8 @@ pub trait ResizeInPlaceExt: ResizeInPlace {
     /// # Errors
     /// - [`AllocError::AllocFailed`] if allocation fails.
     /// - [`AllocError::GrowSmallerNewLayout`] if `new_size < old_layout.size()`.
-    /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
-    /// - [`AllocError::Other`]`("cannot resize in place")` if the growth operation could not be
-    ///   completed in-place.
+    /// - <code>[AllocError::Other]("zero-sized resize in place was requested")</code> if `new_size` is zero.
+    /// - <code>[AllocError::Other]("cannot resize in place")</code> if the growth operation could not be completed in-place.
     #[cfg_attr(miri, track_caller)]
     unsafe fn fgrow_in_place(
         &self,
@@ -200,6 +201,7 @@ pub trait ResizeInPlaceExt: ResizeInPlace {
         fgrow_ip(self, ptr, old_layout, new_size, n)
     }
 
+    //noinspection LongLine
     /// Reallocate a block, growing or shrinking as needed, filling any newly allocated bytes with
     /// `n`.
     ///
@@ -214,9 +216,8 @@ pub trait ResizeInPlaceExt: ResizeInPlace {
     /// # Errors
     ///
     /// - [`AllocError::AllocFailed`] if allocation fails.
-    /// - [`AllocError::Other`]`("zero-sized resize in place was requested")` if `new_size` is zero.
-    /// - [`AllocError::Other`]`("cannot resize in place")` if the reallocation operation could not
-    ///   be completed in-place.
+    /// - <code>[AllocError::Other]("zero-sized resize in place was requested")</code> if `new_size` is zero.
+    /// - <code>[AllocError::Other]("cannot resize in place")</code> if the growth operation could not be completed in-place.
     #[cfg_attr(miri, track_caller)]
     unsafe fn refalloc_in_place(
         &self,

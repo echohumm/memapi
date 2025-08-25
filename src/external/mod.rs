@@ -13,7 +13,7 @@ pub mod mimalloc;
 pub mod malloc;
 
 #[allow(clippy::trivially_copy_pass_by_ref, dead_code)]
-pub(crate) fn fals(_: &usize, _: &usize) -> bool { false }
+pub(crate) const fn fals(_: &usize, _: &usize) -> bool { false }
 #[allow(dead_code)]
 pub(crate) fn no_err(_: usize, _: usize) -> AllocError {
     // SAFETY: this is unreachable because it's guarded by fals
@@ -125,7 +125,7 @@ pub mod ffi {
         #[cfg(feature = "jemalloc")]
         /// Converts a size and alignment to flags in the form of a `c_int`.
         #[must_use]
-        pub fn layout_to_flags(size: usize, align: usize) -> libc::c_int {
+        pub const fn layout_to_flags(size: usize, align: usize) -> libc::c_int {
             if align <= crate::external::ffi::MAX_GUARANTEED_ALIGN && align <= size {
                 0
             } else {
@@ -156,7 +156,7 @@ pub mod ffi {
             core::ptr::{self, NonNull}
         };
 
-        // making this made me feel bad for the libc devs
+        // TODO: see std::sys::os::set_errno? copy that.
         unsafe fn set_errno(err: libc::c_int) {
             #[cfg(any(target_os = "linux", target_os = "fuchsia", target_os = "redox"))]
             {

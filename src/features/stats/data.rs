@@ -206,7 +206,7 @@ pub enum AllocStat {
 }
 
 impl AllocStat {
-    pub(crate) fn new_realloc(
+    pub(crate) const fn new_realloc(
         old_ptr: NonNull<u8>,
         new_ptr: *mut u8,
         old_layout: Layout,

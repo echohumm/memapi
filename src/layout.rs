@@ -1,7 +1,7 @@
 use crate::{
+    data::type_props::{PtrProps, SizedProps},
     error::{ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
     helpers::{align_up_unchecked, checked_op, layout_or_err},
-    data::type_props::{PtrProps, SizedProps},
     unstable_util::lay_from_size_align
 };
 
@@ -20,7 +20,7 @@ pub struct Layout {
 impl Layout {
     /// Creates a layout for the given type.
     ///
-    /// This just delegates to `<T as `[`SizedProps>::LAYOUT`].
+    /// This just delegates to <code><T as [SizedProps>::LAYOUT]</code>.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     #[must_use]
@@ -40,7 +40,7 @@ impl Layout {
 
     /// Creates a layout for the value behind the given reference
     ///
-    /// This just delegates to `<&T as `[`PtrProps>::layout()`].
+    /// This just delegates to <code><&T as [PtrProps>::layout()]</code>.
     #[allow(clippy::inline_always)]
     #[inline(always)]
     pub fn for_value<T: ?Sized>(val: &T) -> Layout {
@@ -50,7 +50,7 @@ impl Layout {
 
     /// Creates a layout for the value behind the given reference
     ///
-    /// This just delegates to `<*const T as `[`PtrProps>::layout()`].
+    /// This just delegates to <code><*const T as [PtrProps>::layout()]</code>.
     ///
     /// # Safety
     ///
@@ -62,15 +62,14 @@ impl Layout {
     #[inline(always)]
     pub unsafe fn for_value_raw<T: ?Sized>(val: *const T) -> Layout { val.layout() }
 
+    //noinspection LongLine
     /// Creates a layout with the given size and alignment.
     ///
     /// # Errors
     ///
-    /// - `LayoutErr::Align(`[`AlignErr::ZeroAlign`](crate::error::AlignErr::ZeroAlign)`)` if `align
-    ///   == 0`.
+    /// - <code>LayoutErr::Align([AlignErr::ZeroAlign](crate::error::AlignErr::ZeroAlign))</code> if `align == 0`.
     /// - `LayoutErr::Align(`
-    ///   [`AlignErr::NonPowerOfTwoAlign(align)`](crate::error::AlignErr::NonPowerOfTwoAlign)`)` if
-    ///   `align` is non-zero, but not a power of two.
+    ///   <code>[AlignErr::NonPowerOfTwoAlign(align)](crate::error::AlignErr::NonPowerOfTwoAlign))</code> if `align` is non-zero, but not a power of two.
     /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
     ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
     #[inline]
@@ -192,6 +191,7 @@ impl Layout {
         }
     }
 
+    //noinspection LongLine
     /// Creates a layout with the same size as `self` but an alignment meeting `align`. If
     /// `self.align >= align`, returns `self`.
     ///
@@ -200,8 +200,7 @@ impl Layout {
     /// # Errors
     ///
     /// - `LayoutErr::Align(`
-    ///   [`AlignErr::NonPowerOfTwoAlign(align)`](crate::error::AlignErr::NonPowerOfTwoAlign)`)` if
-    ///   `align` is larger than `self.align`, but not a power of two.
+    ///   <code>[AlignErr::NonPowerOfTwoAlign(align)](crate::error::AlignErr::NonPowerOfTwoAlign))</code> if `align` is larger than `self.align`, but not a power of two.
     /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
     ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
     #[must_use = "this function returns a new layout, it doesn't modify the original one"]

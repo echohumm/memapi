@@ -8,7 +8,8 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 - [Current low-priority to-dos](#current-low-priority-to-dos)
 - [Version 0.18.0](#version-0180)
-  - [Commit 8](#commit-8-2025-8-20)
+  - [Commit 10]
+  - [Commit 8/9](#commit-89-2025-8-23)
   - [Commit 7](#commit-7-2025-8-16-1255)
   - [Commit 6](#commit-6-2025-8-16-919)
   - [Commit 5](#commit-5-2025-8-16-919)
@@ -70,11 +71,21 @@ _no versions before 0.13.2 have a changelog as I started the changelog in that v
 
 ## Version 0.18.0
 
-### Commit 8 (2025-8-20)
+### Commit 10 (2025-8-24)
+
+- Formatting
+- Fix nursery clippy lints
+- Improve OS error storage
+
+### Commit 8/9 (2025-8-23)
 
 - Switch changelog timestamps to UTC
 - Rename `fallible_dealloc` feature to `checked_dealloc`
 - Remove unnecessary `unsafe` blocks
+- Formatting
+- Add misc_traits feature
+  - not documented yet i dont think
+- I forgot what else, and don't see anything major in the diff
 
 ### Commit 7 (2025-8-16 12:55)
 

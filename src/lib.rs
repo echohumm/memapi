@@ -7,8 +7,8 @@
 //! - [`DefaultAlloc`]: a zero-cost wrapper delegating to the global allocator.
 //! - [`AllocError`]: an enum representing allocation failure cases.
 //! - [`PtrProps`](data::type_props::PtrProps): property getters for pointers to values.
-//! - [`SizedProps`](data::type_props::SizedProps): properties for sized types, similar to the unstable,
-//!   hidden [`SizedTypeProperties`](core::mem::SizedTypeProperties).
+//! - [`SizedProps`](data::type_props::SizedProps): properties for sized types, similar to the
+//!   unstable, hidden [`SizedTypeProperties`](core::mem::SizedTypeProperties).
 //! - [`VarSized`](data::type_props::VarSized): a marker trait for types with `usize` metadata.
 //! - [`UnsizedCopy`](data::marker::UnsizedCopy): a marker trait for safe copying of unsized values.
 //! - [`Thin`](data::marker::Thin): a marker trait for pointers without metadata.
@@ -73,8 +73,8 @@
 //!   the same name.
 //!
 //! - **`assumptions`**: Enables use of `debug_assert!` and `core::hint::unreachable_unchecked()` in
-//!   certain functions to "assume" a condition is true, for safety and optimizations. 
-//!   (MSRV ≥ 1.57.0)
+//!   certain functions to "assume" a condition is true, for safety and optimizations. (MSRV ≥
+//!   1.57.0)
 //!
 //! - **`const_extras`**: Enables additional `const` methods (MSRV ≥ 1.61.0).
 //!
@@ -94,14 +94,22 @@
 // TODO: test on other platforms/targets
 
 #![allow(unknown_lints)]
-#![warn(clippy::all, clippy::pedantic, clippy::borrow_as_ptr, clippy::undocumented_unsafe_blocks)]
+#![warn(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::borrow_as_ptr,
+    clippy::undocumented_unsafe_blocks
+)]
 #![warn(unknown_lints)]
 #![allow(
     unsafe_op_in_unsafe_fn,
     rustdoc::broken_intra_doc_links,
     // :) because patch doesn't work for overriding crates.io packages and i have to include my
     // dependencies' dependencies versions to make this compile on msrv
-    unused_crate_dependencies
+    unused_crate_dependencies,
+    // does anyone else hate the *elf keyword? that capital letter there looks so ugly idk why
+    clippy::use_self
 )]
 #![deny(missing_docs, unused_unsafe)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -141,6 +149,7 @@ macro_rules! const_if {
         #[cfg(not(feature = $feature))]
         #[doc = $docs]
         $(#[$attr])*
+        #[allow(unknown_lints, clippy::missing_const_for_fn)]
         pub fn $name $(<$generic_ty $(: $req)?>)? ($($args)*)
         $(-> $ret)? $(where $where_ty: $where_req)? $body
     };
@@ -325,7 +334,7 @@ mod features;
 
 // TODO: better docs and name
 /// Module for anything related specifically to data.
-/// 
+///
 /// This includes marker traits, type properties, and miscellaneous data-handling traits.
 pub mod data;
 
