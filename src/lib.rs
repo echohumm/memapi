@@ -14,10 +14,6 @@
 //! - [`UnsizedCopy`](data::marker::UnsizedCopy)
 //! - [`Thin`](data::marker::Thin)
 
-// TODO: more allocators, work on underlying allocators ffi
-
-// TODO: reduce compilation times (see stdlib's versions of our stuff like layout)
-
 // TODO: add more tests
 
 // TODO: test on other platforms/targets
@@ -34,10 +30,7 @@
 #![allow(
     unsafe_op_in_unsafe_fn,
     rustdoc::broken_intra_doc_links,
-    // :) because patch doesn't work for overriding crates.io packages and i have to include my
-    // dependencies' dependencies versions to make this compile on msrv
-    unused_crate_dependencies,
-    // does anyone else hate the *elf keyword? that capital letter there looks so ugly idk why
+    // does anyone else hate the Self keyword? that capital letter there looks so ugly idk why
     clippy::use_self
 )]
 #![deny(missing_docs, unused_unsafe)]
@@ -46,8 +39,6 @@
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
-
-// TODO: generally add more helpers and dedup to reduce bin size
 
 // TODO: add missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
 
@@ -225,9 +216,7 @@ pub const unsafe fn assert_unreachable(cond: bool) {
     }
 }
 
-// TODO: dedup docs with some macros
 // TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
-// TODO: simplify cfgs and make sure they are correct
 
 extern crate alloc;
 extern crate core;
@@ -264,7 +253,7 @@ macro_rules! default_alloc_impl {
     ($ty:ty) => {
         impl crate::Alloc for $ty {
             #[cfg_attr(miri, track_caller)]
-            #[inline]
+            #[inline(always)]
             fn alloc(
                 &self,
                 layout: crate::Layout
@@ -278,7 +267,7 @@ macro_rules! default_alloc_impl {
             }
 
             #[cfg_attr(miri, track_caller)]
-            #[inline]
+            #[inline(always)]
             fn zalloc(
                 &self,
                 layout: crate::Layout
@@ -292,7 +281,7 @@ macro_rules! default_alloc_impl {
             }
 
             #[cfg_attr(miri, track_caller)]
-            #[inline]
+            #[inline(always)]
             unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: crate::Layout) {
                 if layout.size() != 0 {
                     alloc::alloc::dealloc(ptr.as_ptr(), layout);

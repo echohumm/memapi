@@ -659,7 +659,6 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         }
     }
 
-    // TODO: dedup these
     const_if! {
         "const_max",
         "Copies as many elements from `slice` as will fit.\n\nOn success, all elements are \

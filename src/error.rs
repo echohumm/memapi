@@ -6,20 +6,6 @@ use {
     }
 };
 
-// TODO: use and implement this
-// hidden until implemented
-#[doc(hidden)]
-/// The result of an allocator operation.
-///
-/// This is a specialized version of [`Result`].
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum AllocRes<S> {
-    /// The operation succeeded and returned the contained value.
-    Succ(S),
-    /// The operation failed and returned the contained error.
-    Fail(AllocError)
-}
-
 /// Errors for allocator operations.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
