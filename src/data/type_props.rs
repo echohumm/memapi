@@ -1,6 +1,7 @@
 use {
-    crate::{Layout, helpers::dangling_nonnull},
+    crate::helpers::dangling_nonnull,
     core::{
+        alloc::Layout,
         mem::{align_of, align_of_val, size_of, size_of_val},
         ptr::NonNull
     }
@@ -19,7 +20,9 @@ pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (usize::MAX >> 1);
 /// A small helper to generate a `usize` in which only the bit at the given index is set.
 #[must_use]
 #[inline]
-pub const fn usize_bit(bit: u8) -> usize { USIZE_HIGH_BIT >> bit }
+pub const fn usize_bit(bit: u8) -> usize {
+    USIZE_HIGH_BIT >> bit
+}
 
 /// A trait containing constants for sized types.
 pub trait SizedProps: Sized {
@@ -78,7 +81,9 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// References are always valid.
     #[inline]
-    unsafe fn layout(&self) -> Layout { Layout::from_size_align_unchecked(self.sz(), self.aln()) }
+    unsafe fn layout(&self) -> Layout {
+        Layout::from_size_align_unchecked(self.sz(), self.aln())
+    }
 
     #[cfg(feature = "metadata")]
     /// Gets the metadata of the value.
@@ -103,7 +108,9 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
-    unsafe fn is_zst(&self) -> bool { self.sz() == 0 }
+    unsafe fn is_zst(&self) -> bool {
+        self.sz() == 0
+    }
 
     /// Gets the largest safe length for a slice containing copies of `self`.
     ///
@@ -196,10 +203,14 @@ impl_ptr_props_as_ref! {
 
 impl<T: ?Sized> PtrProps<T> for NonNull<T> {
     #[inline]
-    unsafe fn sz(&self) -> usize { size_of_val::<T>(&*self.as_ptr()) }
+    unsafe fn sz(&self) -> usize {
+        size_of_val::<T>(&*self.as_ptr())
+    }
 
     #[inline]
-    unsafe fn aln(&self) -> usize { align_of_val::<T>(&*self.as_ptr()) }
+    unsafe fn aln(&self) -> usize {
+        align_of_val::<T>(&*self.as_ptr())
+    }
 
     #[cfg(feature = "metadata")]
     unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata {

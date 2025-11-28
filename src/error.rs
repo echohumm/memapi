@@ -1,9 +1,7 @@
-use {
-    crate::Layout,
-    core::{
-        fmt::{Debug, Display, Formatter, Result as FmtResult},
-        ptr::NonNull
-    }
+use core::{
+    alloc::Layout,
+    fmt::{Debug, Display, Formatter, Result as FmtResult},
+    ptr::NonNull
 };
 
 /// Errors for allocator operations.

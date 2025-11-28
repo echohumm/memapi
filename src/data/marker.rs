@@ -22,8 +22,6 @@ unsafe impl UnsizedCopy for std::ffi::OsStr {}
 // SAFETY: `Path == OsStr == [u8]`
 unsafe impl UnsizedCopy for std::path::Path {}
 
-// TODO: better solution than making them all unsafe
-
 #[cfg(all(not(feature = "metadata"), not(feature = "sized_hierarchy")))]
 /// Trait indicating that a type has no metadata.
 ///

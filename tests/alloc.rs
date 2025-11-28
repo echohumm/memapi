@@ -1,7 +1,7 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 use {
-    core::ptr,
-    memapi2::{error::AllocError, Alloc, DefaultAlloc, Layout}
+    core::{alloc::Layout, ptr},
+    memapi2::{Alloc, DefaultAlloc, error::AllocError}
 };
 
 #[test]
@@ -36,11 +36,7 @@ fn test_alloc_zeroed() {
 #[test]
 fn test_shrink_and_error_cases() {
     let allocator = DefaultAlloc;
-    let old = Layout::from_size_align(
-        8,
-        1
-    )
-    .unwrap();
+    let old = Layout::from_size_align(8, 1).unwrap();
     // 1 is fine here though because we already satisfy the alignment, and
     //  1 < MAXIMUM_GUARANTEED_ALIGNMENT
     let new = Layout::from_size_align(4, 1).unwrap();

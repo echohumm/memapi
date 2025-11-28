@@ -2,8 +2,8 @@
 //! buffers, suitable for use in collections.
 //!
 //! This crate focuses on a minimal API:
-//! - [`Alloc`]: a trait defining basic allocation, zero-allocation, deallocation,
-//!   and simple grow/shrink helpers.
+//! - [`Alloc`]: a trait defining basic allocation, zero-allocation, deallocation, and simple
+//!   grow/shrink helpers.
 //! - [`DefaultAlloc`]: a tiny wrapper delegating to the global allocator.
 //! - [`AllocError`]: an error type describing allocation failures.
 //!
@@ -14,8 +14,7 @@
 //! - [`UnsizedCopy`](data::marker::UnsizedCopy)
 //! - [`Thin`](data::marker::Thin)
 
-// TODO: add more tests
-
+// TODO: add more tests and benches
 // TODO: test on other platforms/targets
 
 #![allow(unknown_lints)]
@@ -40,8 +39,7 @@
 #![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
-// TODO: add missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
-
+// TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
 // TODO: a lot of helpers and unstable utils would be good to have in another crate, maybe?
 
 macro_rules! const_if {
@@ -217,13 +215,11 @@ pub const unsafe fn assert_unreachable(cond: bool) {
 }
 
 // TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
+//  (removed stuff is stuff which would go in new crate)
 
 extern crate alloc;
 extern crate core;
 
-pub use alloc::alloc::Layout;
-
-// TODO: better docs and name
 /// Module for anything related specifically to data.
 ///
 /// This includes marker traits, type properties, and miscellaneous data-handling traits.
@@ -237,6 +233,7 @@ pub mod error;
 
 use {
     core::{
+        alloc::Layout,
         cmp::Ordering,
         ptr::{self, NonNull}
     },
@@ -256,7 +253,7 @@ macro_rules! default_alloc_impl {
             #[inline(always)]
             fn alloc(
                 &self,
-                layout: crate::Layout
+                layout: Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::helpers::null_q_zsl_check(
                     layout,
@@ -270,7 +267,7 @@ macro_rules! default_alloc_impl {
             #[inline(always)]
             fn zalloc(
                 &self,
-                layout: crate::Layout
+                layout: Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::helpers::null_q_zsl_check(
                     layout,
@@ -282,7 +279,7 @@ macro_rules! default_alloc_impl {
 
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
-            unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: crate::Layout) {
+            unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
                 if layout.size() != 0 {
                     alloc::alloc::dealloc(ptr.as_ptr(), layout);
                 }
@@ -295,15 +292,21 @@ macro_rules! default_alloc_impl {
 unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 { alloc::alloc::alloc(layout) }
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        alloc::alloc::alloc(layout)
+    }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) { alloc::alloc::dealloc(ptr, layout); }
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        alloc::alloc::dealloc(ptr, layout);
+    }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 { alloc::alloc::alloc_zeroed(layout) }
+    unsafe fn alloc_zeroed(&self, layout: Layout) -> *mut u8 {
+        alloc::alloc::alloc_zeroed(layout)
+    }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -496,6 +499,7 @@ pub trait Alloc {
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
+    use core::alloc::Layout;
     // SAFETY: DefaultAlloc's allocated memory isn't deallocated until a deallocation method is
     //  called. as a ZST allocator, copying/cloning it doesn't change behavior or invalidate
     //  allocations.
@@ -504,7 +508,7 @@ pub(crate) mod nightly {
         #[inline]
         fn allocate(
             &self,
-            layout: crate::Layout
+            layout: Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::allocate(&alloc::alloc::Global, layout)
         }
@@ -513,14 +517,14 @@ pub(crate) mod nightly {
         #[inline]
         fn allocate_zeroed(
             &self,
-            layout: crate::Layout
+            layout: Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::allocate_zeroed(&alloc::alloc::Global, layout)
         }
 
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, layout: crate::Layout) {
+        unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
             alloc::alloc::Allocator::deallocate(&alloc::alloc::Global, ptr.cast(), layout);
         }
 
@@ -529,8 +533,8 @@ pub(crate) mod nightly {
         unsafe fn grow(
             &self,
             ptr: core::ptr::NonNull<u8>,
-            old_layout: crate::Layout,
-            new_layout: crate::Layout
+            old_layout: Layout,
+            new_layout: Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::grow(&alloc::alloc::Global, ptr.cast(), old_layout, new_layout)
         }
@@ -540,8 +544,8 @@ pub(crate) mod nightly {
         unsafe fn grow_zeroed(
             &self,
             ptr: core::ptr::NonNull<u8>,
-            old_layout: crate::Layout,
-            new_layout: crate::Layout
+            old_layout: Layout,
+            new_layout: Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::grow_zeroed(
                 &alloc::alloc::Global,
@@ -556,8 +560,8 @@ pub(crate) mod nightly {
         unsafe fn shrink(
             &self,
             ptr: core::ptr::NonNull<u8>,
-            old_layout: crate::Layout,
-            new_layout: crate::Layout
+            old_layout: Layout,
+            new_layout: Layout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::shrink(
                 &alloc::alloc::Global,
@@ -575,15 +579,21 @@ pub(crate) mod nightly {
 impl<A: Alloc + ?Sized> Alloc for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> { (**self).alloc(layout) }
+    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        (**self).alloc(layout)
+    }
 
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
-    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> { (**self).zalloc(layout) }
+    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
+        (**self).zalloc(layout)
+    }
 
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) { (**self).dealloc(ptr, layout); }
+    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+        (**self).dealloc(ptr, layout);
+    }
 }
 
 #[cfg(feature = "std")]

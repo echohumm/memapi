@@ -100,7 +100,9 @@ mod checks {
         // from the crate
 
         #[must_use]
-        fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize { unsafe { (&*ptr.as_ptr()).len() } }
+        fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
+            unsafe { (&*ptr.as_ptr()).len() }
+        }
 
         #[must_use]
         fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
