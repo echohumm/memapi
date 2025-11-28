@@ -1,11 +1,10 @@
 [package]
-name = "memapi"
-version = "0.17.0"
+name = "memapi2"
+version = "0.1.0"
 edition = "2018"
 rust-version = "1.56.0"
 authors = ["echohumm"]
 description = "A no_std/no-alloc-friendly memory allocation interface for raw buffers, with improved error reporting."
-readme = "README.md"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/echohumm/memapi"
 keywords = ["allocator", "no_std", "memory", "allocation"]
@@ -29,15 +28,6 @@ maintenance = { status = "actively-developed" }
 
 
 
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
-debug = false
-# overflow checks should be disabled since we manually check where necessary anyways
-overflow-checks = false
-incremental = false
-
 [profile.bench]
 opt-level = 3
 lto = true
@@ -56,8 +46,6 @@ default = ["assumptions"]
 
 # meta features
 dev = []
-no_alloc = []
-malloc_defaultalloc = ["extern_alloc"]
 
 # msrv-changing features
 ## that make small changes
@@ -65,10 +53,6 @@ assumptions = []
 const_extras = ["assumptions"]
 const_max = ["const_extras"]
 c_str = []
-
-## that make large changes
-stats_file_lock = ["stats", "std"]
-stats_thread_safe_io = ["stats", "std"]
 
 # nightly support
 nightly = []
@@ -82,76 +66,17 @@ default_nightly = ["metadata", "clone_to_uninit"]
 
 # std support
 std = []
-std_libc = ["std", "libc/std"]
 
 # specific std features
 os_err_reporting = ["std"]
 
-# main extensions
-checked_dealloc = []
-alloc_aligned_at = []
-
-alloc_ext = []
-alloc_slice = []
-resize_in_place = []
-
 misc_traits = []
 
-# stats
-stats = []
-stats_parking_lot = ["stats", "parking_lot"]
-
-# external allocators
-extern_alloc = ["libc"]
-
-jemalloc = ["memapi-jemalloc-sys", "extern_alloc"]
-mimalloc = ["memapi-mimalloc-sys", "extern_alloc"]
-# libc's malloc
-malloc = ["extern_alloc"]
-
-mimalloc_err_reporting = ["mimalloc", "mim_dbg", "os_err_reporting"]
-mimalloc_global_err = ["mimalloc_err_reporting"]
-mimalloc_err_output = ["mimalloc_err_reporting"]
-
 full = [
-    "mimalloc_global_err",
-    "jemalloc",
-    "malloc",
-    "stats_parking_lot",
-    "stats_file_lock",
-    "stats_thread_safe_io",
-    "alloc_ext",
-    "alloc_slice",
-    "resize_in_place",
     "misc_traits",
-    "alloc_aligned_at",
-    "checked_dealloc",
     "const_max",
     "c_str"
 ]
-
-# jemalloc feature bindings
-jem_bg_threads_rt = ["memapi-jemalloc-sys/background_threads_runtime_support"]
-jem_bg_threads = [
-    "jem_bg_threads_rt",
-    "memapi-jemalloc-sys/background_threads",
-]
-jem_dbg = ["memapi-jemalloc-sys/debug"]
-jem_default = ["jem_bg_threads_rt", "memapi-jemalloc-sys/default"]
-jem_no_cache_oblivious = ["memapi-jemalloc-sys/disable_cache_oblivious"]
-jem_no_init_exec_tls = ["memapi-jemalloc-sys/disable_initial_exec_tls"]
-jem_prof = ["memapi-jemalloc-sys/profiling"]
-jem_stats = ["memapi-jemalloc-sys/stats"]
-jem_unprefixed_malloc_on_supported_platforms = ["memapi-jemalloc-sys/unprefixed_malloc_on_supported_platforms"]
-
-# mimalloc feature bindings
-mim_arena = ["memapi-mimalloc-sys/arena"]
-mim_dbg = ["memapi-mimalloc-sys/debug"]
-mim_dbg_in_dbg = ["memapi-mimalloc-sys/debug_in_debug"]
-mim_local_dynamic_tls = ["memapi-mimalloc-sys/local_dynamic_tls"]
-mim_no_thp = ["memapi-mimalloc-sys/no_thp"]
-mim_override = ["memapi-mimalloc-sys/override"]
-mim_secure = ["memapi-mimalloc-sys/secure"]
 
 
 
@@ -162,111 +87,3 @@ path = "tests/alloc.rs"
 [[test]]
 name = "dangerous"
 path = "tests/potential_ub.rs"
-
-[[test]]
-name = "ext"
-path = "tests/alloc_ext.rs"
-required-features = ["alloc_ext"]
-
-[[test]]
-name = "jem"
-path = "tests/jemalloc.rs"
-required-features = ["jemalloc"]
-
-[[test]]
-name = "mim"
-path = "tests/mimalloc.rs"
-required-features = ["mimalloc"]
-
-[[test]]
-name = "malloc"
-path = "tests/malloc.rs"
-required-features = ["malloc"]
-
-[[test]]
-name = "slice"
-path = "tests/alloc_slice.rs"
-required-features = ["alloc_slice"]
-
-[[test]]
-name = "stats"
-path = "tests/stats.rs"
-required-features = ["stats", "std"]
-
-
-
-[[bin]]
-# to view error formatting output and make sure its readable
-name = "err_fmt_vw"
-path = "devbin/err_fmt.rs"
-required-features = ["std"]
-
-
-
-[dev-dependencies.criterion]
-version = "=0.4.0"
-default-features = false
-
-[dev-dependencies]
-# criterion deps :)
-# this totally didn't take ten minutes to get to compile on msrv and 10 more to get to the most recent working versions
-# why is cargo's "<CRATE> = "^<VER>"" so broken on msrv?
-num-traits = "=0.2.18"
-regex = "=1.7.3"
-half = "=1.7.1"
-clap = "=3.1.18"
-clap_lex = "=0.2.2"
-textwrap = "=0.16.1"
-ciborium = "=0.2.0"
-ciborium-io = "=0.2.1"
-ciborium-ll = "=0.2.1"
-either = "=1.13.0"
-os_str_bytes = "=6.1.0"
-unicode-width = "=0.1.12"
-
-
-
-[[bench]]
-# MSRV 1.66.0 bc of black_box
-name = "base"
-path = "benches/alloc.rs"
-harness = false
-required-features = ["alloc_ext"]
-
-[[bench]]
-name = "jem"
-path = "benches/jemalloc.rs"
-harness = false
-required-features = ["jemalloc"]
-
-
-
-[dependencies.cc]
-version = "=1.0.92"
-optional = true
-default-features = false
-
-[dependencies.libc]
-version = "=0.2.106"
-optional = true
-default-features = false
-
-[dependencies.memapi-jemalloc-sys]
-version = "0.1.2"
-optional = true
-default-features = false
-
-[dependencies.memapi-mimalloc-sys]
-version = "0.1.3"
-optional = true
-default-features = false
-features = ["extended"]
-
-[dependencies.lock_api]
-version = "=0.4.12"
-optional = true
-
-[dependencies.parking_lot]
-version = "=0.11.2"
-optional = true
-default-features = false

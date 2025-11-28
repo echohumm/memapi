@@ -29,10 +29,6 @@ pub enum AllocError {
     ///
     /// The cause may or may not be accurate depending on the type and environment.
     AllocFailed(Layout, Cause),
-    #[cfg(feature = "checked_dealloc")]
-    /// The underlying allocator failed to deallocate the given pointer using the given layout; see
-    /// the contained cause.
-    DeallocFailed(NonNull<u8>, Layout, Cause),
     /// The layout computed with the given size and alignment is invalid; see the contained reason.
     InvalidLayout(InvLayout),
     /// The given alignment was invalid; see the contained information.
@@ -55,20 +51,6 @@ pub enum AllocError {
 }
 
 impl AllocError {
-    #[cfg(feature = "checked_dealloc")]
-    /// Creates a new `DeallocFailed` error.
-    #[allow(clippy::missing_errors_doc)]
-    #[cold]
-    #[inline(never)]
-    #[cfg_attr(not(feature = "dev"), doc(hidden))]
-    pub const fn dealloc_failed(
-        p: NonNull<u8>,
-        layout: Layout,
-        block_stat: crate::checked_dealloc::BlockStatus
-    ) -> Result<(), AllocError> {
-        Err(AllocError::DeallocFailed(p, layout, Cause::InvalidBlockStatus(block_stat)))
-    }
-
     /// Creates a new `ArithmeticOverflow` error.
     #[allow(clippy::missing_errors_doc)]
     #[cold]
@@ -133,39 +115,6 @@ impl Display for AllocError {
                     cause
                 )
             }
-            #[cfg(feature = "checked_dealloc")]
-            AllocError::DeallocFailed(ptr, l, cause) => {
-                use crate::checked_dealloc::BlockStatus;
-
-                // i hate this
-                match cause {
-                    Cause::InvalidBlockStatus(BlockStatus::OwnedIncomplete(Some(l))) => {
-                        write!(
-                            f,
-                            "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: \
-                             {}\n\t\talign: {}\n\tcause: ",
-                            *ptr,
-                            l.size(),
-                            l.align()
-                        )?;
-                        write!(
-                            f,
-                            "owned (incomplete): full layout:\n\t\t\tsize: {}\n\t\t\talign: {}",
-                            l.size(),
-                            l.align()
-                        )
-                    }
-                    _ => write!(
-                        f,
-                        "deallocation failed:\n\tptr: {:p}\n\tlayout:\n\t\tsize: {}\n\t\talign: \
-                         {}\n\tcause: {}",
-                        *ptr,
-                        l.size(),
-                        l.align(),
-                        cause
-                    )
-                }
-            }
             InvalidLayout(inv_layout) => {
                 write!(f, "{}", inv_layout)
             }
@@ -206,9 +155,6 @@ pub enum Cause {
     /// This should only be used when the __allocator__ runs out of memory and doesn't grow. Use
     /// [`OSErr`](Cause::OSErr) if the system runs out of memory.
     OutOfMemory,
-    #[cfg(feature = "checked_dealloc")]
-    /// The block status is invalid.
-    InvalidBlockStatus(crate::checked_dealloc::BlockStatus),
     #[cfg(feature = "os_err_reporting")]
     /// The cause is described in the contained OS error.
     ///
@@ -221,8 +167,6 @@ impl Display for Cause {
         match self {
             Cause::Unknown => write!(f, "unknown"),
             Cause::OutOfMemory => write!(f, "out of memory"),
-            #[cfg(feature = "checked_dealloc")]
-            Cause::InvalidBlockStatus(s) => write!(f, "invalid block status: {}", s),
             #[cfg(feature = "os_err_reporting")]
             Cause::OSErr(e) => write!(f, "os error:\n\t{}", e)
         }

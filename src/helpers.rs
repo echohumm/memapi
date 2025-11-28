@@ -156,14 +156,6 @@ pub fn check_ptr_overlap(a: NonNull<u8>, b: NonNull<u8>, sz: usize) -> bool {
     if a <= b { (b - a) < sz } else { (a - b) < sz }
 }
 
-#[cfg(feature = "extern_alloc")]
-/// Helper to convert a `NonNull<u8>` to a `*mut c_void`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-#[must_use]
-pub const fn nonnull_to_void(ptr: NonNull<u8>) -> *mut libc::c_void {
-    ptr.as_ptr().cast::<libc::c_void>()
-}
-
 /// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
 ///
 /// # Errors
@@ -180,18 +172,6 @@ pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, La
     // SAFETY: we just validated that a layout with a size of `sz * n` and alignment of `align` will
     //  not overflow.
     unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
-}
-
-#[cfg(any(feature = "alloc_slice", feature = "no_alloc"))]
-/// Gets either a valid layout with space for `n` count of `T`, or an
-/// `AllocError::LayoutError(sz, aln)`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-#[allow(clippy::missing_errors_doc)]
-pub const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
-    match layout_or_sz_align::<T>(n) {
-        Ok(l) => Ok(l),
-        Err((sz, aln, r)) => Err(InvLayout(sz, aln, r)),
-    }
 }
 
 /// Preprocesses a [`Layout`] to get its `Malloc`-compatible form (rounds the alignment up to the

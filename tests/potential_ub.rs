@@ -3,7 +3,7 @@
 //  metadata via transmutation.
 use {
     core::ptr::NonNull,
-    memapi::helpers::{nonnull_slice_from_raw_parts, nonnull_slice_len, slice_ptr_from_raw_parts}
+    memapi2::helpers::{nonnull_slice_from_raw_parts, nonnull_slice_len, slice_ptr_from_raw_parts}
 };
 
 #[test]

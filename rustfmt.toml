@@ -5,16 +5,15 @@ imports_granularity = "One"
 imports_layout = "HorizontalVertical"
 
 merge_derives = true
-reorder_impl_items = true
+reorder_impl_items = false
 newline_style = "Unix"
 style_edition = "2024"
 
 comment_width = 100
 inline_attribute_width = 100
-normalize_comments = true
 wrap_comments = true
 
-fn_single_line = true
+fn_single_line = false
 format_strings = true
 trailing_comma = "Never"
 
