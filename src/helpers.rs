@@ -358,7 +358,7 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
 ///
 /// ```none
 /// # use core::ptr::NonNull;
-/// # use memapi::{helpers::AllocGuard, Alloc, DefaultAlloc};
+/// # use memapi2::{helpers::AllocGuard, Alloc, DefaultAlloc};
 /// # let alloc = DefaultAlloc;
 /// // Allocate space for one `u32` and wrap it in a guard
 /// let layout = core::alloc::Layout::new::<u32>();
@@ -453,7 +453,7 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// ```none
 /// # extern crate alloc;
 /// # use core::ptr::NonNull;
-/// # use memapi::{
+/// # use memapi2::{
 /// #  helpers::SliceAllocGuard,
 /// #  Alloc,
 /// #  DefaultAlloc,

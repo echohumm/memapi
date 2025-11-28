@@ -36,7 +36,7 @@ unsafe impl UnsizedCopy for std::path::Path {}
 /// # Example
 ///
 /// ```
-/// # use memapi::data::{
+/// # use memapi2::data::{
 /// # marker::Thin,
 /// # type_props::SizedProps
 /// # };
@@ -61,7 +61,7 @@ pub unsafe trait Thin {}
 /// # Example
 ///
 /// ```
-/// # use memapi::{data::type_props::SizedProps, data::marker::Thin};
+/// # use memapi2::{data::type_props::SizedProps, data::marker::Thin};
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -81,7 +81,7 @@ pub unsafe trait Thin: core::ptr::Pointee<Metadata = ()> {}
 /// # Example
 ///
 /// ```
-/// # use memapi::{data::type_props::SizedProps, data::marker::Thin};
+/// # use memapi2::{data::type_props::SizedProps, data::marker::Thin};
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -102,7 +102,7 @@ pub unsafe trait Thin:
 /// # Example
 ///
 /// ```
-/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -120,7 +120,7 @@ pub unsafe trait SizeMeta {}
 /// # Example
 ///
 /// ```
-/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -140,7 +140,7 @@ pub unsafe trait SizeMeta: core::marker::MetaSized {}
 /// # Example
 ///
 /// ```
-/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -160,7 +160,7 @@ pub unsafe trait SizeMeta: core::ptr::Pointee<Metadata = usize> {}
 /// # Example
 ///
 /// ```
-/// # use memapi::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ * 2)
