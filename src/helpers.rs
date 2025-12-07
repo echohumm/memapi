@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use {
     crate::{
         Alloc,
@@ -9,7 +10,7 @@ use {
             varsized_nonnull_from_raw_parts,
             varsized_pointer_from_raw_parts
         },
-        error::{AllocError, ArithOp, ArithOverflow, Cause, InvLayout, LayoutErr}
+        error::{AllocError, ArithOp, ArithErr, Cause, InvLayout, LayoutErr}
     },
     core::{
         mem::{forget, transmute},
@@ -23,14 +24,21 @@ use {
 ///
 /// # Errors
 ///
-/// [`ArithOverflow`] if the operation would overflow.
-pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithOverflow> {
+/// [`ArithErr`] if the operation would overflow.
+pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
     let res = match op {
         ArithOp::Add => l.checked_add(r),
         ArithOp::Sub => l.checked_sub(r),
         ArithOp::Mul => l.checked_mul(r),
         ArithOp::Div => l.checked_div(r),
-        ArithOp::Rem => l.checked_rem(r)
+        ArithOp::Rem => l.checked_rem(r),
+        // cannot be truncated because we check size first
+        #[allow(clippy::cast_possible_truncation)]
+        ArithOp::Pow => l.checked_pow(if r > u32::MAX as usize {
+            return Err(ArithErr::TooLargeRhs(r));
+        } else {
+            r as u32
+        })
     };
 
     match res {

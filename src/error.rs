@@ -26,22 +26,20 @@ pub enum AllocError {
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
     ShrinkLargerNewLayout(usize, usize),
-    /// An arithmetic operation would overflow.
-    ///
-    /// This error contains both sides of the operation and the operation itself.
-    ArithmeticOverflow(ArithOverflow),
+    /// An arithmetic error.
+    ArithmeticError(ArithErr),
     /// Any other kind of error, in the form of a string.
     Other(&'static str)
 }
 
 impl AllocError {
-    /// Creates a new `ArithmeticOverflow` error.
+    /// Creates a new `ArithmeticErr::Overflow` error.
     #[allow(clippy::missing_errors_doc)]
     #[cold]
     #[inline(never)]
     #[cfg_attr(not(feature = "dev"), doc(hidden))]
-    pub const fn arith_overflow(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithOverflow> {
-        Err(ArithOverflow(l, op, r))
+    pub const fn arith_overflow(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
+        Err(ArithErr::Overflow(l, op, r))
     }
 
     /// Creates a new `InvLayout` error.
@@ -80,7 +78,7 @@ impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         use AllocError::{
             AllocFailed,
-            ArithmeticOverflow,
+            ArithmeticError,
             GrowSmallerNewLayout,
             InvalidAlign,
             InvalidLayout,
@@ -114,7 +112,7 @@ impl Display for AllocError {
             ShrinkLargerNewLayout(old, new) => {
                 write!(f, "attempted to shrink from a size of {} to a larger size of {}", old, new)
             }
-            ArithmeticOverflow(overflow) => {
+            ArithmeticError(overflow) => {
                 write!(f, "{}", overflow)
             }
             Other(other) => write!(f, "{}", other)
@@ -160,33 +158,6 @@ impl Display for Cause {
 #[cfg(feature = "std")]
 impl std::error::Error for Cause {}
 
-/// An error that can occur when creating a layout for repeated instances of a type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[allow(clippy::module_name_repetitions)]
-#[repr(u8)]
-pub enum RepeatLayoutError {
-    /// The computed layout is invalid.
-    InvalidLayout(InvLayout),
-    /// An arithmetic operation would overflow.
-    ArithmeticOverflow(ArithOverflow)
-}
-
-impl Display for RepeatLayoutError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        match self {
-            RepeatLayoutError::InvalidLayout(inv_layout) => {
-                write!(f, "{}", inv_layout)
-            }
-            RepeatLayoutError::ArithmeticOverflow(overflow) => {
-                write!(f, "{}", overflow)
-            }
-        }
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for RepeatLayoutError {}
-
 /// An invalid layout and the reason for it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct InvLayout(pub usize, pub usize, pub LayoutErr);
@@ -213,14 +184,14 @@ pub enum LayoutErr {
     /// The requested size was greater than
     /// [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT) when
     /// rounded up to the nearest multiple of the requested alignment.
-    ExceedsMax,
+    ExceedsMax
 }
 
 impl Display for LayoutErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             LayoutErr::Align(inv_align) => write!(f, "{}", inv_align),
-            LayoutErr::ExceedsMax => write!(f, "size would overflow when rounded up to alignment"),
+            LayoutErr::ExceedsMax => write!(f, "size would overflow when rounded up to alignment")
         }
     }
 }
@@ -252,20 +223,33 @@ impl Display for AlignErr {
 #[cfg(feature = "std")]
 impl std::error::Error for AlignErr {}
 
-/// An arithmetic operation that would overflow.
+/// An arithmetic error.
 ///
-/// Contains both sides of the operation and the operation itself.
+/// Either an overflow containing the lhs, op, and rhs, or a case where the rhs is too large and
+/// that rhs value.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub struct ArithOverflow(pub usize, pub ArithOp, pub usize);
+pub enum ArithErr {
+    /// The right-hand side of the operation is too large for the operation.
+    TooLargeRhs(usize),
+    /// An overflow would occur.
+    Overflow(usize, ArithOp, usize)
+}
 
-impl Display for ArithOverflow {
+impl Display for ArithErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "arithmetic operation would overflow: {} {} {}", self.0, self.1, self.2)
+        match self {
+            ArithErr::TooLargeRhs(rhs) => {
+                write!(f, "right-hand side {} is too large for the operation", rhs)
+            }
+            ArithErr::Overflow(l, o, r) => {
+                write!(f, "arithmetic operation would overflow: {} {} {}", l, o, r)
+            }
+        }
     }
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for ArithOverflow {}
+impl std::error::Error for ArithErr {}
 
 /// An arithmetic operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -280,7 +264,9 @@ pub enum ArithOp {
     /// Division. (/)
     Div,
     /// Modulo. (%)
-    Rem
+    Rem,
+    /// Exponentiation. (**)
+    Pow
 }
 
 impl Display for ArithOp {
@@ -290,7 +276,8 @@ impl Display for ArithOp {
             ArithOp::Sub => write!(f, "-"),
             ArithOp::Mul => write!(f, "*"),
             ArithOp::Div => write!(f, "/"),
-            ArithOp::Rem => write!(f, "%")
+            ArithOp::Rem => write!(f, "%"),
+            ArithOp::Pow => write!(f, "**")
         }
     }
 }
