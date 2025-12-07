@@ -160,24 +160,6 @@ pub fn check_ptr_overlap(a: NonNull<u8>, b: NonNull<u8>, sz: usize) -> bool {
     if a <= b { (b - a) < sz } else { (a - b) < sz }
 }
 
-/// Gets either a valid layout with space for `n` count of `T`, or a raw size and alignment.
-///
-/// # Errors
-///
-/// Returns `Err(size, align, reason)` if creation of a layout with the given size and alignment
-/// fails.
-pub const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, LayoutErr)> {
-    let (sz, align) = (T::SZ, T::ALN);
-
-    if sz != 0 && n > ((USIZE_MAX_NO_HIGH_BIT + 1) - align) / sz {
-        return Err((sz, align, LayoutErr::ExceedsMax));
-    }
-
-    // SAFETY: we just validated that a layout with a size of `sz * n` and alignment of `align` will
-    //  not overflow.
-    unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
-}
-
 const_if! {
     "const_extras",
     "Creates a `NonNull<[T]>` from a pointer and a length.\n\nThis is a helper used in place of
@@ -268,7 +250,6 @@ pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError>
 /// Currently set to call `null_q_oserr`.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
-#[allow(dead_code)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     null_q_oserr(ptr, layout)
 }
@@ -279,7 +260,6 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocEr
 /// Currently set to call `null_q`.
 #[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
-#[allow(dead_code)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     null_q(ptr, layout)
 }

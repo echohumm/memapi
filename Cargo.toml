@@ -1,11 +1,11 @@
 [package]
 name = "memapi2"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2018"
 rust-version = "1.56.0"
 authors = ["echohumm"]
 description = "A no_std/no-alloc-friendly memory allocation interface for raw buffers, with improved error reporting."
-license = "MIT OR Apache-2.0"
+license = "GPLv3 OR MIT"
 repository = "https://github.com/echohumm/memapi"
 keywords = ["allocator", "no_std", "memory", "allocation"]
 categories = ["no-std::no-alloc", "memory-management"]
