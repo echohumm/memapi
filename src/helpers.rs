@@ -1,15 +1,22 @@
 use {
     crate::{
-        Alloc,
-        Layout,
         data::type_props::{
+            varsized_nonnull_from_raw_parts,
+            varsized_pointer_from_raw_parts,
             PtrProps,
             SizedProps,
-            USIZE_MAX_NO_HIGH_BIT,
-            varsized_nonnull_from_raw_parts,
-            varsized_pointer_from_raw_parts
+            USIZE_MAX_NO_HIGH_BIT
         },
-        error::{AllocError, ArithOp, ArithErr, Cause, InvLayout, LayoutErr}
+        error::{
+            AllocError,
+            ArithErr,
+            ArithOp,
+            Cause,
+            InvLayout,
+            LayoutErr
+        },
+        Alloc,
+        Layout
     },
     core::{
         mem::{forget, transmute},
@@ -89,6 +96,34 @@ pub fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
     match checked_op(l, op, r) {
         Ok(v) => v,
         Err(..) => panic!("An arithmetic operation overflowed")
+    }
+}
+
+#[allow(clippy::too_long_first_doc_paragraph)]
+/// Given two layouts `a` and `b`, computes a layout describing a block of memory
+/// that can hold a value of layout `a` followed by a value of layout `b`, where
+/// `b` starts at an offset that satisfies its alignment. Returns the resulting
+/// combined layout and the offset at which `b` begins.
+///
+/// # Errors
+///
+/// Returns [`InvLayout`] when the resulting size or alignment would exceed
+/// [`USIZE_MAX_NO_HIGH_BIT`].
+#[allow(clippy::missing_errors_doc)]
+pub fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvLayout> {
+    // compute the offset where `b` would start when placed after `a`, aligned for `b`.
+    // SAFETY: `Layout::align()` is always non-zero and a power of two.
+    let offset = tri!(do align_up(a.size(),  unsafe { NonZeroUsize::new_unchecked(b.align()) }));
+    let new_align = core::cmp::max(a.align(), b.align());
+
+    // check the total size fits within limits and doesn't overflow.
+    match checked_op(a.size(), ArithOp::Add, offset) {
+        Ok(total) if total <= USIZE_MAX_NO_HIGH_BIT => {
+            // SAFETY: we validated alignment and size constraints above.
+            Ok((unsafe { Layout::from_size_align_unchecked(total, new_align) }, offset))
+        }
+        Err(e) => Err(InvLayout(offset, new_align, LayoutErr::ArithErr(e))),
+        _ => Err(InvLayout(offset, new_align, LayoutErr::ExceedsMax))
     }
 }
 

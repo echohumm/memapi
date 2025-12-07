@@ -1,6 +1,6 @@
 [package]
 name = "memapi2"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2018"
 rust-version = "1.56.0"
 authors = ["echohumm"]
@@ -42,14 +42,14 @@ incremental = false
 
 
 [features]
-default = ["assumptions"]
+default = []
 
 # meta features
 dev = []
 
 # msrv-changing features
 ## that make small changes
-assumptions = []
+assumptions = ["const_extras"]
 const_extras = ["assumptions"]
 const_max = ["const_extras"]
 c_str = []

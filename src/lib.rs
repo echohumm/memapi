@@ -147,72 +147,58 @@ macro_rules! tri {
             Err(e) => return Err(e),
         }
     };
-    (AllocError::$n:ident($($fallible:expr)+)) => {
-        match $($fallible)+ {
-            Ok(s) => s,
-            Err(e) => return Err(crate::error::AllocError::$n(e)),
-        }
-    };
-    (lay, $sz:expr, $aln:expr) => {
-        match crate::unstable_util::lay_from_size_align($sz, $aln) {
-            Ok(layout) => layout,
-            Err(e) => return Err(
-                crate::error::AllocError::InvalidLayout(crate::error::InvLayout($sz, $aln, e))
-            ),
-        }
-    };
-    (lay_preproc $layout:ident) => {{
-        let pre = preproc_layout($layout);
-        match pre {
-            Ok(layout) => layout,
-            Err(e) => return Err(crate::error::AllocError::InvalidLayout(e)),
-        }
-    }}
+    // (AllocError::$n:ident($($fallible:expr)+)) => {
+    //     match $($fallible)+ {
+    //         Ok(s) => s,
+    //         Err(e) => return Err(crate::error::AllocError::$n(e)),
+    //     }
+    // };
 }
 
-#[allow(unused_macros)]
-macro_rules! assume {
-    ($e:expr) => {
-        #[cfg(feature = "assumptions")]
-        {
-            let res = $e;
-
-            #[cfg(debug_assertions)]
-            {
-                assert!(res, concat!("assertion failed: ", stringify!($e)));
-            }
-            crate::assert_unreachable(res);
-        }
-    };
-    (u_pre $e:expr, $msg:literal) => {
-        #[cfg(feature = "assumptions")]
-        {
-            let res = $e;
-            #[cfg(debug_assertions)]
-            {
-                assert!(
-                    res,
-                    concat!("unsafe precondition `", stringify!($e), "` violated: ", $msg)
-                );
-            }
-            crate::assert_unreachable(res);
-        }
-    };
-}
-
-/// Asserts a boolean value to be true, and the false condition to be unreachable.
-///
-/// # Safety
-///
-/// This is only safe to call if `cond` is `true`. See
-/// [`unreachable_unchecked`](core::hint::unreachable_unchecked) for more details.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
-pub const unsafe fn assert_unreachable(cond: bool) {
-    if !cond {
-        #[allow(clippy::incompatible_msrv)]
-        core::hint::unreachable_unchecked();
-    }
-}
+// #[allow(unused_macros)]
+// macro_rules! assume {
+//     ($e:expr) => {
+//         #[cfg(feature = "assumptions")]
+//         {
+//             let res = $e;
+// 
+//             #[cfg(debug_assertions)]
+//             {
+//                 assert!(res, concat!("assertion failed: ", stringify!($e)));
+//             }
+//             crate::assert_unreachable(res);
+//         }
+//     };
+//     (u_pre $e:expr, $msg:literal) => {
+//         #[cfg(feature = "assumptions")]
+//         {
+//             let res = $e;
+//             #[cfg(debug_assertions)]
+//             {
+//                 assert!(
+//                     res,
+//                     concat!("unsafe precondition `", stringify!($e), "` violated: ", $msg)
+//                 );
+//             }
+//             crate::assert_unreachable(res);
+//         }
+//     };
+// }
+// 
+// #[cfg(feature = "assumptions")]
+// /// Asserts a boolean value to be true, and the false condition to be unreachable.
+// ///
+// /// # Safety
+// ///
+// /// This is only safe to call if `cond` is `true`. See
+// /// [`unreachable_unchecked`](core::hint::unreachable_unchecked) for more details.
+// #[cfg_attr(not(feature = "dev"), doc(hidden))]
+// pub const unsafe fn assert_unreachable(cond: bool) {
+//     if !cond {
+//         #[allow(clippy::incompatible_msrv)]
+//         core::hint::unreachable_unchecked();
+//     }
+// }
 
 // TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
 //  (removed stuff is stuff which would go in new crate)

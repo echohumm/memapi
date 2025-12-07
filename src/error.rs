@@ -184,14 +184,17 @@ pub enum LayoutErr {
     /// The requested size was greater than
     /// [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT) when
     /// rounded up to the nearest multiple of the requested alignment.
-    ExceedsMax
+    ExceedsMax,
+    /// An arithmetic error occurred.
+    ArithErr(ArithErr)
 }
 
 impl Display for LayoutErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             LayoutErr::Align(inv_align) => write!(f, "{}", inv_align),
-            LayoutErr::ExceedsMax => write!(f, "size would overflow when rounded up to alignment")
+            LayoutErr::ExceedsMax => write!(f, "size would overflow when rounded up to alignment"),
+            LayoutErr::ArithErr(overflow) => write!(f, "layout err: {}", overflow)
         }
     }
 }
