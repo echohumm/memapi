@@ -1,22 +1,15 @@
 use {
     crate::{
+        Alloc,
+        Layout,
         data::type_props::{
-            varsized_nonnull_from_raw_parts,
-            varsized_pointer_from_raw_parts,
             PtrProps,
             SizedProps,
-            USIZE_MAX_NO_HIGH_BIT
+            USIZE_MAX_NO_HIGH_BIT,
+            varsized_nonnull_from_raw_parts,
+            varsized_pointer_from_raw_parts
         },
-        error::{
-            AllocError,
-            ArithErr,
-            ArithOp,
-            Cause,
-            InvLayout,
-            LayoutErr
-        },
-        Alloc,
-        Layout
+        error::{AlignErr, AllocError, ArithErr, ArithOp, Cause, InvLayout, LayoutErr}
     },
     core::{
         mem::{forget, transmute},
@@ -109,12 +102,16 @@ pub fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
 ///
 /// Returns [`InvLayout`] when the resulting size or alignment would exceed
 /// [`USIZE_MAX_NO_HIGH_BIT`].
-#[allow(clippy::missing_errors_doc)]
-pub fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvLayout> {
+pub const fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvLayout> {
     // compute the offset where `b` would start when placed after `a`, aligned for `b`.
     // SAFETY: `Layout::align()` is always non-zero and a power of two.
-    let offset = tri!(do align_up(a.size(),  unsafe { NonZeroUsize::new_unchecked(b.align()) }));
-    let new_align = core::cmp::max(a.align(), b.align());
+    let offset = tri!(do align_up(a.size(), b.align()));
+
+    // i love how max, possibly the simplest function in existence (aside from accessors), is not
+    // const.
+    let a_align = a.align();
+    let b_align = b.align();
+    let new_align = if a_align > b_align { a_align } else { b_align };
 
     // check the total size fits within limits and doesn't overflow.
     match checked_op(a.size(), ArithOp::Add, offset) {
@@ -130,16 +127,18 @@ pub fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvLayout>
 /// Aligns the given value up to a non-zero alignment.
 ///
 /// # Errors
-///
+// TODO: better (more specific) docs (doesn't mention LayoutErr or AlignErr type)
 /// [`InvLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`].
-pub const fn align_up(sz: usize, align: NonZeroUsize) -> Result<usize, InvLayout> {
-    if sz > USIZE_MAX_NO_HIGH_BIT || align.get() > USIZE_MAX_NO_HIGH_BIT {
-        return Err(InvLayout(sz, align.get(), LayoutErr::ExceedsMax));
+pub const fn align_up(sz: usize, align: usize) -> Result<usize, InvLayout> {
+    if align == 0 {
+        return Err(InvLayout(sz, align, LayoutErr::Align(AlignErr::ZeroAlign)));
+    }
+    if sz > USIZE_MAX_NO_HIGH_BIT || align > USIZE_MAX_NO_HIGH_BIT {
+        return Err(InvLayout(sz, align, LayoutErr::ExceedsMax));
     }
 
-    // SAFETY: align must be nonzero according to NonZeroUsize, and we just checked they were below
-    //  the limits.
-    Ok(unsafe { align_up_unchecked(sz, align.get()) })
+    // SAFETY: align must be nonzero and below the limits.
+    Ok(unsafe { align_up_unchecked(sz, align) })
 }
 
 /// Aligns the given value up to an alignment.

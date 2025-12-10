@@ -161,7 +161,7 @@ macro_rules! tri {
 //         #[cfg(feature = "assumptions")]
 //         {
 //             let res = $e;
-// 
+//
 //             #[cfg(debug_assertions)]
 //             {
 //                 assert!(res, concat!("assertion failed: ", stringify!($e)));
@@ -184,7 +184,7 @@ macro_rules! tri {
 //         }
 //     };
 // }
-// 
+//
 // #[cfg(feature = "assumptions")]
 // /// Asserts a boolean value to be true, and the false condition to be unreachable.
 // ///

@@ -39,9 +39,9 @@ use {
 //         );
 //         let sz = self.sz();
 //         assume!(u_pre
-//             crate::helpers::check_ptr_overlap(*(&self as *const _ as *const NonNull<u8>), dst, sz),
-//             "`CopyToUninit::copy_to_nonoverlapping` requires that `self` doesn't overlap with \
-//             `dst`."
+//             crate::helpers::check_ptr_overlap(*(&self as *const _ as *const NonNull<u8>), dst,
+// sz),             "`CopyToUninit::copy_to_nonoverlapping` requires that `self` doesn't overlap
+// with \             `dst`."
 //         );
 //
 //         ptr::copy_nonoverlapping((self as *const Self).cast::<u8>(), dst.as_ptr(), sz);
