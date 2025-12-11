@@ -1,11 +1,19 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+
+use std::ptr::null_mut;
 use {
     core::{alloc::Layout, ptr},
     memapi2::{Alloc, DefaultAlloc, error::AllocError}
 };
+use memapi2::data::type_props::{varsized_or_sized_pointer_from_raw_parts, VarSizedOrSizedPtr};
 
 #[test]
 fn test_alloc_and_dealloc() {
+    // match varsized_or_sized_pointer_from_raw_parts::<u8>(null_mut(), 8) {
+    //     Ptr::Sized(p) => println!("correct"),
+    //     Ptr::Unsized(p) => println!("incorrect"),
+    // }
+
     let allocator = DefaultAlloc;
     let layout = Layout::from_size_align(16, 8).unwrap();
     // Allocate

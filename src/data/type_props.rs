@@ -1,3 +1,4 @@
+use core::hint::unreachable_unchecked;
 use {
     crate::helpers::dangling_nonnull,
     core::{
@@ -231,7 +232,7 @@ pub unsafe trait VarSized {
     ///
     /// [`VarSized`] types are either slices of another type or include a slice tail; this is that
     /// element type.
-    type Subtype: Sized + SizedProps;
+    type Subtype: Sized;
 
     /// The alignment of the type.
     ///
@@ -271,7 +272,7 @@ unsafe impl VarSized for str {
     type Subtype = u8;
 }
 
-#[cfg(feature = "c_str")]
+#[cfg(all(feature = "c_str", not(feature = "std")))]
 // SAFETY: `CStr = [u8]`
 unsafe impl VarSized for core::ffi::CStr {
     type Subtype = u8;
@@ -287,6 +288,35 @@ unsafe impl VarSized for std::ffi::OsStr {
 unsafe impl VarSized for std::path::Path {
     type Subtype = u8;
 }
+
+/// Trait for types which are either `VarSized` or `Sized`.
+pub unsafe trait VarSizedOrSized {
+    /// Whether the type is `Sized` or not.
+    const IS_SIZED: bool = false;
+
+    #[doc(hidden)]
+    unsafe fn from_u8_ptr(p: *mut u8) -> *mut Self {
+        unreachable_unchecked()
+    }
+}
+
+unsafe impl<T> VarSizedOrSized for T {
+    const IS_SIZED: bool = true;
+
+    #[doc(hidden)]
+    unsafe fn from_u8_ptr(p: *mut u8) -> *mut T {
+        p.cast()
+    }
+}
+
+unsafe impl<T> VarSizedOrSized for [T] {}
+unsafe impl VarSizedOrSized for str {}
+#[cfg(all(feature = "c_str", not(feature = "std")))]
+unsafe impl VarSizedOrSized for core::ffi::CStr {}
+#[cfg(feature = "std")]
+unsafe impl VarSizedOrSized for std::ffi::OsStr {}
+#[cfg(feature = "std")]
+unsafe impl VarSizedOrSized for std::path::Path {}
 
 // not associated to reduce clutter, and so they can be const
 
@@ -335,8 +365,75 @@ const_if! {
     ) -> *mut T {
         // SAFETY: VarSized trait requires T::Metadata == usize
         unsafe {
-            // i hate this so much
-            *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
+            make_ptr(p, meta)
         }
+    }
+}
+
+/// A pointer to either a `VarSized` or `Sized` type.
+pub enum VarSizedOrSizedPtr<T: ?Sized + VarSizedOrSized> {
+    #[allow(private_interfaces)]
+    /// A pointer to a `Sized` type. Cannot be constructed manually, you must use
+    /// [`sized`](VarSizedOrSizedPtr::sized).
+    Sized(*mut u8, Sealed),
+    /// A pointer to a `VarSized` type.
+    VarSized(*mut T)
+}
+
+/// Unconstructable struct used to prevent user construction of `Sized` variant above, as if `T` is
+/// unsized, and `p: *mut T`, `VarSizedOrSizedPtr::Sized(p)` will cause UB if `get()` is called.
+#[doc(hidden)]
+pub struct Sealed {
+    _seal: Seal
+}
+impl Sealed {
+    // must be private
+    const fn new() -> Sealed {
+        Sealed {
+            _seal: Seal
+        }
+    }
+}
+/// Inner seal of `Sealed` used because older versions of rust disallow private structs in public
+/// enums.
+struct Seal;
+
+impl<T: VarSizedOrSized> VarSizedOrSizedPtr<T> {
+    const_if! {
+        "const_extras",
+        "undocumented",
+        pub const fn sized(ptr: *mut T) -> VarSizedOrSizedPtr<T> {
+            VarSizedOrSizedPtr::Sized(ptr.cast(), Sealed::new())
+        }
+    }
+}
+
+impl<T: ?Sized + VarSizedOrSized> VarSizedOrSizedPtr<T> {
+    /// Gets the contained pointer.
+    pub fn get(&self) -> *mut T {
+        match self {
+            VarSizedOrSizedPtr::Sized(ptr, _) => unsafe { T::from_u8_ptr(*ptr) },
+            VarSizedOrSizedPtr::VarSized(ptr) => *ptr
+        }
+    }
+}
+
+const_if! {
+    "const_extras",
+    "Creates a pointer to a type that is either `VarSized` or `Sized` based on a pointer to a `u8` and metadata. If the type is `Sized`, metadata is discarded.",
+    pub const fn varsized_or_sized_pointer_from_raw_parts<T: ?Sized + VarSizedOrSized>(
+        p: *mut u8,
+        meta: usize
+    ) -> VarSizedOrSizedPtr<T> {
+        if T::IS_SIZED { VarSizedOrSizedPtr::Sized(p, Sealed::new()) } else { VarSizedOrSizedPtr::VarSized(unsafe { make_ptr(p, meta) }) }
+    }
+}
+
+const_if! {
+    "const_extras",
+    "private",
+    const unsafe fn make_ptr<T: ?Sized>(p: *mut u8, meta: usize) -> *mut T {
+        // i hate this so much
+        *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
     }
 }

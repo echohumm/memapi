@@ -23,11 +23,11 @@
     clippy::pedantic,
     clippy::nursery,
     clippy::borrow_as_ptr,
-    clippy::undocumented_unsafe_blocks
+    clippy::undocumented_unsafe_blocks,
+    clippy::multiple_unsafe_ops_per_block
 )]
 #![warn(unknown_lints)]
 #![allow(
-    unsafe_op_in_unsafe_fn,
     rustdoc::broken_intra_doc_links,
     // does anyone else hate the Self keyword? that capital letter there looks so ugly idk why
     clippy::use_self
@@ -71,6 +71,36 @@ macro_rules! const_if {
         pub fn $name $(<$generic_ty $(: $req)?>)? ($($args)*)
         $(-> $ret)? $(where $where_ty: $where_req)? $body
     };
+
+    (
+        $feature:literal,
+        $docs:literal,
+        $(#[$attr:meta])*
+        // this is also pretty poorly done, but it makes type param and optional req work
+        const unsafe fn $name:ident $(<$generic_ty:ident $(: ?$req:ident)?>)? ( $($args:tt)* )
+        $(-> $ret:ty)?
+        // also kinda poorly done, but it makes a single where clause work
+        $(where $where_ty:ident : $where_req:ident)?
+        $body:block
+    ) => {
+        // when the feature is enabled, emit a `const fn`
+        #[cfg(feature = $feature)]
+        #[doc = $docs]
+        // feature should only be enabled on compatible versions, so we allow this
+        #[allow(clippy::incompatible_msrv)]
+        $(#[$attr])*
+        const unsafe fn $name $(<$generic_ty $(: ?$req)?>)? ($($args)*)
+        $(-> $ret)? $(where $where_ty: $where_req)? $body
+
+        // when the feature is disabled, drop the `const`
+        #[cfg(not(feature = $feature))]
+        #[doc = $docs]
+        $(#[$attr])*
+        #[allow(unknown_lints, clippy::missing_const_for_fn)]
+        unsafe fn $name $(<$generic_ty $(: ?$req)?>)? ($($args)*)
+        $(-> $ret)? $(where $where_ty: $where_req)? $body
+    };
+
     // branch for a lifetime instead of type param
     (
         $feature:literal,
