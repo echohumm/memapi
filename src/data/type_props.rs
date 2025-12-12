@@ -297,7 +297,7 @@ const_if! {
     #[must_use]
     pub const fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
         // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-        varsized_nonnull_from_raw_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
+        varsized_nonnull_from_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
     }
 }
 
@@ -316,7 +316,7 @@ const_if! {
     "Creates a `NonNull<T>` from a pointer and a `usize` size metadata.",
     #[must_use]
     #[inline]
-    pub const fn varsized_nonnull_from_raw_parts<T: ?Sized + VarSized>(
+    pub const fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
         p: NonNull<u8>,
         meta: usize,
     ) -> NonNull<T> {
@@ -330,6 +330,7 @@ const_if! {
     "Creates a `*mut T` from a pointer and a `usize` size metadata.",
     #[must_use]
     #[inline]
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub const fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
         p: *mut u8,
         meta: usize,
@@ -341,68 +342,58 @@ const_if! {
     }
 }
 
+// believe it or not, this works. it's also the only way to do this.
+
 /// Trait for types which are either `VarSized` or `Sized`.
-pub unsafe trait VarSizedOrSized {
+///
+/// # Safety
+///
+/// Implementors must ensure that `T: VarSized` or `T: Sized`, `IS_SIZED` is correct based on the
+/// aforementioned, and that `ptr_from_u8_ptr` is UB if called when `Self` is not `Sized` but fine
+/// otherwise.
+pub unsafe trait AnySized {
     /// Whether the type is `Sized` or not.
     const IS_SIZED: bool = false;
 
-    #[doc(hidden)]
+    /// Creates a `*mut Self` from a `*mut u8` data pointer.
+    ///
+    /// # Safety
+    ///
+    /// Callers must ensure that `Self: Sized`. This can be determined at runtime via `IS_SIZED`
+    #[must_use]
+    #[inline]
     unsafe fn ptr_from_u8_ptr(_p: *mut u8) -> *mut Self {
         unreachable_unchecked()
     }
 }
 
-unsafe impl<T> VarSizedOrSized for T {
+unsafe impl<T> AnySized for T {
     const IS_SIZED: bool = true;
 
-    #[doc(hidden)]
+    #[inline]
     unsafe fn ptr_from_u8_ptr(p: *mut u8) -> *mut T {
         p.cast()
     }
 }
 
-unsafe impl<T> VarSizedOrSized for [T] {}
-unsafe impl VarSizedOrSized for str {}
+// unfortunately, we can't use impl<T: VarSized> because it overlaps Sized because Sized and
+//  VarSized are not considered mutually exclusive by the language even though they are.
+unsafe impl<T> AnySized for [T] {}
+unsafe impl AnySized for str {}
 #[cfg(all(feature = "c_str", not(feature = "std")))]
-unsafe impl VarSizedOrSized for core::ffi::CStr {}
+unsafe impl AnySized for core::ffi::CStr {}
 #[cfg(feature = "std")]
-unsafe impl VarSizedOrSized for std::ffi::OsStr {}
+unsafe impl AnySized for std::ffi::OsStr {}
 #[cfg(feature = "std")]
-unsafe impl VarSizedOrSized for std::path::Path {}
+unsafe impl AnySized for std::path::Path {}
 
-/// A pointer to a type that is either `VarSized` or `Sized`.
-pub union VarSizedOrSizedPtr<T: ?Sized + VarSizedOrSized> {
-    /// A pointer to a `Sized` type.
-    sized: *mut u8,
-    /// A pointer to a `VarSized` type. Effectively just `(*mut u8, usize)`
-    varsized: *mut T
-}
-
-impl<T: ?Sized + VarSizedOrSized> VarSizedOrSizedPtr<T> {
-    /// Gets the contained pointer.
-    pub fn get(&self) -> *mut T {
-        if T::IS_SIZED {
-            unsafe { T::ptr_from_u8_ptr(self.sized) }
-        } else {
-            unsafe { self.varsized }
-        }
-    }
-}
-
-const_if! {
-    "const_extras",
-    "Creates a pointer to a type that is either `VarSized` or `Sized` based on a pointer to a \n\
-    `u8` and metadata. If the type is `Sized`, metadata is discarded.",
-    pub const fn varsized_or_sized_pointer_from_raw_parts<T: ?Sized + VarSizedOrSized>(
-        p: *mut u8,
-        meta: usize
-    ) -> VarSizedOrSizedPtr<T> {
-        if T::IS_SIZED {
-            VarSizedOrSizedPtr { sized: p }
-        } else {
-            VarSizedOrSizedPtr { varsized: unsafe { make_ptr(p, meta) } }
-        }
-    }
+/// Creates a `*mut T` from a `*mut u8` data pointer and `usize` metadata. If `T: Sized`, the
+/// metadata is ignored.
+#[must_use]
+#[inline]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+pub fn anysized_ptr_from_parts<T: ?Sized + AnySized>(p: *mut u8, meta: usize) -> *mut T {
+    if T::IS_SIZED { unsafe { T::ptr_from_u8_ptr(p) } } else { unsafe { make_ptr(p, meta) } }
 }
 
 const_if! {

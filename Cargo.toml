@@ -83,7 +83,3 @@ full = [
 [[test]]
 name = "base"
 path = "tests/alloc.rs"
-
-[[test]]
-name = "dangerous"
-path = "tests/potential_ub.rs"

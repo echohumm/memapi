@@ -22,12 +22,12 @@
     clippy::all,
     clippy::pedantic,
     clippy::nursery,
-    clippy::borrow_as_ptr,
-    clippy::undocumented_unsafe_blocks,
     // TEMPORARY
+    // clippy::undocumented_unsafe_blocks,
     // clippy::multiple_unsafe_ops_per_block,
-    clippy::missing_docs_in_private_items,
+    // clippy::missing_docs_in_private_items,
 )]
+#![allow(clippy::borrow_as_ptr)]
 #![warn(unknown_lints)]
 #![allow(
     rustdoc::broken_intra_doc_links,

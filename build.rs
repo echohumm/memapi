@@ -5,8 +5,8 @@ fn main() {
         return;
     }
 
-    for Failure { code, msg } in &failures {
-        eprintln!("sp_frp UB test {} failed: {}", code, msg);
+    for Failure { source, code, msg } in &failures {
+        eprintln!("sp_frp UB test {}:{} failed: {}", source, code, msg);
     }
 
     let example_toolchain = "nightly-x86_64-unknown-linux-gnu 1.91.0 (840b83a10 2025-07-30)";
@@ -21,8 +21,8 @@ fn main() {
     );
 }
 
-/// Represents a single check failure
 pub struct Failure {
+    source: usize,
     code: usize,
     msg: &'static str
 }
@@ -54,14 +54,26 @@ mod checks {
 
             // check that they dereference to the same thing
             if unsafe { &*slice_ptr } != slice {
-                failures.push(Failure { code: 0, msg: "result doesn't dereference properly" });
+                failures.push(Failure {
+                    source: 0,
+                    code: 0,
+                    msg: "result doesn't dereference properly"
+                });
             }
             // check that they have the same pointer and length
             if slice.as_ptr() != slice_ptr.cast::<usize>() {
-                failures.push(Failure { code: 1, msg: "result doesn't have the same pointer" });
+                failures.push(Failure {
+                    source: 0,
+                    code: 1,
+                    msg: "result doesn't have the same pointer"
+                });
             }
             if unsafe { slice_ptr.as_ref() }.unwrap().len() != len {
-                failures.push(Failure { code: 2, msg: "result doesn't have the same length" });
+                failures.push(Failure {
+                    source: 0,
+                    code: 2,
+                    msg: "result doesn't have the same length"
+                });
             }
 
             unsafe {
@@ -71,8 +83,11 @@ mod checks {
                         len
                     ))
                 {
-                    failures
-                        .push(Failure { code: 3, msg: "result doesn't have the correct metadata" });
+                    failures.push(Failure {
+                        source: 0,
+                        code: 3,
+                        msg: "result doesn't have the correct metadata"
+                    });
                 }
             }
 
@@ -81,6 +96,7 @@ mod checks {
                 // check that the values are all the same
                 if elem != via_raw {
                     failures.push(Failure {
+                        source: 0,
                         code: 4,
                         msg: "values differ between original slice and raw-slice"
                     });
@@ -89,6 +105,7 @@ mod checks {
                 // manually check that the values are the same
                 if via_raw != 64_usize << i {
                     failures.push(Failure {
+                        source: 0,
                         code: 5,
                         msg: "raw-slice value mismatch against expected"
                     });
@@ -120,25 +137,78 @@ mod checks {
     }
 
     pub mod vs_o_s_p_frp {
-        use {crate::Failure, core::hint::unreachable_unchecked};
+        use {
+            crate::Failure,
+            core::{
+                hint::unreachable_unchecked,
+                mem::{size_of, size_of_val}
+            }
+        };
 
         pub fn check() -> Vec<Failure> {
             let mut failures = Vec::<Failure>::new();
 
             let sized_val = usize::MAX / 2 / 2 * 3 / 5;
-            let sized_ptr = &sized_val as *const u8;
+            let sized_ptr = &sized_val as *const usize as *mut usize;
             let slice = (0..20usize).collect::<Vec<_>>();
-            let slice_ptr = slice.as_slice() as *const [usize] as *const u8;
+            let slice_ptr = slice.as_slice() as *const [usize] as *mut [usize];
 
-            if varsized_or_sized_pointer_from_raw_parts(sized_ptr, 0) {
+            let sized_ptr_remade = anysize_ptr_from_parts::<usize>(sized_ptr.cast::<u8>(), 0);
+            let slice_ptr_remade =
+                anysize_ptr_from_parts::<[usize]>(slice_ptr.cast::<u8>(), slice.len());
 
+            if sized_ptr_remade != sized_ptr {
+                failures.push(Failure {
+                    source: 1,
+                    code: 0,
+                    msg: "result 1 doesn't point to the same sized value"
+                });
+            }
+
+            let sized_sz = unsafe { size_of_val(&*sized_ptr_remade) };
+
+            if sized_sz != size_of::<usize>() {
+                failures.push(Failure {
+                    source: 1,
+                    code: 1,
+                    msg: Box::leak(
+                        format!("result 1 doesn't have the correct size: {}", sized_sz)
+                            .into_boxed_str()
+                    )
+                });
+            }
+
+            // cast to usize to leave out metadata so that's caught below
+            if slice_ptr_remade as *const usize != slice_ptr as *const usize {
+                failures.push(Failure {
+                    source: 1,
+                    code: 2,
+                    msg: "result 2 doesn't point to the same unsized slice"
+                });
+            }
+
+            let unsized_sz = unsafe { size_of_val(&*slice_ptr_remade) };
+
+            if unsized_sz != size_of::<usize>() * slice.len() {
+                failures.push(Failure {
+                    source: 1,
+                    code: 3,
+                    msg: Box::leak(
+                        format!("result 2 doesn't have the correct size: {}", unsized_sz)
+                            .into_boxed_str()
+                    )
+                });
             }
 
             failures
         }
 
         /// Trait for types which are either `VarSized` or `Sized`.
-        pub unsafe trait VarSizedOrSized {
+        ///
+        /// # Safety
+        ///
+        /// Implementors must ensure that `T: VarSized` or `T: Sized`.
+        pub unsafe trait AnySize {
             /// Whether the type is `Sized` or not.
             const IS_SIZED: bool = false;
 
@@ -148,7 +218,7 @@ mod checks {
             }
         }
 
-        unsafe impl<T> VarSizedOrSized for T {
+        unsafe impl<T> AnySize for T {
             const IS_SIZED: bool = true;
 
             #[doc(hidden)]
@@ -157,36 +227,27 @@ mod checks {
             }
         }
 
-        unsafe impl<T> VarSizedOrSized for [T] {}
-        unsafe impl VarSizedOrSized for str {}
+        // unfortunately, we can't use impl<T: VarSized> because it overlaps Sized because Sized and
+        //  VarSized are not considered mutually exclusive by the language even though they are.
+        unsafe impl<T> AnySize for [T] {}
+        unsafe impl AnySize for str {}
+        #[cfg(all(feature = "c_str", not(feature = "std")))]
+        unsafe impl AnySize for core::ffi::CStr {}
+        #[cfg(feature = "std")]
+        unsafe impl AnySize for std::ffi::OsStr {}
+        #[cfg(feature = "std")]
+        unsafe impl AnySize for std::path::Path {}
 
-        /// A pointer to a type that is either `VarSized` or `Sized`.
-        pub union VarSizedOrSizedPtr<T: ?Sized + VarSizedOrSized> {
-            /// A pointer to a `Sized` type.
-            sized: *mut u8,
-            /// A pointer to a `VarSized` type. Effectively just `(*mut u8, usize)`
-            varsized: *mut T
-        }
-
-        impl<T: ?Sized + VarSizedOrSized> VarSizedOrSizedPtr<T> {
-            /// Gets the contained pointer.
-            pub fn get(&self) -> *mut T {
-                if T::IS_SIZED {
-                    unsafe { T::ptr_from_u8_ptr(self.sized) }
-                } else {
-                    unsafe { self.varsized }
-                }
-            }
-        }
-
-        fn varsized_or_sized_pointer_from_raw_parts<T: ?Sized + VarSizedOrSized>(
-            p: *mut u8,
-            meta: usize
-        ) -> VarSizedOrSizedPtr<T> {
+        /// Creates a *mut T from a `*mut u8` data pointer and `usize` metadata. If `T` is sized,
+        /// the metadata is ignored.
+        #[must_use]
+        #[inline]
+        #[allow(clippy::not_unsafe_ptr_arg_deref)]
+        pub fn anysize_ptr_from_parts<T: ?Sized + AnySize>(p: *mut u8, meta: usize) -> *mut T {
             if T::IS_SIZED {
-                VarSizedOrSizedPtr { sized: p }
+                unsafe { T::ptr_from_u8_ptr(p) }
             } else {
-                VarSizedOrSizedPtr { varsized: unsafe { make_ptr(p, meta) } }
+                unsafe { make_ptr(p, meta) }
             }
         }
 

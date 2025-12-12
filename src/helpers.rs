@@ -6,7 +6,7 @@ use {
             PtrProps,
             SizedProps,
             USIZE_MAX_NO_HIGH_BIT,
-            varsized_nonnull_from_raw_parts,
+            varsized_nonnull_from_parts,
             varsized_pointer_from_raw_parts
         },
         error::{AlignErr, AllocError, ArithErr, ArithOp, Cause, InvLayout, LayoutErr}
@@ -207,7 +207,7 @@ const_if! {
     [`NonNull::slice_from_raw_parts`], which was stabilized after this crate's MSRV.",
     #[must_use]
     pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
-        varsized_nonnull_from_raw_parts(p.cast(), len)
+        varsized_nonnull_from_parts(p.cast(), len)
     }
 }
 
