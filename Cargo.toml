@@ -83,3 +83,7 @@ full = [
 [[test]]
 name = "base"
 path = "tests/alloc.rs"
+
+[[test]]
+name = "hlp"
+path = "tests/helpers.rs"

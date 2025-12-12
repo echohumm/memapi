@@ -32,48 +32,6 @@ pub enum AllocError {
     Other(&'static str)
 }
 
-impl AllocError {
-    /// Creates a new `ArithmeticErr::Overflow` error.
-    #[allow(clippy::missing_errors_doc)]
-    #[cold]
-    #[inline(never)]
-    #[cfg_attr(not(feature = "dev"), doc(hidden))]
-    pub const fn arith_overflow(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
-        Err(ArithErr::Overflow(l, op, r))
-    }
-
-    /// Creates a new `InvLayout` error.
-    #[allow(clippy::missing_errors_doc)]
-    #[cold]
-    #[inline(never)]
-    #[cfg_attr(not(feature = "dev"), doc(hidden))]
-    pub const fn inv_layout<Ret>(
-        sz: usize,
-        align: usize,
-        err: LayoutErr
-    ) -> Result<Ret, InvLayout> {
-        Err(InvLayout(sz, align, err))
-    }
-
-    /// Creates a new `GrowSmallerNewLayout` error.
-    #[cold]
-    #[inline(never)]
-    #[cfg_attr(not(feature = "dev"), doc(hidden))]
-    #[must_use]
-    pub const fn grow_smaller(old: usize, new: usize) -> AllocError {
-        AllocError::GrowSmallerNewLayout(old, new)
-    }
-
-    /// Creates a new `ShrinkLargerNewLayout` error.
-    #[cold]
-    #[inline(never)]
-    #[cfg_attr(not(feature = "dev"), doc(hidden))]
-    #[must_use]
-    pub const fn shrink_larger(old: usize, new: usize) -> AllocError {
-        AllocError::ShrinkLargerNewLayout(old, new)
-    }
-}
-
 impl Display for AllocError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         use AllocError::{

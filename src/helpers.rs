@@ -18,6 +18,7 @@ use {
         ptr::{self, NonNull}
     }
 };
+use crate::BasicAlloc;
 
 /// Performs a checked arithmetic operation on two `usize`s.
 ///
@@ -42,7 +43,7 @@ pub const fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithE
 
     match res {
         Some(v) => Ok(v),
-        None => AllocError::arith_overflow(l, op, r)
+        None => Err(ArithErr::Overflow(l, op, r))
     }
 }
 
@@ -127,6 +128,7 @@ pub const fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvL
 /// Aligns the given value up to a non-zero alignment.
 ///
 /// # Errors
+/// 
 // TODO: better (more specific) docs (doesn't mention LayoutErr or AlignErr type)
 /// [`InvLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`].
 pub const fn align_up(sz: usize, align: usize) -> Result<usize, InvLayout> {
@@ -187,7 +189,7 @@ pub fn ptr_max_align(ptr: NonNull<u8>) -> usize {
     p & p.wrapping_neg()
 }
 
-/// Checks if two pointers of to data of size `sz` overlap.
+/// Checks if two pointers to data of size `sz` overlap.
 #[must_use]
 #[inline]
 pub fn check_ptr_overlap(a: NonNull<u8>, b: NonNull<u8>, sz: usize) -> bool {
@@ -237,7 +239,6 @@ const_if! {
 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
 /// result of `f(layout)`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
 pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
     layout: Layout,
@@ -252,7 +253,6 @@ pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, AllocError>>(
 
 #[cfg(feature = "os_err_reporting")]
 /// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     if ptr.is_null() {
@@ -274,7 +274,6 @@ pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Alloc
 }
 
 /// Converts a possibly null pointer into a [`NonNull`] result.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     if ptr.is_null() {
@@ -289,7 +288,6 @@ pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError>
 /// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
 ///
 /// Currently set to call `null_q_oserr`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     null_q_oserr(ptr, layout)
@@ -299,7 +297,6 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocEr
 /// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
 ///
 /// Currently set to call `null_q`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocError> {
     null_q(ptr, layout)
@@ -307,7 +304,6 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, AllocEr
 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise attempting
 /// allocation using `f(layout)`.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
@@ -320,7 +316,6 @@ pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
 /// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
 ///
 /// This is intended for initializing the memory and/or mapping the success value to another.
-#[cfg_attr(not(feature = "dev"), doc(hidden))]
 #[allow(clippy::missing_errors_doc)]
 pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
     a: &A,
@@ -398,14 +393,14 @@ pub unsafe fn byte_add<T: ?Sized>(mut p: *const T, n: usize) -> *const T {
 /// // (commented out for this example as the pointer won't be used)
 /// // let raw = guard.release();
 /// ```
-pub struct AllocGuard<'a, T: ?Sized, A: Alloc + ?Sized> {
+pub struct AllocGuard<'a, T: ?Sized, A: BasicAlloc + ?Sized> {
     /// The pointer this guard will deallocate on panic.
     ptr: NonNull<T>,
     /// The allocator used to allocate/deallocate `ptr`.
     alloc: &'a A
 }
 
-impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
+impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
     const_if! {
         "const_extras",
         "Creates a new guard from a pointer and a reference to an allocator.\n\n# Safety\n\n\
@@ -447,7 +442,7 @@ impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
     }
 }
 
-impl<T: ?Sized, A: Alloc + ?Sized> Drop for AllocGuard<'_, T, A> {
+impl<T: ?Sized, A: BasicAlloc + ?Sized> Drop for AllocGuard<'_, T, A> {
     #[cfg_attr(miri, track_caller)]
     fn drop(&mut self) {
         // SAFETY: new() requires that the pointer is valid.
@@ -459,7 +454,7 @@ impl<T: ?Sized, A: Alloc + ?Sized> Drop for AllocGuard<'_, T, A> {
     }
 }
 
-impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
+impl<T: ?Sized, A: BasicAlloc + ?Sized> Deref for AllocGuard<'_, T, A> {
     type Target = NonNull<T>;
 
     #[inline]
@@ -509,7 +504,7 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// // (commented out for this example as the pointer won't be used)
 /// // let slice_ptr = guard.release();
 /// ```
-pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
+pub struct SliceAllocGuard<'a, T, A: BasicAlloc + ?Sized> {
     /// The pointer to the slice which this guard will deallocate on panic.
     ptr: NonNull<T>,
     /// The allocator used to allocate `ptr`.
@@ -520,7 +515,7 @@ pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
     full: usize
 }
 
-impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
+impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     const_if! {
         "const_extras",
         "Creates a new slice guard for `full` elements at `ptr` in the given allocator.\n\n# \
@@ -784,7 +779,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 }
 
-impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
+impl<T, A: BasicAlloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
     fn drop(&mut self) {
         // SAFETY: `self.init` will be correct without improper usage of methods which set it. new()
         //  requires that the pointer was allocated using the provided allocator.
@@ -798,7 +793,7 @@ impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
     }
 }
 
-impl<T, A: Alloc + ?Sized> Deref for SliceAllocGuard<'_, T, A> {
+impl<T, A: BasicAlloc + ?Sized> Deref for SliceAllocGuard<'_, T, A> {
     type Target = NonNull<T>;
 
     #[inline]

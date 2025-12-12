@@ -149,6 +149,7 @@ mod checks {
             let mut failures = Vec::<Failure>::new();
 
             let sized_val = usize::MAX / 2 / 2 * 3 / 5;
+            #[allow(clippy::borrow_as_ptr)]
             let sized_ptr = &sized_val as *const usize as *mut usize;
             let slice = (0..20usize).collect::<Vec<_>>();
             let slice_ptr = slice.as_slice() as *const [usize] as *mut [usize];
@@ -212,7 +213,6 @@ mod checks {
             /// Whether the type is `Sized` or not.
             const IS_SIZED: bool = false;
 
-            #[doc(hidden)]
             unsafe fn ptr_from_u8_ptr(_p: *mut u8) -> *mut Self {
                 unreachable_unchecked()
             }
@@ -221,7 +221,6 @@ mod checks {
         unsafe impl<T> AnySize for T {
             const IS_SIZED: bool = true;
 
-            #[doc(hidden)]
             unsafe fn ptr_from_u8_ptr(p: *mut u8) -> *mut T {
                 p.cast()
             }
