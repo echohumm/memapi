@@ -334,6 +334,40 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
     }
 }
 
+/// Subtracts `n` bytes from a pointer's address.
+///
+/// # Safety
+///
+/// The caller must ensure:
+/// - `n < USIZE_MAX_NO_HIGH_BIT`
+/// - the resulting pointer will be within the same allocation as `p`
+/// - the resulting pointer's metadata remains valid for the new address
+pub unsafe fn byte_sub<T: ?Sized>(mut p: *const T, n: usize) -> *const T {
+    let addr_ptr = (&mut p as *mut *const T).cast::<usize>();
+    // SAFETY: the pointer is valid as it is from a &mut.
+    unsafe {
+        ptr::write(addr_ptr, *addr_ptr - n);
+    }
+    p
+}
+
+/// Adds `n` bytes to a pointer's address.
+///
+/// # Safety
+///
+/// The caller must ensure:
+/// - `n < USIZE_MAX_NO_HIGH_BIT`
+/// - the resulting pointer will be within the same allocation as `p`
+/// - the resulting pointer's metadata remains valid for the new address
+pub unsafe fn byte_add<T: ?Sized>(mut p: *const T, n: usize) -> *const T {
+    let addr_ptr = (&mut p as *mut *const T).cast::<usize>();
+    // SAFETY: the pointer is valid as it is from a &mut.
+    unsafe {
+        ptr::write(addr_ptr, *addr_ptr + n);
+    }
+    p
+}
+
 /// A RAII guard that owns a single allocation and ensures it is deallocated unless explicitly
 /// released.
 ///

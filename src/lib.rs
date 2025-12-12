@@ -32,9 +32,10 @@
 #![allow(
     rustdoc::broken_intra_doc_links,
     // does anyone else hate the Self keyword? that capital letter there looks so ugly idk why
-    clippy::use_self
+    clippy::use_self,
+    unused_unsafe
 )]
-#![deny(missing_docs, unused_unsafe)]
+#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
