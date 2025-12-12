@@ -7,7 +7,7 @@ use {
             SizedProps,
             USIZE_MAX_NO_HIGH_BIT,
             varsized_nonnull_from_parts,
-            varsized_pointer_from_raw_parts
+            varsized_pointer_from_parts
         },
         error::{AlignErr, AllocError, ArithErr, ArithOp, Cause, InvLayout, LayoutErr}
     },
@@ -206,7 +206,7 @@ const_if! {
     "Creates a `NonNull<[T]>` from a pointer and a length.\n\nThis is a helper used in place of
     [`NonNull::slice_from_raw_parts`], which was stabilized after this crate's MSRV.",
     #[must_use]
-    pub const fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
+    pub const fn nonnull_slice_from_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
         varsized_nonnull_from_parts(p.cast(), len)
     }
 }
@@ -216,8 +216,8 @@ const_if! {
     "Creates a `*mut [T]` from a pointer and a length.\n\nThis is a helper used in place of \
     [`ptr::slice_from_raw_parts_mut`], which was const-stabilized after this crate's MSRV.",
     #[must_use]
-    pub const fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
-        varsized_pointer_from_raw_parts(p.cast(), len)
+    pub const fn slice_ptr_from_parts<T>(p: *mut T, len: usize) -> *mut [T] {
+        varsized_pointer_from_parts(p.cast(), len)
     }
 }
 
@@ -553,7 +553,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         #[cfg_attr(miri, track_caller)]
         #[must_use]
         pub const fn get_init_part(&self) -> NonNull<[T]> {
-            nonnull_slice_from_raw_parts(self.ptr, self.init)
+            nonnull_slice_from_parts(self.ptr, self.init)
         }
     }
 
@@ -562,7 +562,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         "Gets a `NonNull<[T]>` pointer to the uninitialized elements of the slice.",
         #[must_use]
         pub const fn get_uninit_part(&self) -> NonNull<[T]> {
-            nonnull_slice_from_raw_parts(
+            nonnull_slice_from_parts(
                 // SAFETY: the pointer was a valid NonNull to begin with, adding cannot invalidate
                 //  it. `self.init` will be in bounds unless an init-setting method was used
                 //  incorrectly.
@@ -578,7 +578,7 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         #[cfg_attr(miri, track_caller)]
         #[must_use]
         pub const fn get_full(&self) -> NonNull<[T]> {
-            nonnull_slice_from_raw_parts(self.ptr, self.full)
+            nonnull_slice_from_parts(self.ptr, self.full)
         }
     }
 
@@ -755,7 +755,7 @@ impl<T, A: Alloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
         // SAFETY: `self.init` will be correct without improper usage of methods which set it. new()
         //  requires that the pointer was allocated using the provided allocator.
         unsafe {
-            ptr::drop_in_place(slice_ptr_from_raw_parts(self.ptr.as_ptr(), self.init));
+            ptr::drop_in_place(slice_ptr_from_parts(self.ptr.as_ptr(), self.init));
             self.alloc.dealloc(
                 self.ptr.cast(),
                 Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN)

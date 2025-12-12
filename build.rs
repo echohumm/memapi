@@ -50,7 +50,7 @@ mod checks {
             let ptr = slice.as_mut_ptr();
             let len = slice.len();
 
-            let slice_ptr = slice_ptr_from_raw_parts(ptr, len);
+            let slice_ptr = slice_ptr_from_parts(ptr, len);
 
             // check that they dereference to the same thing
             if unsafe { &*slice_ptr } != slice {
@@ -78,7 +78,7 @@ mod checks {
 
             unsafe {
                 if len
-                    != nonnull_slice_len(nonnull_slice_from_raw_parts(
+                    != nonnull_slice_len(nonnull_slice_from_parts(
                         NonNull::new_unchecked(ptr),
                         len
                     ))
@@ -123,12 +123,12 @@ mod checks {
         }
 
         #[must_use]
-        fn nonnull_slice_from_raw_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
-            unsafe { NonNull::new_unchecked(slice_ptr_from_raw_parts(p.as_ptr(), len)) }
+        fn nonnull_slice_from_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
+            unsafe { NonNull::new_unchecked(slice_ptr_from_parts(p.as_ptr(), len)) }
         }
 
         #[must_use]
-        fn slice_ptr_from_raw_parts<T>(p: *mut T, len: usize) -> *mut [T] {
+        fn slice_ptr_from_parts<T>(p: *mut T, len: usize) -> *mut [T] {
             unsafe {
                 // i hate this so much
                 *((&(p, len)) as *const (*mut T, usize)).cast::<*mut [T]>()

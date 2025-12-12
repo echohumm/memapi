@@ -307,7 +307,7 @@ const_if! {
     #[must_use]
     pub const fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
         // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-        varsized_pointer_from_raw_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
+        varsized_pointer_from_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
     }
 }
 
@@ -321,7 +321,7 @@ const_if! {
         meta: usize,
     ) -> NonNull<T> {
         // SAFETY: `p` was already non-null, so it with different meta must also be nn.
-        unsafe { NonNull::new_unchecked(varsized_pointer_from_raw_parts(p.as_ptr(), meta)) }
+        unsafe { NonNull::new_unchecked(varsized_pointer_from_parts(p.as_ptr(), meta)) }
     }
 }
 
@@ -331,7 +331,7 @@ const_if! {
     #[must_use]
     #[inline]
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub const fn varsized_pointer_from_raw_parts<T: ?Sized + VarSized>(
+    pub const fn varsized_pointer_from_parts<T: ?Sized + VarSized>(
         p: *mut u8,
         meta: usize,
     ) -> *mut T {
