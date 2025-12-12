@@ -31,6 +31,7 @@ fn run_checks() -> Vec<Failure> {
     let mut failures = Vec::new();
 
     failures.extend(checks::sp_frp::check());
+    failures.extend(checks::vs_o_s_p_frp::check());
 
     failures
 }
@@ -115,6 +116,83 @@ mod checks {
                 // i hate this so much
                 *((&(p, len)) as *const (*mut T, usize)).cast::<*mut [T]>()
             }
+        }
+    }
+
+    pub mod vs_o_s_p_frp {
+        use {crate::Failure, core::hint::unreachable_unchecked};
+
+        pub fn check() -> Vec<Failure> {
+            let mut failures = Vec::<Failure>::new();
+
+            let sized_val = usize::MAX / 2 / 2 * 3 / 5;
+            let sized_ptr = &sized_val as *const u8;
+            let slice = (0..20usize).collect::<Vec<_>>();
+            let slice_ptr = slice.as_slice() as *const [usize] as *const u8;
+
+            if varsized_or_sized_pointer_from_raw_parts(sized_ptr, 0) {
+
+            }
+
+            failures
+        }
+
+        /// Trait for types which are either `VarSized` or `Sized`.
+        pub unsafe trait VarSizedOrSized {
+            /// Whether the type is `Sized` or not.
+            const IS_SIZED: bool = false;
+
+            #[doc(hidden)]
+            unsafe fn ptr_from_u8_ptr(_p: *mut u8) -> *mut Self {
+                unreachable_unchecked()
+            }
+        }
+
+        unsafe impl<T> VarSizedOrSized for T {
+            const IS_SIZED: bool = true;
+
+            #[doc(hidden)]
+            unsafe fn ptr_from_u8_ptr(p: *mut u8) -> *mut T {
+                p.cast()
+            }
+        }
+
+        unsafe impl<T> VarSizedOrSized for [T] {}
+        unsafe impl VarSizedOrSized for str {}
+
+        /// A pointer to a type that is either `VarSized` or `Sized`.
+        pub union VarSizedOrSizedPtr<T: ?Sized + VarSizedOrSized> {
+            /// A pointer to a `Sized` type.
+            sized: *mut u8,
+            /// A pointer to a `VarSized` type. Effectively just `(*mut u8, usize)`
+            varsized: *mut T
+        }
+
+        impl<T: ?Sized + VarSizedOrSized> VarSizedOrSizedPtr<T> {
+            /// Gets the contained pointer.
+            pub fn get(&self) -> *mut T {
+                if T::IS_SIZED {
+                    unsafe { T::ptr_from_u8_ptr(self.sized) }
+                } else {
+                    unsafe { self.varsized }
+                }
+            }
+        }
+
+        fn varsized_or_sized_pointer_from_raw_parts<T: ?Sized + VarSizedOrSized>(
+            p: *mut u8,
+            meta: usize
+        ) -> VarSizedOrSizedPtr<T> {
+            if T::IS_SIZED {
+                VarSizedOrSizedPtr { sized: p }
+            } else {
+                VarSizedOrSizedPtr { varsized: unsafe { make_ptr(p, meta) } }
+            }
+        }
+
+        unsafe fn make_ptr<T: ?Sized>(p: *mut u8, meta: usize) -> *mut T {
+            // i hate this so much
+            *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
         }
     }
 }

@@ -365,7 +365,9 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
 /// // let raw = guard.release();
 /// ```
 pub struct AllocGuard<'a, T: ?Sized, A: Alloc + ?Sized> {
+    /// The pointer this guard will deallocate on panic.
     ptr: NonNull<T>,
+    /// The allocator used to allocate/deallocate `ptr`.
     alloc: &'a A
 }
 
@@ -414,9 +416,11 @@ impl<'a, T: ?Sized, A: Alloc + ?Sized> AllocGuard<'a, T, A> {
 impl<T: ?Sized, A: Alloc + ?Sized> Drop for AllocGuard<'_, T, A> {
     #[cfg_attr(miri, track_caller)]
     fn drop(&mut self) {
+        // SAFETY: new() requires that the pointer is valid.
+        let layout = unsafe { self.ptr.layout() };
         // SAFETY: new() requires that the pointer was allocated using the provided allocator
         unsafe {
-            self.alloc.dealloc(self.ptr.cast::<u8>(), self.ptr.layout());
+            self.alloc.dealloc(self.ptr.cast::<u8>(), layout);
         }
     }
 }
@@ -472,9 +476,13 @@ impl<T: ?Sized, A: Alloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// // let slice_ptr = guard.release();
 /// ```
 pub struct SliceAllocGuard<'a, T, A: Alloc + ?Sized> {
+    /// The pointer to the slice which this guard will deallocate on panic.
     ptr: NonNull<T>,
+    /// The allocator used to allocate `ptr`.
     alloc: &'a A,
+    /// The initialized element count of the slice.
     pub(crate) init: usize,
+    /// The allocated length of the slice.
     full: usize
 }
 
@@ -716,6 +724,8 @@ impl<'a, T, A: Alloc + ?Sized> SliceAllocGuard<'a, T, A> {
         if uncloned == 0 { Ok(()) } else { Err(uncloned) }
     }
 
+    // error shows, but it seems to be fine since it compiles
+    //noinspection RsAssociatedTypeMismatch
     /// Initializes the next elements of the slice with the elements from `iter`.
     ///
     /// # Errors

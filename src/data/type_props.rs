@@ -1,8 +1,8 @@
-use core::hint::unreachable_unchecked;
 use {
     crate::helpers::dangling_nonnull,
     core::{
         alloc::Layout,
+        hint::unreachable_unchecked,
         mem::{align_of, align_of_val, size_of, size_of_val},
         ptr::NonNull
     }
@@ -289,35 +289,6 @@ unsafe impl VarSized for std::path::Path {
     type Subtype = u8;
 }
 
-/// Trait for types which are either `VarSized` or `Sized`.
-pub unsafe trait VarSizedOrSized {
-    /// Whether the type is `Sized` or not.
-    const IS_SIZED: bool = false;
-
-    #[doc(hidden)]
-    unsafe fn from_u8_ptr(p: *mut u8) -> *mut Self {
-        unreachable_unchecked()
-    }
-}
-
-unsafe impl<T> VarSizedOrSized for T {
-    const IS_SIZED: bool = true;
-
-    #[doc(hidden)]
-    unsafe fn from_u8_ptr(p: *mut u8) -> *mut T {
-        p.cast()
-    }
-}
-
-unsafe impl<T> VarSizedOrSized for [T] {}
-unsafe impl VarSizedOrSized for str {}
-#[cfg(all(feature = "c_str", not(feature = "std")))]
-unsafe impl VarSizedOrSized for core::ffi::CStr {}
-#[cfg(feature = "std")]
-unsafe impl VarSizedOrSized for std::ffi::OsStr {}
-#[cfg(feature = "std")]
-unsafe impl VarSizedOrSized for std::path::Path {}
-
 // not associated to reduce clutter, and so they can be const
 
 const_if! {
@@ -370,62 +341,67 @@ const_if! {
     }
 }
 
-/// A pointer to either a `VarSized` or `Sized` type.
-pub enum VarSizedOrSizedPtr<T: ?Sized + VarSizedOrSized> {
-    #[allow(private_interfaces)]
-    /// A pointer to a `Sized` type. Cannot be constructed manually, you must use
-    /// [`sized`](VarSizedOrSizedPtr::sized).
-    Sized(*mut u8, Sealed),
-    /// A pointer to a `VarSized` type.
-    VarSized(*mut T)
-}
+/// Trait for types which are either `VarSized` or `Sized`.
+pub unsafe trait VarSizedOrSized {
+    /// Whether the type is `Sized` or not.
+    const IS_SIZED: bool = false;
 
-/// Unconstructable struct used to prevent user construction of `Sized` variant above, as if `T` is
-/// unsized, and `p: *mut T`, `VarSizedOrSizedPtr::Sized(p)` will cause UB if `get()` is called.
-#[doc(hidden)]
-pub struct Sealed {
-    _seal: Seal
-}
-impl Sealed {
-    // must be private
-    const fn new() -> Sealed {
-        Sealed {
-            _seal: Seal
-        }
+    #[doc(hidden)]
+    unsafe fn ptr_from_u8_ptr(_p: *mut u8) -> *mut Self {
+        unreachable_unchecked()
     }
 }
-/// Inner seal of `Sealed` used because older versions of rust disallow private structs in public
-/// enums.
-struct Seal;
 
-impl<T: VarSizedOrSized> VarSizedOrSizedPtr<T> {
-    const_if! {
-        "const_extras",
-        "undocumented",
-        pub const fn sized(ptr: *mut T) -> VarSizedOrSizedPtr<T> {
-            VarSizedOrSizedPtr::Sized(ptr.cast(), Sealed::new())
-        }
+unsafe impl<T> VarSizedOrSized for T {
+    const IS_SIZED: bool = true;
+
+    #[doc(hidden)]
+    unsafe fn ptr_from_u8_ptr(p: *mut u8) -> *mut T {
+        p.cast()
     }
+}
+
+unsafe impl<T> VarSizedOrSized for [T] {}
+unsafe impl VarSizedOrSized for str {}
+#[cfg(all(feature = "c_str", not(feature = "std")))]
+unsafe impl VarSizedOrSized for core::ffi::CStr {}
+#[cfg(feature = "std")]
+unsafe impl VarSizedOrSized for std::ffi::OsStr {}
+#[cfg(feature = "std")]
+unsafe impl VarSizedOrSized for std::path::Path {}
+
+/// A pointer to a type that is either `VarSized` or `Sized`.
+pub union VarSizedOrSizedPtr<T: ?Sized + VarSizedOrSized> {
+    /// A pointer to a `Sized` type.
+    sized: *mut u8,
+    /// A pointer to a `VarSized` type. Effectively just `(*mut u8, usize)`
+    varsized: *mut T
 }
 
 impl<T: ?Sized + VarSizedOrSized> VarSizedOrSizedPtr<T> {
     /// Gets the contained pointer.
     pub fn get(&self) -> *mut T {
-        match self {
-            VarSizedOrSizedPtr::Sized(ptr, _) => unsafe { T::from_u8_ptr(*ptr) },
-            VarSizedOrSizedPtr::VarSized(ptr) => *ptr
+        if T::IS_SIZED {
+            unsafe { T::ptr_from_u8_ptr(self.sized) }
+        } else {
+            unsafe { self.varsized }
         }
     }
 }
 
 const_if! {
     "const_extras",
-    "Creates a pointer to a type that is either `VarSized` or `Sized` based on a pointer to a `u8` and metadata. If the type is `Sized`, metadata is discarded.",
+    "Creates a pointer to a type that is either `VarSized` or `Sized` based on a pointer to a \n\
+    `u8` and metadata. If the type is `Sized`, metadata is discarded.",
     pub const fn varsized_or_sized_pointer_from_raw_parts<T: ?Sized + VarSizedOrSized>(
         p: *mut u8,
         meta: usize
     ) -> VarSizedOrSizedPtr<T> {
-        if T::IS_SIZED { VarSizedOrSizedPtr::Sized(p, Sealed::new()) } else { VarSizedOrSizedPtr::VarSized(unsafe { make_ptr(p, meta) }) }
+        if T::IS_SIZED {
+            VarSizedOrSizedPtr { sized: p }
+        } else {
+            VarSizedOrSizedPtr { varsized: unsafe { make_ptr(p, meta) } }
+        }
     }
 }
 
