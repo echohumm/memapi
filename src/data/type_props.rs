@@ -346,6 +346,11 @@ const_if! {
 
 /// Trait for types which are either `VarSized` or `Sized`.
 ///
+/// Unfortunately, you must implement this yourself for all types you want to use with
+/// `anysized_ptr_from_parts`. This is because using a blanket implementation for `T: Sized` will
+/// include any type which might include a sized type parameter, meaning that this will not work
+/// with structs like `Value<T: ?Sized>`.
+///
 /// # Safety
 ///
 /// Implementors must ensure that `T: VarSized` or `T: Sized`, `IS_SIZED` is correct based on the
@@ -364,15 +369,6 @@ pub unsafe trait AnySized {
     #[inline]
     unsafe fn ptr_from_u8_ptr(_p: *mut u8) -> *mut Self {
         unreachable_unchecked()
-    }
-}
-
-unsafe impl<T> AnySized for T {
-    const IS_SIZED: bool = true;
-
-    #[inline]
-    unsafe fn ptr_from_u8_ptr(p: *mut u8) -> *mut T {
-        p.cast()
     }
 }
 
