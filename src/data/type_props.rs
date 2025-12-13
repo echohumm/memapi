@@ -3,7 +3,7 @@ use {
     core::{
         alloc::Layout,
         mem::{align_of, align_of_val, size_of, size_of_val},
-        ptr::{self, NonNull}
+        ptr::NonNull
     }
 };
 
@@ -338,7 +338,7 @@ const_if! {
     ) -> *mut T {
         // SAFETY: VarSized trait requires T::Metadata == usize
         unsafe {
-            *((&ptr::slice_from_raw_parts_mut::<T::Subtype>(
+            *((&core::ptr::slice_from_raw_parts_mut::<T::Subtype>(
                     p.cast(), meta
                 ) as *const *mut [T::Subtype]).cast::<*mut T>())
         }
@@ -375,7 +375,7 @@ const_if! {
     ) -> *const T {
         // SAFETY: VarSized trait requires T::Metadata == usize
         unsafe {
-            *((&ptr::slice_from_raw_parts::<T::Subtype>(
+            *((&core::ptr::slice_from_raw_parts::<T::Subtype>(
                     p.cast(), meta
                 ) as *const *const [T::Subtype]).cast::<*const T>())
         }

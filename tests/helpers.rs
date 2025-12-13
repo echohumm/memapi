@@ -18,7 +18,9 @@ const BYTE: u8 = 0b1010_1010;
 
 #[test]
 fn byte_sub_stack() {
-    let ptr = (&VALUE as *const u64).cast::<u8>();
+    let value = VALUE;
+
+    let ptr = (&value as *const u64).cast::<u8>();
     assert_eq!(unsafe { *ptr }, BYTE);
     let ptr_halfway = unsafe { ptr.add(4) };
     assert_eq!(unsafe { *ptr_halfway }, BYTE);
@@ -34,7 +36,7 @@ fn byte_sub_heap() {
     let l = Layout::new::<u64>();
     let mem = a.alloc(l).unwrap().cast();
     unsafe {
-        mem.write(VALUE);
+        ptr::write(mem.as_ptr(), VALUE);
     }
 
     let ptr = mem.as_ptr().cast::<u8>();
@@ -60,7 +62,7 @@ fn slice_ptr_from_parts_stack_roundtrip() {
         let s: &mut [u32] = unsafe { &mut *raw_slice };
         assert_eq!(s, &mut [1, 2, 3, 4]);
     }
-    assert!(ptr::eq(arr.as_slice() as *const _, raw_slice as *const _));
+    assert!(ptr::eq(&arr, raw_slice as *const _));
 }
 
 #[test]
@@ -73,5 +75,5 @@ fn varsized_ptr_from_parts_for_slices() {
         let s: &mut [u16] = unsafe { &mut *raw_slice };
         assert_eq!(s, &mut [10, 20, 30]);
     }
-    assert!(ptr::eq(arr.as_slice() as *const _, raw_slice as *const _));
+    assert!(ptr::eq(&arr, raw_slice as *const _));
 }
