@@ -42,7 +42,9 @@
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
 // TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
-// TODO: a lot of helpers and unstable utils would be good to have in another crate, maybe?
+// TODO: a lot of helpers and unstable utils would be good to have in another crate, maybe
+// TODO: now that i'm using rustversion anyways, should get rid of const_if! in favor of
+//  attr(since(...), const)
 
 extern crate alloc;
 extern crate core;

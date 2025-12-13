@@ -125,7 +125,6 @@ mod checks {
         #[must_use]
         fn slice_ptr_from_parts<T>(p: *mut T, len: usize) -> *mut [T] {
             unsafe {
-                // i hate this so much
                 *((&(p, len)) as *const (*mut T, usize)).cast::<*mut [T]>()
             }
         }
