@@ -2,9 +2,8 @@ use {
     crate::helpers::dangling_nonnull,
     core::{
         alloc::Layout,
-        hint::unreachable_unchecked,
         mem::{align_of, align_of_val, size_of, size_of_val},
-        ptr::NonNull
+        ptr::{self, NonNull}
     }
 };
 
@@ -291,6 +290,7 @@ unsafe impl VarSized for std::path::Path {
 
 // not associated to reduce clutter, and so they can be const
 
+// TODO: better dangling delegation system, const vers
 const_if! {
     "const_extras",
     "Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.",
@@ -305,9 +305,9 @@ const_if! {
     "const_extras",
     "Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.",
     #[must_use]
-    pub const fn varsized_dangling_pointer<T: ?Sized + VarSized>() -> *mut T {
+    pub const fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *mut T {
         // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-        varsized_pointer_from_parts(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
+        varsized_ptr_from_parts_mut(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
     }
 }
 
@@ -321,86 +321,82 @@ const_if! {
         meta: usize,
     ) -> NonNull<T> {
         // SAFETY: `p` was already non-null, so it with different meta must also be nn.
-        unsafe { NonNull::new_unchecked(varsized_pointer_from_parts(p.as_ptr(), meta)) }
+        unsafe { NonNull::new_unchecked(varsized_ptr_from_parts_mut(p.as_ptr(), meta)) }
     }
 }
 
+#[rustversion::since(1.83)]
 const_if! {
     "const_extras",
     "Creates a `*mut T` from a pointer and a `usize` size metadata.",
     #[must_use]
     #[inline]
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    pub const fn varsized_pointer_from_parts<T: ?Sized + VarSized>(
+    pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(
         p: *mut u8,
         meta: usize,
     ) -> *mut T {
         // SAFETY: VarSized trait requires T::Metadata == usize
         unsafe {
-            make_ptr(p, meta)
+            *((&ptr::slice_from_raw_parts_mut::<T::Subtype>(
+                    p.cast(), meta
+                ) as *const *mut [T::Subtype]).cast::<*mut T>())
+        }
+    }
+}
+#[rustversion::before(1.83)]
+const_if! {
+    "const_extras",
+    "Creates a `*mut T` from a pointer and a `usize` size metadata.",
+    #[must_use]
+    #[inline]
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(
+        p: *mut u8,
+        meta: usize,
+    ) -> *mut T {
+        // SAFETY: VarSized trait requires T::Metadata == usize
+        unsafe {
+            // i hate this so much
+            *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
+        }
+    }
+}
+#[rustversion::since(1.83)]
+const_if! {
+    "const_extras",
+    "Creates a `*mut T` from a pointer and a `usize` size metadata.",
+    #[must_use]
+    #[inline]
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(
+        p: *const u8,
+        meta: usize,
+    ) -> *const T {
+        // SAFETY: VarSized trait requires T::Metadata == usize
+        unsafe {
+            *((&ptr::slice_from_raw_parts::<T::Subtype>(
+                    p.cast(), meta
+                ) as *const *const [T::Subtype]).cast::<*const T>())
+        }
+    }
+}
+#[rustversion::before(1.83)]
+const_if! {
+    "const_extras",
+    "Creates a `*mut T` from a pointer and a `usize` size metadata.",
+    #[must_use]
+    #[inline]
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
+    pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(
+        p: *const u8,
+        meta: usize,
+    ) -> *const T {
+        // SAFETY: VarSized trait requires T::Metadata == usize
+        unsafe {
+            *((&(p, meta)) as *const (*const u8, usize)).cast::<*const T>()
         }
     }
 }
 
-// believe it or not, this works. it's also the only way to do this.
-
-/// Trait for types which are either `VarSized` or `Sized`.
-///
-/// # Safety
-///
-/// Implementors must ensure that `T: VarSized` or `T: Sized`, `IS_SIZED` is correct based on the
-/// aforementioned, and that `ptr_from_u8_ptr` is UB if called when `Self` is not `Sized` but fine
-/// otherwise.
-pub unsafe trait AnySized {
-    /// Whether the type is `Sized` or not.
-    const IS_SIZED: bool = false;
-
-    /// Creates a `*mut Self` from a `*mut u8` data pointer.
-    ///
-    /// # Safety
-    ///
-    /// Callers must ensure that `Self: Sized`. This can be determined at runtime via `IS_SIZED`
-    #[must_use]
-    #[inline]
-    unsafe fn ptr_from_u8_ptr(_p: *mut u8) -> *mut Self {
-        unreachable_unchecked()
-    }
-}
-
-unsafe impl<T> AnySized for T {
-    const IS_SIZED: bool = true;
-
-    #[inline]
-    unsafe fn ptr_from_u8_ptr(p: *mut u8) -> *mut T {
-        p.cast()
-    }
-}
-
-// unfortunately, we can't use impl<T: VarSized> because it overlaps Sized because Sized and
-//  VarSized are not considered mutually exclusive by the language even though they are.
-unsafe impl<T> AnySized for [T] {}
-unsafe impl AnySized for str {}
-#[cfg(all(feature = "c_str", not(feature = "std")))]
-unsafe impl AnySized for core::ffi::CStr {}
-#[cfg(feature = "std")]
-unsafe impl AnySized for std::ffi::OsStr {}
-#[cfg(feature = "std")]
-unsafe impl AnySized for std::path::Path {}
-
-/// Creates a `*mut T` from a `*mut u8` data pointer and `usize` metadata. If `T: Sized`, the
-/// metadata is ignored.
-#[must_use]
-#[inline]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-pub fn anysized_ptr_from_parts<T: ?Sized + AnySized>(p: *mut u8, meta: usize) -> *mut T {
-    if T::IS_SIZED { unsafe { T::ptr_from_u8_ptr(p) } } else { unsafe { make_ptr(p, meta) } }
-}
-
-const_if! {
-    "const_extras",
-    "private",
-    const unsafe fn make_ptr<T: ?Sized>(p: *mut u8, meta: usize) -> *mut T {
-        // i hate this so much
-        *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
-    }
-}
+// anysized system didn't work well enough for me to actually keep it.

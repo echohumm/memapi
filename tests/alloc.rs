@@ -2,7 +2,7 @@
 
 use {
     core::{alloc::Layout, ptr},
-    memapi2::{traits::*, DefaultAlloc, error::AllocError}
+    memapi2::{DefaultAlloc, error::AllocError, traits::*}
 };
 
 #[test]

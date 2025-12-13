@@ -1,13 +1,15 @@
 use {
     crate::{
         Alloc,
+        BasicAlloc,
         Layout,
         data::type_props::{
             PtrProps,
             SizedProps,
             USIZE_MAX_NO_HIGH_BIT,
             varsized_nonnull_from_parts,
-            varsized_pointer_from_parts
+            varsized_ptr_from_parts,
+            varsized_ptr_from_parts_mut
         },
         error::{AlignErr, AllocError, ArithErr, ArithOp, Cause, InvLayout, LayoutErr}
     },
@@ -18,7 +20,6 @@ use {
         ptr::{self, NonNull}
     }
 };
-use crate::BasicAlloc;
 
 /// Performs a checked arithmetic operation on two `usize`s.
 ///
@@ -128,7 +129,6 @@ pub const fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvL
 /// Aligns the given value up to a non-zero alignment.
 ///
 /// # Errors
-/// 
 // TODO: better (more specific) docs (doesn't mention LayoutErr or AlignErr type)
 /// [`InvLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`].
 pub const fn align_up(sz: usize, align: usize) -> Result<usize, InvLayout> {
@@ -162,6 +162,7 @@ pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
     unsafe { NonNull::new_unchecked(r as *const T as *mut T) }
 }
 
+// TODO: better dangling delegation system, const vers
 /// Returns a [`NonNull`] which has the given alignment as its address.
 ///
 /// # Safety
@@ -218,8 +219,18 @@ const_if! {
     "Creates a `*mut [T]` from a pointer and a length.\n\nThis is a helper used in place of \
     [`ptr::slice_from_raw_parts_mut`], which was const-stabilized after this crate's MSRV.",
     #[must_use]
-    pub const fn slice_ptr_from_parts<T>(p: *mut T, len: usize) -> *mut [T] {
-        varsized_pointer_from_parts(p.cast(), len)
+    pub const fn slice_ptr_from_parts_mut<T>(p: *mut T, len: usize) -> *mut [T] {
+        varsized_ptr_from_parts_mut(p.cast(), len)
+    }
+}
+
+const_if! {
+    "const_extras",
+    "Creates a `*mut [T]` from a pointer and a length.\n\nThis is a helper used in place of \
+    [`ptr::slice_from_raw_parts_mut`], which was const-stabilized after this crate's MSRV.",
+    #[must_use]
+    pub const fn slice_ptr_from_parts<T>(p: *const T, len: usize) -> *const [T] {
+        varsized_ptr_from_parts(p.cast(), len)
     }
 }
 
@@ -329,6 +340,9 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
     }
 }
 
+// TODO: more handling of different rust versions. here, we use proper provenance on versions which
+//  need it (>=1.84) by using stdlib's byte_sub when it's available (>=1.75).
+#[rustversion::since(1.75)]
 /// Subtracts `n` bytes from a pointer's address.
 ///
 /// # Safety
@@ -337,7 +351,20 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
 /// - `n < USIZE_MAX_NO_HIGH_BIT`
 /// - the resulting pointer will be within the same allocation as `p`
 /// - the resulting pointer's metadata remains valid for the new address
-pub unsafe fn byte_sub<T: ?Sized>(mut p: *const T, n: usize) -> *const T {
+pub unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
+    p.byte_sub(n)
+}
+#[rustversion::before(1.75)]
+/// Subtracts `n` bytes from a pointer's address.
+///
+/// # Safety
+///
+/// The caller must ensure:
+/// - `n < USIZE_MAX_NO_HIGH_BIT`
+/// - the resulting pointer will be within the same allocation as `p`
+/// - the resulting pointer's metadata remains valid for the new address
+pub unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
+    let mut p = p;
     let addr_ptr = (&mut p as *mut *const T).cast::<usize>();
     // SAFETY: the pointer is valid as it is from a &mut.
     unsafe {
@@ -346,6 +373,7 @@ pub unsafe fn byte_sub<T: ?Sized>(mut p: *const T, n: usize) -> *const T {
     p
 }
 
+#[rustversion::since(1.75)]
 /// Adds `n` bytes to a pointer's address.
 ///
 /// # Safety
@@ -354,7 +382,20 @@ pub unsafe fn byte_sub<T: ?Sized>(mut p: *const T, n: usize) -> *const T {
 /// - `n < USIZE_MAX_NO_HIGH_BIT`
 /// - the resulting pointer will be within the same allocation as `p`
 /// - the resulting pointer's metadata remains valid for the new address
-pub unsafe fn byte_add<T: ?Sized>(mut p: *const T, n: usize) -> *const T {
+pub unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
+    p.byte_add(n)
+}
+#[rustversion::before(1.75)]
+/// Adds `n` bytes to a pointer's address.
+///
+/// # Safety
+///
+/// The caller must ensure:
+/// - `n < USIZE_MAX_NO_HIGH_BIT`
+/// - the resulting pointer will be within the same allocation as `p`
+/// - the resulting pointer's metadata remains valid for the new address
+pub unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
+    let mut p = p;
     let addr_ptr = (&mut p as *mut *const T).cast::<usize>();
     // SAFETY: the pointer is valid as it is from a &mut.
     unsafe {
@@ -784,7 +825,7 @@ impl<T, A: BasicAlloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
         // SAFETY: `self.init` will be correct without improper usage of methods which set it. new()
         //  requires that the pointer was allocated using the provided allocator.
         unsafe {
-            ptr::drop_in_place(slice_ptr_from_parts(self.ptr.as_ptr(), self.init));
+            ptr::drop_in_place(slice_ptr_from_parts_mut(self.ptr.as_ptr(), self.init));
             self.alloc.dealloc(
                 self.ptr.cast(),
                 Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN)

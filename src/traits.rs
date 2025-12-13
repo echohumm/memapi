@@ -1,8 +1,5 @@
 use {
-    crate::{
-        error::AllocError,
-        helpers::{self, alloc_then}
-    },
+    crate::{error::AllocError, helpers::alloc_then},
     core::{
         alloc::Layout,
         cmp::Ordering,
@@ -10,7 +7,8 @@ use {
     }
 };
 
-// TODO: make sure new set of traits is compatible wit hall features
+// TODO: make sure new set of traits is compatible with all featuresets
+// TODO: try to remove Dealloc requirement from Grow/Shrink and by ext., Realloc
 /// A memory allocation interface.
 pub trait Alloc {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
@@ -295,23 +293,23 @@ impl Alloc for std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        helpers::null_q_zsl_check(
+        crate::helpers::null_q_zsl_check(
             layout,
             // SAFETY: System::alloc is only called after the layout is verified non-zero-sized.
             |layout| unsafe { alloc::alloc::GlobalAlloc::alloc(self, layout) },
-            helpers::null_q_dyn
+            crate::helpers::null_q_dyn
         )
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, AllocError> {
-        helpers::null_q_zsl_check(
+        crate::helpers::null_q_zsl_check(
             layout,
             // SAFETY: System::alloc_zeroed is only called after the layout is verified
             //  non-zero-sized.
             |layout| unsafe { alloc::alloc::GlobalAlloc::alloc_zeroed(self, layout) },
-            helpers::null_q_dyn
+            crate::helpers::null_q_dyn
         )
     }
 }
@@ -352,7 +350,9 @@ unsafe fn grow<A: Grow + ?Sized>(
                 grow_unchecked(&a, ptr, old_layout, new_layout, b)
             }
         }
-        Ordering::Greater => Err(AllocError::GrowSmallerNewLayout(old_layout.size(), new_layout.size()))
+        Ordering::Greater => {
+            Err(AllocError::GrowSmallerNewLayout(old_layout.size(), new_layout.size()))
+        }
     }
 }
 
@@ -365,7 +365,9 @@ unsafe fn shrink<A: Shrink + ?Sized>(
     new_layout: Layout
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => Err(AllocError::ShrinkLargerNewLayout(old_layout.size(), new_layout.size())),
+        Ordering::Less => {
+            Err(AllocError::ShrinkLargerNewLayout(old_layout.size(), new_layout.size()))
+        }
         Ordering::Equal => {
             if new_layout.align() == old_layout.align() {
                 Ok(ptr)
@@ -396,7 +398,7 @@ unsafe fn grow_unchecked<A: Grow + ?Sized>(
     let old_size = old_layout.size();
     let new_ptr = match b {
         Bytes::Uninitialized => tri!(do a.alloc(new_layout)),
-        Bytes::Zeroed => tri!(do a.zalloc(new_layout)),
+        Bytes::Zeroed => tri!(do a.zalloc(new_layout))
     };
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_size);
@@ -459,5 +461,5 @@ enum Bytes {
     /// Uninitialized bytes.
     Uninitialized,
     /// Zeroed bytes.
-    Zeroed,
+    Zeroed
 }

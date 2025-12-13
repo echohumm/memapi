@@ -58,11 +58,8 @@ c_str = []
 nightly = []
 metadata = ["nightly"]
 sized_hierarchy = ["nightly"]
-clone_to_uninit = ["nightly"]
 
-all_nightly = ["metadata", "clone_to_uninit"]
-
-default_nightly = ["metadata", "clone_to_uninit"]
+all_nightly = ["metadata", "sized_hierarchy"]
 
 # std support
 std = []
@@ -70,13 +67,17 @@ std = []
 # specific std features
 os_err_reporting = ["std"]
 
-misc_traits = []
-
 full = [
-    "misc_traits",
+    "os_err_reporting",
     "const_max",
     "c_str"
 ]
+full_nightly = ["full", "all_nightly"]
+
+
+
+[dependencies]
+rustversion = "1.0.22"
 
 
 

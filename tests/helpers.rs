@@ -1,9 +1,15 @@
 // provenance is annoying. this crate definitely has more issues with it than i am aware of
-#![cfg(not(miri))]
 #![allow(clippy::cast_ptr_alignment)]
+
 use {
-    memapi2::{Alloc, DefaultAlloc, helpers::byte_sub},
-    std::alloc::Layout
+    memapi2::{
+        Alloc,
+        Dealloc,
+        DefaultAlloc,
+        data::type_props::varsized_ptr_from_parts_mut,
+        helpers::{byte_sub, slice_ptr_from_parts_mut}
+    },
+    std::{alloc::Layout, ptr}
 };
 
 const VALUE: u64 =
@@ -25,7 +31,8 @@ fn byte_sub_stack() {
 #[test]
 fn byte_sub_heap() {
     let a = DefaultAlloc;
-    let mem = a.alloc(Layout::new::<u64>()).unwrap().cast();
+    let l = Layout::new::<u64>();
+    let mem = a.alloc(l).unwrap().cast();
     unsafe {
         mem.write(VALUE);
     }
@@ -38,4 +45,33 @@ fn byte_sub_heap() {
     let ptr_subbed = unsafe { byte_sub(ptr_halfway.cast::<u64>(), 4) };
     assert_eq!(unsafe { *ptr_subbed }, VALUE);
     assert_eq!(unsafe { *ptr_subbed.cast::<u8>() }, BYTE);
+
+    unsafe {
+        a.dealloc(mem.cast(), l);
+    }
+}
+
+#[test]
+fn slice_ptr_from_parts_stack_roundtrip() {
+    let mut arr = [1u32, 2, 3, 4];
+    let raw_slice = slice_ptr_from_parts_mut(arr.as_mut_ptr(), arr.len());
+
+    {
+        let s: &mut [u32] = unsafe { &mut *raw_slice };
+        assert_eq!(s, &mut [1, 2, 3, 4]);
+    }
+    assert!(ptr::eq(arr.as_slice() as *const _, raw_slice as *const _));
+}
+
+#[test]
+fn varsized_ptr_from_parts_for_slices() {
+    let mut arr = [10u16, 20, 30];
+    let raw_slice: *mut [u16] =
+        varsized_ptr_from_parts_mut(arr.as_mut_ptr().cast::<u8>(), arr.len());
+
+    {
+        let s: &mut [u16] = unsafe { &mut *raw_slice };
+        assert_eq!(s, &mut [10, 20, 30]);
+    }
+    assert!(ptr::eq(arr.as_slice() as *const _, raw_slice as *const _));
 }

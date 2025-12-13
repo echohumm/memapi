@@ -39,7 +39,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
-#![cfg_attr(feature = "clone_to_uninit", feature(clone_to_uninit))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
 // TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
@@ -82,7 +81,7 @@ macro_rules! const_if {
         $docs:literal,
         $(#[$attr:meta])*
         // this is also pretty poorly done, but it makes type param and optional req work
-        const unsafe fn $name:ident $(<$generic_ty:ident $(: ?$req:ident)?>)? ( $($args:tt)* )
+        const unsafe fn $name:ident $(<$generic_ty:ident $(: ?$req:ident)? $(+ $req2:ident)?>)? ( $($args:tt)* )
         $(-> $ret:ty)?
         // also kinda poorly done, but it makes a single where clause work
         $(where $where_ty:ident : $where_req:ident)?
@@ -94,7 +93,7 @@ macro_rules! const_if {
         // feature should only be enabled on compatible versions, so we allow this
         #[allow(clippy::incompatible_msrv)]
         $(#[$attr])*
-        const unsafe fn $name $(<$generic_ty $(: ?$req)?>)? ($($args)*)
+        const unsafe fn $name $(<$generic_ty $(: ?$req)? $(+ $req2)?>)? ($($args)*)
         $(-> $ret)? $(where $where_ty: $where_req)? $body
 
         // when the feature is disabled, drop the `const`
@@ -102,7 +101,7 @@ macro_rules! const_if {
         #[doc = $docs]
         $(#[$attr])*
         #[allow(unknown_lints, clippy::missing_const_for_fn)]
-        unsafe fn $name $(<$generic_ty $(: ?$req)?>)? ($($args)*)
+        unsafe fn $name $(<$generic_ty $(: ?$req)? $(+ $req2)?>)? ($($args)*)
         $(-> $ret)? $(where $where_ty: $where_req)? $body
     };
 
@@ -192,9 +191,6 @@ macro_rules! tri {
 /// This includes marker traits, type properties, and miscellaneous data-handling traits.
 pub mod data;
 
-/// Small alternatives to Rust functions that are unstable as of the most recent release.
-pub mod unstable_util;
-
 /// The library's main traits.
 pub mod traits;
 pub use traits::*;
@@ -202,9 +198,7 @@ pub use traits::*;
 /// Errors that can occur during allocation.
 pub mod error;
 
-use {
-    core::alloc::Layout
-};
+use core::alloc::Layout;
 
 /// Default allocator, delegating to the global allocator.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
