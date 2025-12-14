@@ -1,8 +1,8 @@
 [package]
 name = "memapi2"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2018"
-rust-version = "1.56.0"
+rust-version = "1.46.0"
 authors = ["echohumm"]
 description = "A no_std/no-alloc-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "GPL-3.0 OR MIT"
@@ -43,14 +43,8 @@ incremental = false
 [features]
 default = []
 
-# meta features
-dev = []
-
 # msrv-changing features
 ## that make small changes
-assumptions = ["const_extras"]
-const_extras = []
-const_max = ["const_extras"]
 c_str = []
 
 # nightly support
@@ -68,7 +62,6 @@ os_err_reporting = ["std"]
 
 full = [
     "os_err_reporting",
-    "const_max",
     "c_str"
 ]
 full_nightly = ["full", "all_nightly"]

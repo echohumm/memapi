@@ -30,7 +30,6 @@
 #![allow(clippy::borrow_as_ptr)]
 #![warn(unknown_lints)]
 #![allow(
-    rustdoc::broken_intra_doc_links,
     // does anyone else hate the Self keyword? that capital letter there looks so ugly idk why
     clippy::use_self,
     unused_unsafe
@@ -43,140 +42,18 @@
 
 // TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
 // TODO: a lot of helpers and unstable utils would be good to have in another crate, maybe
-// TODO: now that i'm using rustversion anyways, should get rid of const_if! in favor of
-//  attr(since(...), const)
 
 extern crate alloc;
 extern crate core;
-macro_rules! const_if {
-    (
-        $feature:literal,
-        $docs:literal,
-        $(#[$attr:meta])*
-        // this is also pretty poorly done, but it makes type param and optional req work
-        pub const fn $name:ident $(<$generic_ty:ident $(: $req:ident)?>)? ( $($args:tt)* )
-        $(-> $ret:ty)?
-        // also kinda poorly done, but it makes a single where clause work
-        $(where $where_ty:ident : $where_req:ident)?
-        $body:block
-    ) => {
-        // when the feature is enabled, emit a `const fn`
-        #[cfg(feature = $feature)]
-        #[doc = $docs]
-        // feature should only be enabled on compatible versions, so we allow this
-        #[allow(clippy::incompatible_msrv)]
-        $(#[$attr])*
-        pub const fn $name $(<$generic_ty $(: $req)?>)? ($($args)*)
-        $(-> $ret)? $(where $where_ty: $where_req)? $body
-
-        // when the feature is disabled, drop the `const`
-        #[cfg(not(feature = $feature))]
-        #[doc = $docs]
-        $(#[$attr])*
-        #[allow(unknown_lints, clippy::missing_const_for_fn)]
-        pub fn $name $(<$generic_ty $(: $req)?>)? ($($args)*)
-        $(-> $ret)? $(where $where_ty: $where_req)? $body
-    };
-
-    (
-        $feature:literal,
-        $docs:literal,
-        $(#[$attr:meta])*
-        // this is also pretty poorly done, but it makes type param and optional req work
-        const unsafe fn $name:ident $(<$generic_ty:ident $(: ?$req:ident)? $(+ $req2:ident)?>)? ( $($args:tt)* )
-        $(-> $ret:ty)?
-        // also kinda poorly done, but it makes a single where clause work
-        $(where $where_ty:ident : $where_req:ident)?
-        $body:block
-    ) => {
-        // when the feature is enabled, emit a `const fn`
-        #[cfg(feature = $feature)]
-        #[doc = $docs]
-        // feature should only be enabled on compatible versions, so we allow this
-        #[allow(clippy::incompatible_msrv)]
-        $(#[$attr])*
-        const unsafe fn $name $(<$generic_ty $(: ?$req)? $(+ $req2)?>)? ($($args)*)
-        $(-> $ret)? $(where $where_ty: $where_req)? $body
-
-        // when the feature is disabled, drop the `const`
-        #[cfg(not(feature = $feature))]
-        #[doc = $docs]
-        $(#[$attr])*
-        #[allow(unknown_lints, clippy::missing_const_for_fn)]
-        unsafe fn $name $(<$generic_ty $(: ?$req)? $(+ $req2)?>)? ($($args)*)
-        $(-> $ret)? $(where $where_ty: $where_req)? $body
-    };
-
-    // branch for a lifetime instead of type param
-    (
-        $feature:literal,
-        $docs:literal,
-        $(#[$attr:meta])*
-        // this is also pretty poorly done, but it makes type param and optional req work
-        pub const fn $name:ident $(<$lt:lifetime>)? ( $($args:tt)* )
-        $(-> $ret:ty)?
-        $body:block
-    ) => {
-        #[cfg(feature = $feature)]
-        #[doc = $docs]
-        #[allow(clippy::incompatible_msrv)]
-        $(#[$attr])*
-        pub const fn $name $(<$lt>)? ($($args)*)
-        $(-> $ret)? $body
-
-        #[cfg(not(feature = $feature))]
-        #[doc = $docs]
-        $(#[$attr])*
-        pub fn $name $(<$lt>)? ($($args)*) $(-> $ret)? $body
-    };
-    // branch for unsafe functions
-    (
-        $feature:literal,
-        $docs:literal,
-        $(#[$attr:meta])*
-        //                                kinda poorly done, but it makes a type param work, which
-        //                                is all i need.
-        pub const unsafe fn $name:ident $(<$generic_ty:ident $(: $req:ident)?>)? ( $($args:tt)* )
-        $(-> $ret:ty)?
-        $body:block
-    ) => {
-        #[cfg(feature = $feature)]
-        #[doc = $docs]
-        #[allow(clippy::incompatible_msrv)]
-        $(#[$attr])*
-        pub const unsafe fn $name$(<$generic_ty $(: $req)?>)?($($args)*) $(-> $ret)? $body
-
-        #[cfg(not(feature = $feature))]
-        #[doc = $docs]
-        $(#[$attr])*
-        pub unsafe fn $name$(<$generic_ty $(: $req)?>)?($($args)*) $(-> $ret)? $body
-    };
-    // branch for relaxed bound + second bound
-    (
-        $feature:literal,
-        $docs:literal,
-        $(#[$attr:meta])*
-        pub const fn $name:ident <$generic_ty:ident: ?Sized + $req:ident> ($($args:tt)*)
-        $(-> $ret:ty)?
-        $body:block
-    ) => {
-        #[cfg(feature = $feature)]
-        #[doc = $docs]
-        #[allow(clippy::incompatible_msrv)]
-        $(#[$attr])*
-        pub const fn $name <$generic_ty: ?Sized + $req> ($($args)*)
-        $(-> $ret)? $body
-
-        #[cfg(not(feature = $feature))]
-        #[doc = $docs]
-        $(#[$attr])*
-        pub fn $name <$generic_ty: ?Sized + $req> ($($args)*)
-        $(-> $ret)? $body
-    }
-}
 
 /// This macro is theoretically faster than `<fallible>?`.
 macro_rules! tri {
+    (opt $($fallible:expr)+) => {
+        match $($fallible)+ {
+            Some(x) => x,
+            None => return None,
+        }
+    };
     (do $($fallible:expr)+) => {
         match $($fallible)+ {
             Ok(s) => s,
