@@ -21,6 +21,7 @@ use {
     }
 };
 
+// TODO: make const on lower versions
 /// Performs a checked arithmetic operation on two `usize`s.
 ///
 /// # Errors
@@ -28,24 +29,24 @@ use {
 /// [`ArithErr`] if the operation would overflow.
 #[rustversion::attr(since(1.47), const)]
 pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
-    #[rustversion::since(1.51)]
+    #[rustversion::since(1.52)]
     #[allow(clippy::inline_always)]
     #[inline(always)]
     const fn checked_div(l: usize, r: usize) -> Option<usize> {
         l.checked_div(r)
     }
-    #[rustversion::before(1.51)]
+    #[rustversion::before(1.52)]
     const fn checked_div(l: usize, r: usize) -> Option<usize> {
         if r == 0 { None } else { Some(l / r) }
     }
 
-    #[rustversion::since(1.51)]
+    #[rustversion::since(1.52)]
     #[allow(clippy::inline_always)]
     #[inline(always)]
     const fn checked_rem(l: usize, r: usize) -> Option<usize> {
         l.checked_rem(r)
     }
-    #[rustversion::before(1.51)]
+    #[rustversion::before(1.52)]
     const fn checked_rem(l: usize, r: usize) -> Option<usize> {
         if r == 0 { None } else { Some(l % r) }
     }
@@ -141,7 +142,7 @@ pub const fn checked_op_panic_const(l: usize, op: ArithOp, r: usize) -> usize {
 ///
 /// Returns [`InvLayout`] when the resulting size or alignment would exceed
 /// [`USIZE_MAX_NO_HIGH_BIT`].
-#[rustversion::attr(since(1.50), const)]
+#[rustversion::attr(since(1.47), const)]
 pub fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvLayout> {
     // compute the offset where `b` would start when placed after `a`, aligned for `b`.
     // SAFETY: `Layout::align()` is always non-zero and a power of two.
@@ -212,13 +213,14 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
     NonNull::new_unchecked(NonZeroUsize::new_unchecked(align).get() as *mut u8)
 }
 
-// TODO: make const below 1.50
 /// Returns a valid, dangling [`NonNull`] for the given layout.
 #[must_use]
-#[rustversion::attr(since(1.50), const)]
-pub fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
+pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
+    #[allow(clippy::incompatible_msrv)]
     // SAFETY: Layout guarantees the alignment is a valid power of 2
-    unsafe { dangling_nonnull(layout.align()) }
+    unsafe {
+        dangling_nonnull(layout.align())
+    }
 }
 
 /// Returns the maximum alignment satisfied by a non-null pointer.
@@ -660,11 +662,12 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
     pub fn get_uninit_part(&self) -> NonNull<[T]> {
+        // SAFETY: `self.init` will be in bounds unless an init-setting method was used incorrectly.
+        let ptr = unsafe { self.ptr.as_ptr().add(self.init) };
         nonnull_slice_from_parts(
             // SAFETY: the pointer was a valid NonNull to begin with, adding cannot invalidate
-            //  it. `self.init` will be in bounds unless an init-setting method was used
-            //  incorrectly.
-            unsafe { NonNull::new_unchecked(self.ptr.as_ptr().add(self.init)) },
+            //  it.
+            unsafe { NonNull::new_unchecked(ptr) },
             self.full - self.init
         )
     }
@@ -767,10 +770,12 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
         let lim = self.full - self.init;
         let to_copy = if slice.len() < lim { slice.len() } else { lim };
 
-        // SAFETY: `self.init` and `to_copy` will disallow oob access unless there was improper
-        //  usage of unsafe setter methods
+        // SAFETY: `self.init` will be in bounds unless an init-setting method was used incorrectly.
+        let uninit_p = unsafe { self.ptr.as_ptr().add(self.init) };
+
+        // SAFETY: to_copy will be at most the remaining space after uninit_p, so it won't go oob.
         unsafe {
-            ptr::copy(slice.as_ptr(), self.ptr.as_ptr().add(self.init), to_copy);
+            ptr::copy(slice.as_ptr(), uninit_p, to_copy);
         }
 
         self.init += to_copy;
@@ -796,11 +801,17 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
 
         // SAFETY: `self.init` and `to_clone` will disallow oob access unless there was improper
         //  usage of unsafe setter methods
-        unsafe {
-            for elem in &slice[..to_clone] {
-                self.as_ptr().add(self.init).write(elem.clone());
-                self.init += 1;
+        for elem in &slice[..to_clone] {
+            // SAFETY: `self.init` will be in bounds unless an init-setting method was used
+            //  incorrectly.
+            let ptr = unsafe { self.as_ptr().add(self.init) };
+            // SAFETY: `ptr` is valid. we have not yet incremented `self.init`, so `drop` won't
+            //  access uninitialized memory if cloning fails.
+            unsafe {
+                // TODO: make sure we use ptr::.*(p, args) instead of p\..*(args) everywhere
+                ptr::write(ptr, elem.clone());
             }
+            self.init += 1;
         }
 
         self.init += to_clone;
@@ -823,11 +834,15 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
                 return Err(iter);
             }
             match iter.next() {
-                // SAFETY: we just verified that there is space
-                Some(elem) => unsafe {
-                    ptr::write(self.ptr.as_ptr().add(self.init), elem);
-                    self.init += 1;
-                },
+                Some(elem) => {
+                    // SAFETY: we just verified that there is space
+                    let uninit_ptr = unsafe { self.ptr.as_ptr().add(self.init) };
+                    // SAFETY: the pointer is valid, and we just verified that there is space.
+                    unsafe {
+                        ptr::write(uninit_ptr, elem);
+                        self.init += 1;
+                    }
+                }
                 None => return Ok(())
             }
         }
@@ -836,13 +851,20 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
 
 impl<T, A: BasicAlloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
     fn drop(&mut self) {
-        // SAFETY: `self.init` will be correct without improper usage of methods which set it. new()
-        //  requires that the pointer was allocated using the provided allocator.
+        // SAFETY: `self.init` will be correct without improper usage of methods which set it.
         unsafe {
             ptr::drop_in_place(slice_ptr_from_parts_mut(self.ptr.as_ptr(), self.init));
+        }
+        // SAFETY: this memory was already allocated with this layout, so its size and align must be
+        // valid.
+        let layout = unsafe {
+            Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN)
+        };
+        // SAFETY: new() requires that the pointer was allocated using the provided allocator.
+        unsafe {
             self.alloc.dealloc(
                 self.ptr.cast(),
-                Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN)
+                layout
             );
         }
     }
