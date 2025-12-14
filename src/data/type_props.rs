@@ -1,11 +1,12 @@
 use {
-    crate::helpers::dangling_nonnull,
+    crate::{Layout, helpers::dangling_nonnull},
     core::{
-        alloc::Layout,
         mem::{align_of, align_of_val, size_of, size_of_val},
         ptr::NonNull
     }
 };
+
+// TODO: i feel like the lines between helpers, traits, and type props have become blurred, fix
 
 /// The maximum value of a `usize` with no high bit.
 ///
@@ -130,6 +131,7 @@ pub trait PtrProps<T: ?Sized> {
     }
 }
 
+/// Implements `PtrProps` for raw pointers.
 macro_rules! impl_ptr_props_raw {
     ($($name:ty),* $(,)?) => {
         $(
@@ -198,7 +200,19 @@ impl_ptr_props_identity! { &T, &mut T }
 impl_ptr_props_as_ref! {
     alloc::boxed::Box<T>,
     alloc::rc::Rc<T>,
-    alloc::sync::Arc<T>
+    alloc::sync::Arc<T>,
+}
+impl<T: Clone> PtrProps<T> for alloc::borrow::Cow<'_, T> {
+    #[inline]
+    unsafe fn sz(&self) -> usize {
+        T::SZ
+    }
+    #[inline]
+    unsafe fn aln(&self) -> usize {
+        T::ALN
+    }
+    #[cfg(feature = "metadata")]
+    unsafe fn metadata(&self) {}
 }
 
 impl<T: ?Sized> PtrProps<T> for NonNull<T> {

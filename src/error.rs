@@ -1,7 +1,9 @@
-use core::{
-    alloc::Layout,
-    fmt::{Debug, Display, Formatter, Result as FmtResult},
-    ptr::NonNull
+use {
+    crate::Layout,
+    core::{
+        fmt::{Debug, Display, Formatter, Result as FmtResult},
+        ptr::NonNull
+    }
 };
 
 /// Errors for allocator operations.
@@ -46,33 +48,23 @@ impl Display for AllocError {
         };
 
         match self {
-            AllocFailed(l, cause) => {
-                write!(
-                    f,
-                    "allocation failed:\n\tlayout:\n\t\tsize: {}\n\t\talign: {}\n\tcause: {}",
-                    l.size(),
-                    l.align(),
-                    cause
-                )
-            }
-            InvalidLayout(inv_layout) => {
-                write!(f, "{}", inv_layout)
-            }
-            InvalidAlign(inv_align) => {
-                write!(f, "{}", inv_align)
-            }
-            ZeroSizedLayout(_) => {
-                write!(f, "received a zero-sized layout")
-            }
+            AllocFailed(l, cause) => write!(
+                f,
+                "allocation failed:\n\tlayout:\n\t\tsize: {}\n\t\talign: {}\n\tcause: {}",
+                l.size(),
+                l.align(),
+                cause
+            ),
+            InvalidLayout(inv_layout) => write!(f, "{}", inv_layout),
+            InvalidAlign(inv_align) => write!(f, "{}", inv_align),
+            ZeroSizedLayout(_) => write!(f, "received a zero-sized layout"),
             GrowSmallerNewLayout(old, new) => {
                 write!(f, "attempted to grow from a size of {} to a smaller size of {}", old, new)
             }
             ShrinkLargerNewLayout(old, new) => {
                 write!(f, "attempted to shrink from a size of {} to a larger size of {}", old, new)
             }
-            ArithmeticError(overflow) => {
-                write!(f, "{}", overflow)
-            }
+            ArithmeticError(overflow) => write!(f, "{}", overflow),
             Other(other) => write!(f, "{}", other)
         }
     }
@@ -187,7 +179,7 @@ impl std::error::Error for AlignErr {}
 /// An arithmetic error.
 ///
 /// Either an overflow containing the lhs, op, and rhs, or a case where the rhs is too large and
-/// that rhs value.
+/// that rhs value. Divide-by-zero errors are considered overflows.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ArithErr {
     /// The right-hand side of the operation is too large for the operation.
@@ -242,3 +234,29 @@ impl Display for ArithOp {
         }
     }
 }
+
+#[rustversion::before(1.50)]
+/// An error that can occur when creating a layout for repeated instances of a type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(clippy::module_name_repetitions)]
+#[repr(u8)]
+pub enum RepeatLayoutError {
+    /// The computed layout is invalid.
+    InvalidLayout(InvLayout),
+    /// An error occurred when performing an arithmetic operation.
+    ArithmeticError(ArithErr)
+}
+
+#[rustversion::before(1.50)]
+impl Display for RepeatLayoutError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            RepeatLayoutError::InvalidLayout(inv_layout) => write!(f, "{}", inv_layout),
+            RepeatLayoutError::ArithmeticError(err) => write!(f, "{}", err)
+        }
+    }
+}
+
+#[rustversion::before(1.50)]
+#[cfg(feature = "std")]
+impl std::error::Error for RepeatLayoutError {}
