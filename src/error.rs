@@ -235,7 +235,7 @@ impl Display for ArithOp {
     }
 }
 
-//#[rustversion::before(1.50)]
+#[rustversion::before(1.50)]
 /// An error that can occur when creating a layout for repeated instances of a type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(clippy::module_name_repetitions)]
