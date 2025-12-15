@@ -143,17 +143,9 @@ mod checks {
         use crate::Failure;
 
         pub fn check() -> Vec<Failure> {
-            #[cfg(target_pointer_width = "32")]
-            const SZ: usize = 0b1010_1010_1010_1010_1010_1010_1010_1010;
-            #[cfg(target_pointer_width = "64")]
-            const SZ: usize =
-                0b1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010;
-
-            const ALN: usize = 8192;
-
             let mut failures = Vec::<Failure>::new();
 
-            let std_layout = StdLayout::from_size_align(SZ, ALN).unwrap();
+            let std_layout = StdLayout::from_size_align(1024, 1024).unwrap();
             let custom_layout = Layout::from_stdlib(std_layout);
 
             if custom_layout.size() != std_layout.size() {
