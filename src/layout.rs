@@ -3,7 +3,13 @@ use crate::{
     StdLayout,
     data::type_props::{PtrProps, SizedProps, USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT},
     error::{AlignErr, ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
-    helpers::{align_up_unchecked, checked_op, dangling_nonnull_for, layout_extend, union_transmute}
+    helpers::{
+        align_up_unchecked,
+        checked_op,
+        dangling_nonnull_for,
+        layout_extend,
+        union_transmute
+    }
 };
 
 #[rustversion::before(1.50)]
@@ -230,7 +236,7 @@ impl Layout {
     ///
     /// On success, returns `(l, offs)` where `l` is the layout of the array and `offs` is the
     /// distance between the start of each element in the array (stride).
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.47 and above.
     ///
     /// # Errors
@@ -256,7 +262,7 @@ impl Layout {
     ///
     /// In other words, if the layout returned by`repeat_packed` is used to allocate an array, it
     /// isn't guaranteed that all elements in the array will be properly aligned.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.47 and above.
     ///
     /// # Errors
@@ -296,7 +302,7 @@ impl Layout {
         if align > self.align() { Layout::from_size_align(self.size(), align) } else { Ok(*self) }
     }
 
-    /// Converts this layout to a [`stdlib layout`](StdLayout).
+    /// Converts this layout to a [`alloc::alloc::Layout`].
     #[inline]
     pub const fn to_stdlib(self) -> StdLayout {
         // SAFETY: we validate all layout's requirements ourselves
@@ -307,17 +313,14 @@ impl Layout {
 
     // TODO: make a less bad solution. if none are available, at least test that this is fine in
     //  build.rs and tests/helpers.rs.
-    /// Converts a [`stdlib layout`](StdLayout) to a [`Layout`].
-    ///
-    /// Avoid using, as this function may cause UB as it transmutes from this type to the opaque
-    /// `StdLayout`, whose internal layout may not match this.
+    /// Converts a [`alloc::alloc::Layout`] to a [`Layout`].
     ///
     /// Note that this is only `const` on Rust versions 1.56 and above.
     // this will never be const like this, but it will if i fully switch to this type from StdLayout
     #[rustversion::attr(since(1.56), const)]
     #[inline]
     pub unsafe fn from_stdlib(layout: StdLayout) -> Layout {
-        // SAFETY: we share layout's requirements
+        // SAFETY: we share layout's requirements and, as checked by the build.rs, internal layout.
         unsafe { union_transmute::<StdLayout, Layout>(layout) }
     }
 }

@@ -31,6 +31,7 @@ fn run_checks() -> Vec<Failure> {
     let mut failures = Vec::new();
 
     failures.extend(checks::sp_frp::check());
+    failures.extend(checks::layout::check());
 
     failures
 }
@@ -130,7 +131,81 @@ mod checks {
         unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {
             union Either<Src: Copy, Dst: Copy> {
                 src: Src,
-                dst: Dst,
+                dst: Dst
+            }
+
+            Either { src }.dst
+        }
+    }
+
+    #[allow(clippy::use_self)]
+    pub mod layout {
+        use crate::Failure;
+
+        pub fn check() -> Vec<Failure> {
+            #[cfg(target_pointer_width = "32")]
+            const SZ: usize = 0b1010_1010_1010_1010_1010_1010_1010_1010;
+            #[cfg(target_pointer_width = "64")]
+            const SZ: usize =
+                0b1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010;
+
+            const ALN: usize = 8192;
+
+            let mut failures = Vec::<Failure>::new();
+
+            let std_layout = StdLayout::from_size_align(SZ, ALN).unwrap();
+            let custom_layout = Layout::from_stdlib(std_layout);
+
+            if custom_layout.size() != std_layout.size() {
+                failures.push(Failure {
+                    source: 1,
+                    code: 0,
+                    msg: "custom layout size does not match std layout size"
+                });
+            }
+
+            if custom_layout.align() != std_layout.align() {
+                failures.push(Failure {
+                    source: 1,
+                    code: 1,
+                    msg: "custom layout align does not match std layout align"
+                });
+            }
+
+            failures
+        }
+
+        type StdLayout = core::alloc::Layout;
+
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+        struct Layout {
+            size: usize,
+            align: usize
+        }
+
+        impl Layout {
+            #[must_use]
+            #[inline]
+            const fn size(&self) -> usize {
+                self.size
+            }
+
+            #[must_use]
+            #[inline]
+            const fn align(&self) -> usize {
+                self.align
+            }
+
+            fn from_stdlib(layout: StdLayout) -> Layout {
+                // SAFETY: we share layout's requirements and in theory, layout
+                unsafe { union_transmute::<StdLayout, Layout>(layout) }
+            }
+        }
+
+        unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {
+            union Either<Src: Copy, Dst: Copy> {
+                src: Src,
+                dst: Dst
             }
 
             Either { src }.dst

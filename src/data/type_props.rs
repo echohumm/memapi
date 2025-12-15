@@ -363,9 +363,7 @@ pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta:
 #[rustversion::attr(since(1.61), const)]
 pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe {
-        crate::helpers::union_transmute::<(*mut u8, usize), *mut T>((p, meta))
-    }
+    unsafe { crate::helpers::union_transmute::<(*mut u8, usize), *mut T>((p, meta)) }
 }
 
 #[rustversion::since(1.64)]
@@ -393,9 +391,7 @@ pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: u
 #[inline]
 pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
     // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe {
-        crate::helpers::union_transmute::<(*const u8, usize), *const T>((p, meta))
-    }
+    unsafe { crate::helpers::union_transmute::<(*const u8, usize), *const T>((p, meta)) }
 }
 
 // anysized system didn't work well enough for me to actually keep it.

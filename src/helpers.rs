@@ -365,7 +365,7 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
 // TODO: lower const msrv and generally improve these
 #[rustversion::since(1.75)]
 /// Subtracts `n` bytes from a pointer's address.
-/// 
+///
 /// Note that this is only `const` on Rust versions 1.75 and above.
 ///
 /// # Safety
@@ -379,7 +379,7 @@ pub const unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
 }
 #[rustversion::before(1.75)]
 /// Subtracts `n` bytes from a pointer's address.
-/// 
+///
 /// Note that this is only `const` on Rust versions 1.75 and above.
 ///
 /// # Safety
@@ -400,7 +400,7 @@ pub unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
 
 #[rustversion::since(1.75)]
 /// Adds `n` bytes to a pointer's address.
-/// 
+///
 /// Note that this is only `const` on Rust versions 1.75 and above.
 ///
 /// # Safety
@@ -446,7 +446,7 @@ pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
 
     union Either<Src, Dst> {
         src: ManuallyDrop<Src>,
-        dst: ManuallyDrop<Dst>,
+        dst: ManuallyDrop<Dst>
     }
 
     ManuallyDrop::into_inner(Either { src: ManuallyDrop::new(src) }.dst)
@@ -463,7 +463,7 @@ pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
 pub unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {
     union Either<Src: Copy, Dst: Copy> {
         src: Src,
-        dst: Dst,
+        dst: Dst
     }
 
     Either { src }.dst
@@ -508,7 +508,7 @@ pub struct AllocGuard<'a, T: ?Sized, A: BasicAlloc + ?Sized> {
 
 impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
     /// Creates a new guard from a pointer and a reference to an allocator.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     ///
     /// # Safety
@@ -522,7 +522,7 @@ impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
     }
 
     /// Initializes the value by writing to the contained pointer.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.83 and above.
     #[rustversion::attr(since(1.83), const)]
     #[cfg_attr(miri, track_caller)]
@@ -539,7 +539,7 @@ impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
 
     /// Releases ownership of the allocation, preventing deallocation, and returns the raw
     /// pointer.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -626,7 +626,7 @@ pub struct SliceAllocGuard<'a, T, A: BasicAlloc + ?Sized> {
 
 impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Creates a new slice guard for `full` elements at `ptr` in the given allocator.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     ///
     /// # Safety
@@ -640,7 +640,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Creates a new slice guard for `full` elements at `ptr` in the given allocator.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     ///
     /// # Safety
@@ -660,7 +660,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
 
     /// Release ownership of the slice without deallocating memory, returning a `NonNull<T>`
     /// pointer to the slice.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -673,7 +673,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
 
     /// Release ownership of the slice without deallocating memory, returning a `NonNull<T>`
     /// pointer to the slice's first element.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -685,7 +685,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Gets a `NonNull<[T]>` pointer to the initialized elements of the slice.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[cfg_attr(miri, track_caller)]
@@ -695,7 +695,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Gets a `NonNull<[T]>` pointer to the uninitialized elements of the slice.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -711,7 +711,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Gets a `NonNull<[T]>` pointer to the full slice.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[cfg_attr(miri, track_caller)]
@@ -721,7 +721,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Sets the initialized element count.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.83 and above.
     ///
     /// # Safety
@@ -734,7 +734,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Initializes the next element of the slice with `elem`.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.83 and above.
     ///
     /// # Errors
@@ -754,7 +754,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Initializes the next element of the slice with `elem`.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.83 and above.
     ///
     /// # Safety
@@ -768,7 +768,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Returns how many elements have been initialized.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -778,7 +778,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Returns the total number of elements in the slice.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -788,7 +788,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Returns `true` if every element in the slice has been initialized.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -798,7 +798,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Returns `true` if no elements have been initialized.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
     #[must_use]
@@ -812,7 +812,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// On success, all elements are copied and `Ok(())` is returned. If
     /// `slice.len() > remaining_capacity`, it copies as many elements as will fit, advances the
     /// initialized count to full, and returns `Err(excess)`.
-    /// 
+    ///
     /// Note that this is only `const` on Rust versions 1.83 and above.
     ///
     /// # Errors
@@ -864,7 +864,6 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
             // SAFETY: `ptr` is valid. we have not yet incremented `self.init`, so `drop` won't
             //  access uninitialized memory if cloning fails.
             unsafe {
-                // TODO: make sure we use ptr::.*(p, args) instead of p\..*(args) everywhere
                 ptr::write(ptr, elem.clone());
             }
             self.init += 1;

@@ -6,7 +6,6 @@ use {
     }
 };
 
-// TODO: try to remove Dealloc requirement from Grow/Shrink and by ext., Realloc
 /// A memory allocation interface.
 pub trait Alloc {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].

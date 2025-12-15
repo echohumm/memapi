@@ -73,6 +73,9 @@ pub mod error;
 
 mod layout;
 
+// TODO: doc consistency. for example, layout used to refer to stdlib's layout as exactly that, but
+//  elsewhere we use the full path instead.
+
 #[rustversion::since(1.50)]
 /// The layout type used by the crate for all operations. [`alloc::alloc::Layout`] on Rust 1.50 and
 /// above, a custom layout type otherwise.
