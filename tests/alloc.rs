@@ -1,8 +1,8 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 
 use {
-    core::{alloc::Layout, ptr},
-    memapi2::{DefaultAlloc, error::AllocError, traits::*}
+    core::ptr,
+    memapi2::{DefaultAlloc, Layout, error::AllocError, traits::*}
 };
 
 #[test]

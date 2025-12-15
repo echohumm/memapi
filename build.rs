@@ -124,7 +124,16 @@ mod checks {
 
         #[must_use]
         fn slice_ptr_from_parts<T>(p: *mut T, len: usize) -> *mut [T] {
-            unsafe { *((&(p, len)) as *const (*mut T, usize)).cast::<*mut [T]>() }
+            unsafe { union_transmute((p, len)) }
+        }
+
+        unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {
+            union Either<Src: Copy, Dst: Copy> {
+                src: Src,
+                dst: Dst,
+            }
+
+            Either { src }.dst
         }
     }
 }

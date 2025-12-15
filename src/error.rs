@@ -235,7 +235,6 @@ impl Display for ArithOp {
     }
 }
 
-#[rustversion::before(1.50)]
 /// An error that can occur when creating a layout for repeated instances of a type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[allow(clippy::module_name_repetitions)]
@@ -247,7 +246,6 @@ pub enum RepeatLayoutError {
     ArithmeticError(ArithErr)
 }
 
-#[rustversion::before(1.50)]
 impl Display for RepeatLayoutError {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
@@ -257,6 +255,5 @@ impl Display for RepeatLayoutError {
     }
 }
 
-#[rustversion::before(1.50)]
 #[cfg(feature = "std")]
 impl std::error::Error for RepeatLayoutError {}

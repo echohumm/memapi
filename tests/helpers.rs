@@ -1,4 +1,3 @@
-// provenance is annoying. this crate definitely has more issues with it than i am aware of
 #![allow(clippy::cast_ptr_alignment)]
 
 use {
@@ -6,10 +5,11 @@ use {
         Alloc,
         Dealloc,
         DefaultAlloc,
+        Layout,
         data::type_props::varsized_ptr_from_parts_mut,
         helpers::{byte_sub, slice_ptr_from_parts_mut}
     },
-    std::{alloc::Layout, ptr}
+    std::ptr
 };
 
 const VALUE: u64 =

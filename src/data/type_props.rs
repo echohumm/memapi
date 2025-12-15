@@ -5,7 +5,6 @@ use {
         ptr::NonNull
     }
 };
-
 // TODO: i feel like the lines between helpers, traits, and type props have become blurred, fix
 
 /// The maximum value of a `usize` with no high bit.
@@ -306,6 +305,8 @@ unsafe impl VarSized for std::path::Path {
 
 // TODO: better dangling delegation system, const vers
 /// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above
 #[rustversion::attr(since(1.61), const)]
 #[must_use]
 pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
@@ -314,6 +315,8 @@ pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
 }
 
 /// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above
 #[rustversion::attr(since(1.61), const)]
 #[must_use]
 pub fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *mut T {
@@ -322,6 +325,8 @@ pub fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *mut T {
 }
 
 /// Creates a `NonNull<T>` from a pointer and a `usize` size metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above
 #[rustversion::attr(since(1.61), const)]
 #[must_use]
 #[inline]
@@ -335,11 +340,12 @@ pub fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
 
 #[rustversion::since(1.83)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above
 #[must_use]
 #[inline]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[rustversion::attr(since(1.61), const)]
-pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
+pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
         *((&core::ptr::slice_from_raw_parts_mut::<T::Subtype>(p.cast(), meta)
@@ -349,6 +355,8 @@ pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize
 }
 #[rustversion::before(1.83)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above
 #[must_use]
 #[inline]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
@@ -356,17 +364,18 @@ pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize
 pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
-        // i hate this so much
-        *((&(p, meta)) as *const (*mut u8, usize)).cast::<*mut T>()
+        crate::helpers::union_transmute::<(*mut u8, usize), *mut T>((p, meta))
     }
 }
-#[rustversion::since(1.83)]
+
+#[rustversion::since(1.64)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above
 #[must_use]
 #[inline]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[rustversion::attr(since(1.61), const)]
-pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
+pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
         *((&core::ptr::slice_from_raw_parts::<T::Subtype>(p.cast(), meta)
@@ -374,15 +383,19 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
             .cast::<*const T>())
     }
 }
-#[rustversion::before(1.83)]
+#[rustversion::before(1.64)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above
+#[rustversion::attr(since(1.61), const)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[must_use]
 #[inline]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[rustversion::attr(since(1.61), const)]
 pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
     // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe { *((&(p, meta)) as *const (*const u8, usize)).cast::<*const T>() }
+    unsafe {
+        crate::helpers::union_transmute::<(*const u8, usize), *const T>((p, meta))
+    }
 }
 
 // anysized system didn't work well enough for me to actually keep it.

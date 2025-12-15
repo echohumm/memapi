@@ -3,7 +3,7 @@ use crate::{
     StdLayout,
     data::type_props::{PtrProps, SizedProps, USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT},
     error::{AlignErr, ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
-    helpers::{align_up_unchecked, checked_op, dangling_nonnull_for, layout_extend}
+    helpers::{align_up_unchecked, checked_op, dangling_nonnull_for, layout_extend, union_transmute}
 };
 
 #[rustversion::before(1.50)]
@@ -230,6 +230,8 @@ impl Layout {
     ///
     /// On success, returns `(l, offs)` where `l` is the layout of the array and `offs` is the
     /// distance between the start of each element in the array (stride).
+    /// 
+    /// Note that this is only `const` on Rust versions 1.47 and above.
     ///
     /// # Errors
     ///
@@ -254,6 +256,8 @@ impl Layout {
     ///
     /// In other words, if the layout returned by`repeat_packed` is used to allocate an array, it
     /// isn't guaranteed that all elements in the array will be properly aligned.
+    /// 
+    /// Note that this is only `const` on Rust versions 1.47 and above.
     ///
     /// # Errors
     ///
@@ -282,9 +286,7 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// - `LayoutErr::Align(`
-    ///   <code>[AlignErr::NonPowerOfTwoAlign(align)](crate::error::AlignErr::NonPowerOfTwoAlign))</
-    ///   code> if `align` is larger than `self.align`, but not a power of two.
+    /// - <code>LayoutErr::Align([AlignErr::NonPowerOfTwoAlign(align)](crate::error::AlignErr::NonPowerOfTwoAlign))</code> if `align` is larger than `self.align`, but not a power of two.
     /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
     ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
     #[must_use = "this function returns a new layout, it doesn't modify the original one"]
@@ -298,6 +300,8 @@ impl Layout {
     #[inline]
     pub const fn to_stdlib(self) -> StdLayout {
         // SAFETY: we validate all layout's requirements ourselves
+        // TODO: i'm torn between keeping or changing this to use a transmute like from_stdlib;
+        //  higher safety or consistency
         unsafe { StdLayout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
@@ -307,9 +311,13 @@ impl Layout {
     ///
     /// Avoid using, as this function may cause UB as it transmutes from this type to the opaque
     /// `StdLayout`, whose internal layout may not match this.
+    ///
+    /// Note that this is only `const` on Rust versions 1.56 and above.
+    // this will never be const like this, but it will if i fully switch to this type from StdLayout
+    #[rustversion::attr(since(1.56), const)]
     #[inline]
     pub unsafe fn from_stdlib(layout: StdLayout) -> Layout {
         // SAFETY: we share layout's requirements
-        unsafe { core::mem::transmute::<StdLayout, Layout>(layout) }
+        unsafe { union_transmute::<StdLayout, Layout>(layout) }
     }
 }

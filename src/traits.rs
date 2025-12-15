@@ -6,7 +6,6 @@ use {
     }
 };
 
-// TODO: make sure new set of traits is compatible with all featuresets
 // TODO: try to remove Dealloc requirement from Grow/Shrink and by ext., Realloc
 /// A memory allocation interface.
 pub trait Alloc {

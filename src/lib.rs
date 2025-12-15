@@ -18,12 +18,7 @@
 // TODO: test on other platforms/targets
 
 #![allow(unknown_lints)]
-#![warn(
-    clippy::all,
-    clippy::pedantic,
-    clippy::nursery,
-    clippy::multiple_unsafe_ops_per_block,
-)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
 #![allow(clippy::borrow_as_ptr)]
 #![warn(unknown_lints)]
 #![allow(
@@ -38,7 +33,6 @@
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
 // TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
-// TODO: a lot of helpers and unstable utils would be good to have in another crate, maybe
 
 extern crate alloc;
 extern crate core;
@@ -60,7 +54,8 @@ macro_rules! tri {
 }
 
 // TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
-//  (removed stuff is stuff which would go in new crate)
+//  (removed stuff is stuff which would go in new crates)
+//  a lot of helpers would be good to have in another crate too, like .*AllocGuard
 
 /// Module for anything related specifically to data.
 ///
@@ -79,12 +74,20 @@ pub mod error;
 mod layout;
 
 #[rustversion::since(1.50)]
-pub use alloc::alloc::Layout;
+/// The layout type used by the crate for all operations. [`alloc::alloc::Layout`] on Rust 1.50 and
+/// above, a custom layout type otherwise.
+///
+/// Currently, the former.
+pub type Layout = alloc::alloc::Layout;
+/// A type alias for [`alloc::alloc::Layout`].
+pub type StdLayout = alloc::alloc::Layout;
 
 #[rustversion::before(1.50)]
-pub use layout::Layout;
-
-pub use alloc::alloc::Layout as StdLayout;
+/// The layout type used by the crate for all operations. [`alloc::alloc::Layout`] on Rust 1.50 and
+/// above, a custom layout type otherwise.
+///
+/// Currently, the latter.
+pub type Layout = layout::Layout;
 
 #[rustversion::before(1.50)]
 pub(crate) const fn layout_handle(l: Layout) -> StdLayout {
@@ -109,13 +112,13 @@ macro_rules! default_alloc_impl {
             #[inline(always)]
             fn alloc(
                 &self,
-                layout: Layout,
+                layout: Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
                     |layout| unsafe { alloc::alloc::alloc(layout_handle(layout)) },
-                    crate::helpers::null_q_dyn,
+                    crate::helpers::null_q_dyn
                 )
             }
 
@@ -123,13 +126,13 @@ macro_rules! default_alloc_impl {
             #[inline(always)]
             fn zalloc(
                 &self,
-                layout: Layout,
+                layout: Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
                     |layout| unsafe { alloc::alloc::alloc_zeroed(layout_handle(layout)) },
-                    crate::helpers::null_q_dyn,
+                    crate::helpers::null_q_dyn
                 )
             }
         }
@@ -142,7 +145,6 @@ macro_rules! default_alloc_impl {
                 }
             }
         }
-        // TODO: manual impls should be faster, but may not be worth it with the duplicated code
         impl crate::Grow for $ty {}
         impl crate::Shrink for $ty {}
         impl crate::Realloc for $ty {}
@@ -171,12 +173,7 @@ unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn realloc(
-        &self,
-        ptr: *mut u8,
-        layout: StdLayout,
-        new_size: usize,
-    ) -> *mut u8 {
+    unsafe fn realloc(&self, ptr: *mut u8, layout: StdLayout, new_size: usize) -> *mut u8 {
         alloc::alloc::realloc(ptr, layout, new_size)
     }
 }
@@ -186,7 +183,7 @@ default_alloc_impl!(DefaultAlloc);
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use crate::{layout_handle, StdLayout, Layout};
+    use crate::{Layout, StdLayout, layout_handle};
 
     // SAFETY: DefaultAlloc's allocated memory isn't deallocated until a deallocation method is
     //  called. as a ZST allocator, copying/cloning it doesn't change behavior or invalidate
@@ -196,7 +193,7 @@ pub(crate) mod nightly {
         #[inline]
         fn allocate(
             &self,
-            layout: StdLayout,
+            layout: StdLayout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::allocate(&alloc::alloc::Global, layout)
         }
@@ -205,7 +202,7 @@ pub(crate) mod nightly {
         #[inline]
         fn allocate_zeroed(
             &self,
-            layout: StdLayout,
+            layout: StdLayout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::allocate_zeroed(&alloc::alloc::Global, layout)
         }
@@ -222,7 +219,7 @@ pub(crate) mod nightly {
             &self,
             ptr: core::ptr::NonNull<u8>,
             old_layout: StdLayout,
-            new_layout: StdLayout,
+            new_layout: StdLayout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::grow(&alloc::alloc::Global, ptr.cast(), old_layout, new_layout)
         }
@@ -233,13 +230,13 @@ pub(crate) mod nightly {
             &self,
             ptr: core::ptr::NonNull<u8>,
             old_layout: StdLayout,
-            new_layout: StdLayout,
+            new_layout: StdLayout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::grow_zeroed(
                 &alloc::alloc::Global,
                 ptr.cast(),
                 old_layout,
-                new_layout,
+                new_layout
             )
         }
 
@@ -249,13 +246,13 @@ pub(crate) mod nightly {
             &self,
             ptr: core::ptr::NonNull<u8>,
             old_layout: StdLayout,
-            new_layout: StdLayout,
+            new_layout: StdLayout
         ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
             alloc::alloc::Allocator::shrink(
                 &alloc::alloc::Global,
                 ptr.cast(),
                 old_layout,
-                new_layout,
+                new_layout
             )
         }
     }
