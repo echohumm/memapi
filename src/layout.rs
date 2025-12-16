@@ -1,4 +1,3 @@
-#[rustversion::before(1.50)]
 use crate::{
     StdLayout,
     data::type_props::{PtrProps, SizedProps, USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT},
@@ -12,7 +11,6 @@ use crate::{
     }
 };
 
-#[rustversion::before(1.50)]
 const fn lay_from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
     tri!(do check_lay(size, align));
 
@@ -20,7 +18,6 @@ const fn lay_from_size_align(size: usize, align: usize) -> Result<Layout, Layout
     Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
 }
 
-#[rustversion::before(1.50)]
 pub const fn check_lay(size: usize, align: usize) -> Result<(), LayoutErr> {
     if align == 0 {
         return Err(LayoutErr::Align(AlignErr::ZeroAlign));
@@ -32,20 +29,37 @@ pub const fn check_lay(size: usize, align: usize) -> Result<(), LayoutErr> {
     Ok(())
 }
 
-#[rustversion::before(1.50)]
 /// The layout of a block of memory in the form of its size and alignment in bytes.
 ///
-/// Note that this is `memapi`'s custom type to avoid importing the `alloc` crate. Its performance
-/// cannot be guaranteed relative to stdlib's version. Use should be avoided.
-///
-/// This type is being used because the `no_alloc` feature is on.
+/// Note that this is `memapi`'s custom type, not stdlib's [`alloc::alloc::Layout`]. If a function
+/// you want does not exist, request it in an issue.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Layout {
     size: usize,
     align: usize
 }
 
-#[rustversion::before(1.50)]
+impl PartialEq<StdLayout> for Layout {
+    fn eq(&self, other: &StdLayout) -> bool {
+        self.align == other.align() && self.size == other.size()
+    }
+}
+impl PartialEq<Layout> for StdLayout {
+    fn eq(&self, other: &Layout) -> bool {
+        self.align() == other.align && self.size() == other.size
+    }
+}
+impl From<StdLayout> for Layout {
+    fn from(layout: StdLayout) -> Layout {
+        Layout::from_stdlib(layout)
+    }
+}
+impl From<Layout> for StdLayout {
+    fn from(layout: Layout) -> StdLayout {
+        layout.to_stdlib()
+    }
+}
+
 const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, LayoutErr)> {
     let (sz, align) = (T::SZ, T::ALN);
 
@@ -58,7 +72,6 @@ const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, Layout
     unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
 }
 
-#[rustversion::before(1.50)]
 #[allow(clippy::missing_errors_doc)]
 const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
     match layout_or_sz_align::<T>(n) {
@@ -67,7 +80,6 @@ const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
     }
 }
 
-#[rustversion::before(1.50)]
 impl Layout {
     /// Creates a layout for the given type.
     ///
@@ -99,13 +111,13 @@ impl Layout {
     /// starts at an offset that satisfies its alignment. Returns the resulting combined layout and
     /// the offset at which `other` begins.
     ///
-    /// This method delegates to [`helpers::layout_extend`](crate::helpers::layout_extend).
+    /// This method delegates to [`helpers::layout_extend`](layout_extend).
     ///
     /// # Errors
     ///
     /// Returns [`InvLayout`] when the resulting size or alignment would exceed
-    /// [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT) or when an
-    /// intermediate arithmetic operation overflows.
+    /// [`USIZE_MAX_NO_HIGH_BIT`] or when an intermediate arithmetic operation overflows.
+    #[rustversion::attr(since(1.47), const)]
     pub fn extend(&self, other: Layout) -> Result<(Layout, usize), InvLayout> {
         layout_extend(*self, other)
     }
@@ -151,8 +163,7 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// - <code>LayoutErr::Align([AlignErr::ZeroAlign](crate::error::AlignErr::ZeroAlign))</code> if
-    ///   `align == 0`.
+    /// - <code>LayoutErr::Align([AlignErr::ZeroAlign](AlignErr::ZeroAlign))</code> if `align == 0`.
     /// - <code>LayoutErr::Align([AlignErr::NonPowerOfTwoAlign](align))</code> if `align` is
     ///   non-zero, but not a power of two.
     /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
@@ -198,7 +209,7 @@ impl Layout {
     /// # Example
     ///
     /// ```
-    /// # use memapi::Layout;
+    /// # use memapi2::Layout;
     ///
     /// assert_eq!(unsafe { Layout::from_size_align_unchecked(6, 8) }.padding_needed_for(8), 2);
     /// ```
@@ -222,13 +233,10 @@ impl Layout {
     #[must_use]
     #[inline]
     pub const fn pad_to_align(&self) -> Layout {
-        // SAFETY: layout's requirements guarantee that the rounded up size is valid.
-        unsafe {
-            Layout::from_size_align_unchecked(
-                align_up_unchecked(self.size(), self.align()),
-                self.align()
-            )
-        }
+        // SAFETY: constructors require that the size and alignment are valid for this operation.
+        let aligned_sz = unsafe { align_up_unchecked(self.size(), self.align()) };
+        // SAFETY: above.
+        unsafe { Layout::from_size_align_unchecked(aligned_sz, self.align()) }
     }
 
     /// Creates a layout for `n` instances of the value described by `layout`, with padding between
@@ -292,9 +300,9 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// - <code>LayoutErr::Align([AlignErr::NonPowerOfTwoAlign(align)](crate::error::AlignErr::NonPowerOfTwoAlign))</code> if `align` is larger than `self.align`, but not a power of two.
+    /// - <code>LayoutErr::Align([AlignErr::NonPowerOfTwoAlign(align)](AlignErr::NonPowerOfTwoAlign))</code> if `align` is larger than `self.align`, but not a power of two.
     /// - [`LayoutErr::ExceedsMax`] if `size` rounded up to the nearest multiple of `align` exceeds
-    ///   [`USIZE_MAX_NO_HIGH_BIT`](crate::data::type_props::USIZE_MAX_NO_HIGH_BIT).
+    ///   [`USIZE_MAX_NO_HIGH_BIT`].
     #[must_use = "this function returns a new layout, it doesn't modify the original one"]
     #[allow(clippy::double_must_use)]
     #[inline]
@@ -303,6 +311,7 @@ impl Layout {
     }
 
     /// Converts this layout to a [`alloc::alloc::Layout`].
+    #[must_use]
     #[inline]
     pub const fn to_stdlib(self) -> StdLayout {
         // SAFETY: we validate all layout's requirements ourselves
@@ -311,15 +320,14 @@ impl Layout {
         unsafe { StdLayout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
-    // TODO: make a less bad solution. if none are available, at least test that this is fine in
-    //  build.rs and tests/helpers.rs.
     /// Converts a [`alloc::alloc::Layout`] to a [`Layout`].
     ///
     /// Note that this is only `const` on Rust versions 1.56 and above.
     // this will never be const like this, but it will if i fully switch to this type from StdLayout
     #[rustversion::attr(since(1.56), const)]
+    #[must_use]
     #[inline]
-    pub unsafe fn from_stdlib(layout: StdLayout) -> Layout {
+    pub fn from_stdlib(layout: StdLayout) -> Layout {
         // SAFETY: we share layout's requirements and, as checked by the build.rs, internal layout.
         unsafe { union_transmute::<StdLayout, Layout>(layout) }
     }

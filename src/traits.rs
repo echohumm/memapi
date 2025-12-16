@@ -293,9 +293,7 @@ impl Alloc for std::alloc::System {
         crate::helpers::null_q_zsl_check(
             layout,
             // SAFETY: System::alloc is only called after the layout is verified non-zero-sized.
-            |layout| unsafe {
-                alloc::alloc::GlobalAlloc::alloc(self, crate::layout_handle(layout))
-            },
+            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc(self, layout.to_stdlib()) },
             crate::helpers::null_q_dyn
         )
     }
@@ -307,9 +305,7 @@ impl Alloc for std::alloc::System {
             layout,
             // SAFETY: System::alloc_zeroed is only called after the layout is verified
             //  non-zero-sized.
-            |layout| unsafe {
-                alloc::alloc::GlobalAlloc::alloc_zeroed(self, crate::layout_handle(layout))
-            },
+            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc_zeroed(self, layout.to_stdlib()) },
             crate::helpers::null_q_dyn
         )
     }
@@ -320,7 +316,7 @@ impl Dealloc for std::alloc::System {
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if layout.size() != 0 {
-            alloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), crate::layout_handle(layout));
+            alloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
         }
     }
 }

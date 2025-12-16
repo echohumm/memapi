@@ -71,37 +71,16 @@ pub mod error;
 
 // TODO: consider using only layout::Layout and fully dropping alloc::alloc::Layout
 
-mod layout;
+#[doc(hidden)] pub mod layout;
 
 // TODO: doc consistency. for example, layout used to refer to stdlib's layout as exactly that, but
 //  elsewhere we use the full path instead.
+// TODO: attr order consistency, its rather chaotic currently.
 
-#[rustversion::since(1.50)]
-/// The layout type used by the crate for all operations. [`alloc::alloc::Layout`] on Rust 1.50 and
-/// above, a custom layout type otherwise.
-///
-/// Currently, the former.
-pub type Layout = alloc::alloc::Layout;
+pub use layout::Layout;
+
 /// A type alias for [`alloc::alloc::Layout`].
 pub type StdLayout = alloc::alloc::Layout;
-
-#[rustversion::before(1.50)]
-/// The layout type used by the crate for all operations. [`alloc::alloc::Layout`] on Rust 1.50 and
-/// above, a custom layout type otherwise.
-///
-/// Currently, the latter.
-pub type Layout = layout::Layout;
-
-#[rustversion::before(1.50)]
-pub(crate) const fn layout_handle(l: Layout) -> StdLayout {
-    l.to_stdlib()
-}
-#[rustversion::since(1.50)]
-#[allow(clippy::inline_always)]
-#[inline(always)]
-pub(crate) const fn layout_handle(l: Layout) -> StdLayout {
-    l
-}
 
 /// Default allocator, delegating to the global allocator.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -120,7 +99,7 @@ macro_rules! default_alloc_impl {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { alloc::alloc::alloc(layout_handle(layout)) },
+                    |layout| unsafe { alloc::alloc::alloc(layout.to_stdlib()) },
                     crate::helpers::null_q_dyn
                 )
             }
@@ -134,7 +113,7 @@ macro_rules! default_alloc_impl {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { alloc::alloc::alloc_zeroed(layout_handle(layout)) },
+                    |layout| unsafe { alloc::alloc::alloc_zeroed(layout.to_stdlib()) },
                     crate::helpers::null_q_dyn
                 )
             }
@@ -144,7 +123,7 @@ macro_rules! default_alloc_impl {
             #[inline(always)]
             unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
                 if layout.size() != 0 {
-                    alloc::alloc::dealloc(ptr.as_ptr(), layout_handle(layout));
+                    alloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
             }
         }
@@ -186,7 +165,7 @@ default_alloc_impl!(DefaultAlloc);
 #[cfg(feature = "nightly")]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use crate::{Layout, StdLayout, layout_handle};
+    use crate::{Layout, StdLayout};
 
     // SAFETY: DefaultAlloc's allocated memory isn't deallocated until a deallocation method is
     //  called. as a ZST allocator, copying/cloning it doesn't change behavior or invalidate

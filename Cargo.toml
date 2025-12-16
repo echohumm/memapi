@@ -61,9 +61,17 @@ rustversion = "1.0.22"
 
 
 [[test]]
-name = "base"
+name = "alc"
 path = "tests/alloc.rs"
 
 [[test]]
 name = "hlp"
 path = "tests/helpers.rs"
+
+[[test]]
+name = "lyt"
+path = "tests/layout.rs"
+
+[[test]]
+name = "ext_alc"
+path = "tests/extra_traits.rs"

@@ -176,6 +176,7 @@ macro_rules! impl_ptr_props_identity {
 macro_rules! impl_ptr_props_as_ref {
     ($($name:ty),* $(,)?) => {
         $(
+            #[allow(unused_qualifications)]
             impl<T: ?Sized> PtrProps<T> for $name {
                 #[inline]
                 unsafe fn sz(&self) -> usize {

@@ -15,7 +15,6 @@ use {
     },
     core::{
         mem::forget,
-        num::NonZeroUsize,
         ops::Deref,
         ptr::{self, NonNull}
     }
@@ -185,7 +184,7 @@ pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
 #[must_use]
 #[inline]
 pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
-    NonNull::new_unchecked(NonZeroUsize::new_unchecked(align).get() as *mut u8)
+    NonNull::new_unchecked(align as *mut u8)
 }
 
 /// Returns a valid, dangling [`NonNull`] for the given layout.
@@ -882,7 +881,14 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// Returns `Err((iter, elem))` if the slice is filled before iteration finishes. The
     /// contained iterator will have been partially consumed.
-    pub fn extend_init<I: IntoIterator<Item = T>>(&mut self, iter: I) -> Result<(), I::IntoIter> {
+    pub fn extend_init<I>(&mut self, iter: I) -> Result<(), I::IntoIter>
+    where
+        I: IntoIterator<
+                Item = T,
+                // my ide is dumb today so i have to specify this exactly to stop the error
+                IntoIter: Iterator + Sized
+            >
+    {
         let mut iter = iter.into_iter();
         loop {
             if self.init == self.full {
