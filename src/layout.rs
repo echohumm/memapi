@@ -2,22 +2,9 @@ use crate::{
     StdLayout,
     data::type_props::{PtrProps, SizedProps, USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT},
     error::{AlignErr, ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
-    helpers::{
-        align_up_unchecked,
-        checked_op,
-        dangling_nonnull_for,
-        layout_extend,
-        union_transmute
-    }
+    helpers::{align_up_unchecked, checked_op, dangling_nonnull, layout_extend, union_transmute}
 };
-
-const fn lay_from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
-    tri!(do check_lay(size, align));
-
-    // SAFETY: we just validated the parameters
-    Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
-}
-
+// TODO: merge and remove
 pub const fn check_lay(size: usize, align: usize) -> Result<(), LayoutErr> {
     if align == 0 {
         return Err(LayoutErr::Align(AlignErr::ZeroAlign));
@@ -60,26 +47,6 @@ impl From<Layout> for StdLayout {
     }
 }
 
-const fn layout_or_sz_align<T>(n: usize) -> Result<Layout, (usize, usize, LayoutErr)> {
-    let (sz, align) = (T::SZ, T::ALN);
-
-    if sz != 0 && n > ((USIZE_MAX_NO_HIGH_BIT + 1) - align) / sz {
-        return Err((sz, align, LayoutErr::ExceedsMax));
-    }
-
-    // SAFETY: we just validated that a layout with a size of `sz * n` and alignment of `align` will
-    //  not overflow.
-    unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
-}
-
-#[allow(clippy::missing_errors_doc)]
-const fn layout_or_err<T>(n: usize) -> Result<Layout, InvLayout> {
-    match layout_or_sz_align::<T>(n) {
-        Ok(l) => Ok(l),
-        Err((sz, aln, r)) => Err(InvLayout(sz, aln, r))
-    }
-}
-
 impl Layout {
     /// Creates a layout for the given type.
     ///
@@ -97,10 +64,19 @@ impl Layout {
     ///
     /// See [`repeat_packed`](Layout::repeat_packed).
     pub const fn array<T>(n: usize) -> Result<Layout, RepeatLayoutError> {
-        match layout_or_err::<T>(n) {
-            Ok(l) => Ok(l),
-            Err(e) => Err(RepeatLayoutError::InvalidLayout(e))
+        let (sz, align) = (T::SZ, T::ALN);
+
+        if sz != 0 && n > ((USIZE_MAX_NO_HIGH_BIT + 1) - align) / sz {
+            return Err(RepeatLayoutError::InvalidLayout(InvLayout(
+                sz,
+                align,
+                LayoutErr::ExceedsMax
+            )));
         }
+
+        // SAFETY: we just validated that a layout with a size of `sz * n` and alignment of `align`
+        // will not overflow.
+        unsafe { Ok(Layout::from_size_align_unchecked(sz * n, align)) }
     }
 
     /// Combines two layouts sequentially, returning the combined layout and the
@@ -129,7 +105,8 @@ impl Layout {
     #[must_use]
     #[inline]
     pub const fn dangling(&self) -> core::ptr::NonNull<u8> {
-        dangling_nonnull_for(*self)
+        // SAFETY: we validate dangling_nonnull's requirements at construction.
+        unsafe { dangling_nonnull(self.align()) }
     }
 
     /// Creates a layout for the value behind the given reference
@@ -170,7 +147,10 @@ impl Layout {
     ///   [`USIZE_MAX_NO_HIGH_BIT`](USIZE_MAX_NO_HIGH_BIT).
     #[inline]
     pub const fn from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
-        lay_from_size_align(size, align)
+        tri!(do check_lay(size, align));
+
+        // SAFETY: we just validated the parameters
+        Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
     }
 
     /// Creates a layout with the given size and alignment.
@@ -186,6 +166,14 @@ impl Layout {
     #[must_use]
     #[inline]
     pub const unsafe fn from_size_align_unchecked(size: usize, align: usize) -> Layout {
+        assume!(
+            check_lay(size, align).is_ok(),
+            "values passed to `Layout::from_size_align_unchecked()` are invalid. size: {}, align: \
+             {}",
+            size,
+            align
+        );
+
         Layout { size, align }
     }
 

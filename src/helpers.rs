@@ -103,7 +103,7 @@ pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
         None => Err(ArithErr::Overflow(l, op, r))
     }
 }
-
+// TODO: move this to Layout::extend and remove
 #[allow(clippy::too_long_first_doc_paragraph)]
 /// Given two layouts `a` and `b`, computes a layout describing a block of memory
 /// that can hold a value of layout `a` followed by a value of layout `b`, where
@@ -185,16 +185,6 @@ pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
 #[inline]
 pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
     NonNull::new_unchecked(align as *mut u8)
-}
-
-/// Returns a valid, dangling [`NonNull`] for the given layout.
-#[must_use]
-pub const fn dangling_nonnull_for(layout: Layout) -> NonNull<u8> {
-    #[allow(clippy::incompatible_msrv)]
-    // SAFETY: Layout guarantees the alignment is a valid power of 2
-    unsafe {
-        dangling_nonnull(layout.align())
-    }
 }
 
 /// Returns the maximum alignment satisfied by a non-null pointer.

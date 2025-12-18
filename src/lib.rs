@@ -53,6 +53,27 @@ macro_rules! tri {
     };
 }
 
+// TODO: use elsewhere
+macro_rules! assume {
+    (!$e:expr, $($msg:tt)+) => {
+        if $e {
+            #[cfg(debug_assertions)]
+            {
+                panic!($($msg)+);
+            }
+            // SAFETY: guarded in debug by the above, UB in release builds if used improperly
+            #[cfg(not(debug_assertions))]
+            #[allow(unused_unsafe)]
+            unsafe {
+                switch!(core::hint::unreachable_unchecked(););
+            }
+        }
+    };
+    ($e:expr, $($msg:tt)+) => {
+        assume!(!!$e, $($msg)+)
+    };
+}
+
 // TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
 //  (removed stuff is stuff which would go in new crates)
 //  a lot of helpers would be good to have in another crate too, like .*AllocGuard

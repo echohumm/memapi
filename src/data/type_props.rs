@@ -6,7 +6,7 @@ use {
     }
 };
 // TODO: i feel like the lines between helpers, traits, and type props have become blurred, fix
-
+// TODO: move usize stuff to helpers
 /// The maximum value of a `usize` with no high bit.
 ///
 /// Equivalent to `usize::MAX >> 1` or `isize::MAX as usize`.
@@ -14,8 +14,9 @@ pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
 
 /// A `usize` in which only the high bit is set.
 ///
-/// Equivalent to `usize::MAX ^ (usize::MAX >> 1)` or `usize::MAX << usize::BITS - 1`.
-pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (usize::MAX >> 1);
+/// Equivalent to `usize::MAX ^ (usize::MAX >> 1)`, `usize::MAX << usize::BITS - 1`, or
+/// <code>[USIZE_MAX_NO_HIGH_BIT] + 1</code>
+pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (USIZE_MAX_NO_HIGH_BIT);
 
 /// A small helper to generate a `usize` in which only the bit at the given index is set.
 #[must_use]
