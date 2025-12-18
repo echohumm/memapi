@@ -310,7 +310,7 @@ impl Layout {
         if align > self.align() { Layout::from_size_align(self.size(), align) } else { Ok(*self) }
     }
 
-    /// Converts this layout to a [`alloc::alloc::Layout`].
+    /// Converts this layout to an [`alloc::alloc::Layout`].
     #[must_use]
     #[inline]
     pub const fn to_stdlib(self) -> StdLayout {
@@ -320,7 +320,7 @@ impl Layout {
         unsafe { StdLayout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
-    /// Converts a [`alloc::alloc::Layout`] to a [`Layout`].
+    /// Converts an [`alloc::alloc::Layout`] to a [`Layout`].
     ///
     /// Note that this is only `const` on Rust versions 1.56 and above.
     // this will never be const like this, but it will if i fully switch to this type from StdLayout

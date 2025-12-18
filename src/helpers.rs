@@ -454,7 +454,8 @@ pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
 #[rustversion::before(1.49)]
 /// Transmutes via a `union`. Performs no validity checks.
 ///
-/// Note that this requires both `Src: Copy` and `Dst: Copy` on rust versions below 1.49.
+/// Note that this requires both `Src: Copy` and `Dst: Copy` on rust versions below 1.49, and is
+/// only `const` on 1.56 and above.
 ///
 /// # Safety
 ///
@@ -483,12 +484,12 @@ pub unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {
 ///
 /// # Examples
 ///
-/// ```none
+/// ```
 /// # use core::ptr::NonNull;
-/// # use memapi2::{helpers::AllocGuard, Alloc, DefaultAlloc};
+/// # use memapi2::{helpers::AllocGuard, Layout, Alloc, DefaultAlloc};
 /// # let alloc = DefaultAlloc;
 /// // Allocate space for one `u32` and wrap it in a guard
-/// let layout = core::alloc::Layout::new::<u32>();
+/// let layout = Layout::new::<u32>();
 /// let mut guard = unsafe { AllocGuard::new(alloc.alloc(layout).unwrap().cast::<u32>(), &alloc) };
 ///
 /// // Initialize the value
@@ -580,11 +581,11 @@ impl<T: ?Sized, A: BasicAlloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// Use [`init`](SliceAllocGuard::init) or [`init_unchecked`](SliceAllocGuard::init_unchecked)
 /// to initialize elements one by one, [`extend_init`](SliceAllocGuard::extend_init) to
 /// initialize many elements at once, and [`release`](SliceAllocGuard::release) to take
-/// ownership of the fully‐initialized slice without running cleanup.
+/// ownership of the initialized slice without running cleanup.
 ///
 /// # Examples
 ///
-/// ```none
+/// ```
 /// # extern crate alloc;
 /// # use core::ptr::NonNull;
 /// # use memapi2::{
