@@ -222,7 +222,6 @@ impl<A: Dealloc + ?Sized> Dealloc for &A {
         (**self).dealloc(ptr, layout);
     }
 }
-// TODO: idk if this duplicated code is worth it either
 #[allow(clippy::inline_always)]
 impl<A: Grow + ?Sized> Grow for &A {
     #[cfg_attr(miri, track_caller)]
@@ -327,7 +326,7 @@ impl Shrink for std::alloc::System {}
 #[cfg(feature = "std")]
 impl Realloc for std::alloc::System {}
 
-// TODO: make this whole system better
+// TODO: make this whole system better, same for libc vers in ffi.rs
 
 #[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
 #[cfg_attr(miri, track_caller)]
@@ -341,10 +340,10 @@ unsafe fn grow<A: Grow + ?Sized>(
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => grow_unchecked(a, ptr, old_layout, new_layout, b),
         Ordering::Equal => {
-            if new_layout.align() == old_layout.align() {
-                Ok(ptr)
-            } else {
+            if new_layout.align() > old_layout.align() {
                 grow_unchecked(&a, ptr, old_layout, new_layout, b)
+            } else {
+                Ok(ptr)
             }
         }
         Ordering::Greater => {
@@ -366,10 +365,10 @@ unsafe fn shrink<A: Shrink + ?Sized>(
             Err(AllocError::ShrinkLargerNewLayout(old_layout.size(), new_layout.size()))
         }
         Ordering::Equal => {
-            if new_layout.align() == old_layout.align() {
-                Ok(ptr)
-            } else {
+            if new_layout.align() > old_layout.align() {
                 shrink_unchecked(&a, ptr, old_layout, new_layout)
+            } else {
+                Ok(ptr)
             }
         }
         Ordering::Greater => shrink_unchecked(a, ptr, old_layout, new_layout)
@@ -441,14 +440,14 @@ unsafe fn ralloc<A: Realloc + ?Sized>(
 ) -> Result<NonNull<u8>, AllocError> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => grow_unchecked(&a, ptr, old_layout, new_layout, b),
-        Ordering::Greater => shrink_unchecked(&a, ptr, old_layout, new_layout),
         Ordering::Equal => {
-            if new_layout.align() == old_layout.align() {
-                Ok(ptr)
-            } else {
+            if new_layout.align() > old_layout.align() {
                 grow_unchecked(&a, ptr, old_layout, new_layout, b)
+            } else {
+                Ok(ptr)
             }
         }
+        Ordering::Greater => shrink_unchecked(&a, ptr, old_layout, new_layout)
     }
 }
 

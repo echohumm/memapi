@@ -8,7 +8,7 @@ use {
 
 #[test]
 fn layout_from_stdlib() {
-    let std_layout = StdLayout::from_size_align(1024, 1024).unwrap();
+    let std_layout = StdLayout::from_size_align(1024, 64).unwrap();
     let layout = Layout::from_stdlib(std_layout);
 
     assert_eq!(std_layout.size(), layout.size(), "size mismatch");
@@ -21,7 +21,7 @@ fn layout_from_stdlib() {
 
 #[test]
 fn layout_to_stdlib() {
-    let layout = Layout::from_size_align(1024, 1024).unwrap();
+    let layout = Layout::from_size_align(1024, 64).unwrap();
     let std_layout = layout.to_stdlib();
 
     assert_eq!(layout.size(), std_layout.size(), "size mismatch");

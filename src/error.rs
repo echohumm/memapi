@@ -1,5 +1,5 @@
 use {
-    crate::Layout,
+    crate::{Layout, data::type_props::SizedProps},
     core::{
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         ptr::NonNull
@@ -87,6 +87,10 @@ pub enum Cause {
     /// This should only be used when the __allocator__ runs out of memory and doesn't grow. Use
     /// [`OSErr`](Cause::OSErr) if the system runs out of memory.
     OutOfMemory,
+    // TODO: better docs
+    /// An error occurred while rounding the alignment of the requested layout up to a value
+    /// compatible with [`CAlloc`](crate::c_alloc::alloc::CAlloc).
+    CRoundUp,
     #[cfg(feature = "os_err_reporting")]
     /// The cause is described in the contained OS error.
     ///
@@ -99,6 +103,10 @@ impl Display for Cause {
         match self {
             Cause::Unknown => write!(f, "unknown"),
             Cause::OutOfMemory => write!(f, "out of memory"),
+            // TODO: better error message
+            Cause::CRoundUp => {
+                write!(f, "failed to round layout alignment up to a multiple of {}", usize::SZ)
+            }
             #[cfg(feature = "os_err_reporting")]
             Cause::OSErr(e) => write!(f, "os error:\n\t{}", e)
         }

@@ -1,10 +1,17 @@
 use crate::{
     StdLayout,
     data::type_props::{PtrProps, SizedProps, USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT},
-    error::{AlignErr, ArithOp, InvLayout, LayoutErr, RepeatLayoutError},
-    helpers::{align_up_unchecked, checked_op, dangling_nonnull, layout_extend, union_transmute}
+    error::{AlignErr, AllocError, ArithOp, Cause, InvLayout, LayoutErr, RepeatLayoutError},
+    helpers::{
+        align_up,
+        align_up_unchecked,
+        checked_op,
+        dangling_nonnull,
+        is_multiple_of,
+        layout_extend
+    }
 };
-// TODO: merge and remove
+
 pub const fn check_lay(size: usize, align: usize) -> Result<(), LayoutErr> {
     if align == 0 {
         return Err(LayoutErr::Align(AlignErr::ZeroAlign));
@@ -298,25 +305,79 @@ impl Layout {
         if align > self.align() { Layout::from_size_align(self.size(), align) } else { Ok(*self) }
     }
 
+    /// Returns a layout with the same `size` as `self` but whose alignment has been rounded up to
+    /// the nearest multiple of `align`.
+    ///
+    /// This differs from [`Layout::align_to`]: `align_to` sets the layout's alignment to the
+    /// provided alignment if that alignment is larger than the current one. This method instead
+    /// rounds the current alignment up to a multiple of the provided `align`.
+    ///
+    /// # Errors
+    ///
+    /// Propagates the error returned by [`Layout::from_size_align`] if construction of the new
+    /// layout fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use memapi2::Layout;
+    /// // current alignment 8, round up to a multiple of 6 => next multiple is 12
+    /// let l = unsafe { Layout::from_size_align_unchecked(30, 8) };
+    /// let rounded = l.align_to_multiple_of(16).unwrap();
+    /// assert_eq!(rounded.align(), 16);
+    /// assert_eq!(rounded.size(), 30);
+    /// ```
+    #[inline]
+    pub const fn align_to_multiple_of(&self, align: usize) -> Result<Layout, InvLayout> {
+        let cur_align = self.align();
+        if is_multiple_of(cur_align, align) {
+            Ok(*self)
+        } else {
+            let new_align = tri!(do align_up(cur_align, align));
+            match Layout::from_size_align(self.size(), new_align) {
+                Ok(l) => Ok(l),
+                Err(e) => Err(InvLayout(self.size(), new_align, e))
+            }
+        }
+    }
+
+    /// Produce a layout that is compatible with C's `aligned_alloc` requirements.
+    ///
+    /// C's `aligned_alloc(alignment, size)` requires:
+    /// - `alignment` is a power of two, non-zero, and a multiple of `size_of::<*mut c_void>()`.
+    /// - `size` is a multiple of `alignment`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(AllocError::AllocFailed(layout, Cause::CRoundUp))` if the alignment-rounding
+    /// step fails. See [`Layout::align_to_multiple_of`] (the function used for rounding).
+    #[inline]
+    pub const fn to_aligned_alloc_compatible(&self) -> Result<Layout, AllocError> {
+        // first, make the alignment a multiple of `size_of::<*mut c_void>()`.
+        let aligned = match self.align_to_multiple_of(usize::SZ) {
+            Ok(l) => l,
+            Err(_) => return Err(AllocError::AllocFailed(*self, Cause::CRoundUp))
+        };
+        // then pad the size up to a multiple of the new alignment
+        Ok(aligned.pad_to_align())
+    }
+
     /// Converts this layout to an [`alloc::alloc::Layout`].
     #[must_use]
     #[inline]
     pub const fn to_stdlib(self) -> StdLayout {
         // SAFETY: we validate all layout's requirements ourselves
-        // TODO: i'm torn between keeping or changing this to use a transmute like from_stdlib;
-        //  higher safety or consistency
         unsafe { StdLayout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
     /// Converts an [`alloc::alloc::Layout`] to a [`Layout`].
     ///
-    /// Note that this is only `const` on Rust versions 1.56 and above.
-    // this will never be const like this, but it will if i fully switch to this type from StdLayout
-    #[rustversion::attr(since(1.56), const)]
+    /// Note that this is only `const` on Rust versions 1.50 and above.
+    #[rustversion::attr(since(1.50), const)]
     #[must_use]
     #[inline]
     pub fn from_stdlib(layout: StdLayout) -> Layout {
         // SAFETY: we share layout's requirements and, as checked by the build.rs, internal layout.
-        unsafe { union_transmute::<StdLayout, Layout>(layout) }
+        unsafe { Layout::from_size_align_unchecked(layout.size(), layout.align()) }
     }
 }

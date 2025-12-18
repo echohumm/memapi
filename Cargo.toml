@@ -30,6 +30,8 @@ maintenance = { status = "actively-developed" }
 [features]
 default = []
 
+c_alloc = []
+
 # msrv-changing features
 ## that make small changes
 c_str = []
@@ -49,8 +51,10 @@ os_err_reporting = ["std"]
 
 full = [
     "os_err_reporting",
-    "c_str"
+    "c_str",
+    "c_alloc"
 ]
+full_msrv = ["os_err_reporting", "c_alloc"]
 full_nightly = ["full", "all_nightly"]
 
 
@@ -65,13 +69,13 @@ name = "alc"
 path = "tests/alloc.rs"
 
 [[test]]
+name = "c_alc"
+path = "tests/c_alloc.rs"
+
+[[test]]
 name = "hlp"
 path = "tests/helpers.rs"
 
 [[test]]
 name = "lyt"
 path = "tests/layout.rs"
-
-[[test]]
-name = "ext_alc"
-path = "tests/extra_traits.rs"

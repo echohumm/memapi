@@ -31,7 +31,6 @@ fn run_checks() -> Vec<Failure> {
     let mut failures = Vec::new();
 
     failures.extend(checks::sp_frp::check());
-    failures.extend(checks::layout::check());
 
     failures
 }
@@ -126,72 +125,6 @@ mod checks {
         #[must_use]
         fn slice_ptr_from_parts<T>(p: *mut T, len: usize) -> *mut [T] {
             unsafe { union_transmute((p, len)) }
-        }
-
-        unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {
-            union Either<Src: Copy, Dst: Copy> {
-                src: Src,
-                dst: Dst
-            }
-
-            Either { src }.dst
-        }
-    }
-
-    #[allow(clippy::use_self)]
-    pub mod layout {
-        use crate::Failure;
-
-        pub fn check() -> Vec<Failure> {
-            let mut failures = Vec::<Failure>::new();
-
-            let std_layout = StdLayout::from_size_align(1024, 1024).unwrap();
-            let custom_layout = Layout::from_stdlib(std_layout);
-
-            if custom_layout.size() != std_layout.size() {
-                failures.push(Failure {
-                    source: 1,
-                    code: 0,
-                    msg: "custom layout size does not match std layout size"
-                });
-            }
-
-            if custom_layout.align() != std_layout.align() {
-                failures.push(Failure {
-                    source: 1,
-                    code: 1,
-                    msg: "custom layout align does not match std layout align"
-                });
-            }
-
-            failures
-        }
-
-        type StdLayout = core::alloc::Layout;
-
-        #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-        struct Layout {
-            size: usize,
-            align: usize
-        }
-
-        impl Layout {
-            #[must_use]
-            #[inline]
-            const fn size(&self) -> usize {
-                self.size
-            }
-
-            #[must_use]
-            #[inline]
-            const fn align(&self) -> usize {
-                self.align
-            }
-
-            fn from_stdlib(layout: StdLayout) -> Layout {
-                // SAFETY: we share layout's requirements and in theory, layout
-                unsafe { union_transmute::<StdLayout, Layout>(layout) }
-            }
         }
 
         unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {

@@ -1,13 +1,13 @@
-#![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+#![cfg(feature = "c_alloc")]
 
 use {
-    core::ptr,
-    memapi2::{DefaultAlloc, Layout, error::AllocError, traits::*}
+    memapi2::{Alloc, Dealloc, Grow, Layout, Shrink, c_alloc::CAlloc, error::AllocError},
+    std::ptr
 };
 
 #[test]
 fn test_alloc_and_dealloc() {
-    let allocator = DefaultAlloc;
+    let allocator = CAlloc;
     let layout = Layout::from_size_align(16, 8).unwrap();
     // Allocate
     let ptr = allocator.alloc(layout).expect("alloc failed");
@@ -23,7 +23,7 @@ fn test_alloc_and_dealloc() {
 
 #[test]
 fn test_alloc_zeroed() {
-    let allocator = DefaultAlloc;
+    let allocator = CAlloc;
     let layout = Layout::from_size_align(32, 8).unwrap();
     let ptr = allocator.zalloc(layout).expect("alloc_zeroed failed");
     unsafe {
@@ -36,7 +36,7 @@ fn test_alloc_zeroed() {
 
 #[test]
 fn test_shrink_and_error_cases() {
-    let allocator = DefaultAlloc;
+    let allocator = CAlloc;
     let old = Layout::from_size_align(8, 1).unwrap();
     // 1 is fine here though because we already satisfy the alignment, and
     //  1 < MAXIMUM_GUARANTEED_ALIGNMENT
@@ -67,7 +67,7 @@ fn test_shrink_and_error_cases() {
 
 #[test]
 fn grow_preserves_prefix() {
-    let a = DefaultAlloc;
+    let a = CAlloc;
     let old = Layout::from_size_align(8, 8).unwrap();
     let new = Layout::from_size_align(16, 8).unwrap();
 
@@ -88,7 +88,7 @@ fn grow_preserves_prefix() {
 
 #[test]
 fn zgrow_zeros_new_region() {
-    let a = DefaultAlloc;
+    let a = CAlloc;
     let old = Layout::from_size_align(8, 8).unwrap();
     let new = Layout::from_size_align(16, 8).unwrap();
 
@@ -113,7 +113,7 @@ fn zgrow_zeros_new_region() {
 
 #[test]
 fn shrink_preserves_prefix() {
-    let a = DefaultAlloc;
+    let a = CAlloc;
     let old = Layout::from_size_align(16, 8).unwrap();
     let new = Layout::from_size_align(8, 8).unwrap();
 

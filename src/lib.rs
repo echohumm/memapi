@@ -14,8 +14,7 @@
 //! - [`UnsizedCopy`](data::marker::UnsizedCopy)
 //! - [`Thin`](data::marker::Thin)
 
-// TODO: add more tests and benches
-// TODO: test on other platforms/targets
+// TODO: add more tests. ALWAYS MORE TESTS.
 
 #![allow(unknown_lints)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
@@ -39,6 +38,12 @@ extern crate core;
 
 /// This macro is theoretically faster than `<fallible>?`.
 macro_rules! tri {
+    (AllocError::$err:ident $($fallible:expr)+) => {
+        match $($fallible)+ {
+            Ok(x)  => x,
+            Err(e)  => return Err(AllocError::$err(e)),
+        }
+    };
     (opt $($fallible:expr)+) => {
         match $($fallible)+ {
             Some(x) => x,
@@ -78,6 +83,9 @@ macro_rules! assume {
 //  (removed stuff is stuff which would go in new crates)
 //  a lot of helpers would be good to have in another crate too, like .*AllocGuard
 
+#[cfg(feature = "c_alloc")]
+/// An allocator which uses C's `aligned_alloc` set of allocation functions.
+pub mod c_alloc;
 /// Module for anything related specifically to data.
 ///
 /// This includes marker traits, type properties, and miscellaneous data-handling traits.
@@ -89,9 +97,6 @@ pub use traits::*;
 
 /// Errors that can occur during allocation.
 pub mod error;
-
-// TODO: consider using only layout::Layout and fully dropping alloc::alloc::Layout
-
 #[doc(hidden)] pub mod layout;
 
 // TODO: doc consistency. for example, layout used to refer to stdlib's layout as exactly that, but

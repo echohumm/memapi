@@ -139,21 +139,24 @@ pub fn layout_extend(a: Layout, b: Layout) -> Result<(Layout, usize), InvLayout>
     }
 }
 
-/// Aligns the given value up to a non-zero alignment.
+/// Aligns the given value up to an alignment.
 ///
 /// # Errors
-// TODO: better (more specific) docs (doesn't mention LayoutErr or AlignErr type)
-/// [`InvLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`].
-pub const fn align_up(sz: usize, align: usize) -> Result<usize, InvLayout> {
+///
+/// [`InvLayout`] if either `sz` or `align` are over [`USIZE_MAX_NO_HIGH_BIT`] or `align` is 0 or
+/// not a power of two.
+pub const fn align_up(val: usize, align: usize) -> Result<usize, InvLayout> {
     if align == 0 {
-        return Err(InvLayout(sz, align, LayoutErr::Align(AlignErr::ZeroAlign)));
+        return Err(InvLayout(val, align, LayoutErr::Align(AlignErr::ZeroAlign)));
+    } else if !align.is_power_of_two() {
+        return Err(InvLayout(val, align, LayoutErr::Align(AlignErr::NonPowerOfTwoAlign(align))));
     }
-    if sz > USIZE_MAX_NO_HIGH_BIT || align > USIZE_MAX_NO_HIGH_BIT {
-        return Err(InvLayout(sz, align, LayoutErr::ExceedsMax));
+    if val > USIZE_MAX_NO_HIGH_BIT || align > USIZE_MAX_NO_HIGH_BIT {
+        return Err(InvLayout(val, align, LayoutErr::ExceedsMax));
     }
 
     // SAFETY: align must be nonzero and below the limits.
-    Ok(unsafe { align_up_unchecked(sz, align) })
+    Ok(unsafe { align_up_unchecked(val, align) })
 }
 
 /// Aligns the given value up to an alignment.
@@ -164,9 +167,9 @@ pub const fn align_up(sz: usize, align: usize) -> Result<usize, InvLayout> {
 /// `align` must be non-zero, but no greater than `USIZE_MAX_NO_HIGH_BIT`.
 #[must_use]
 #[inline]
-pub const unsafe fn align_up_unchecked(sz: usize, align: usize) -> usize {
+pub const unsafe fn align_up_unchecked(val: usize, align: usize) -> usize {
     let m1 = align - 1;
-    (sz + m1) & !m1
+    (val + m1) & !m1
 }
 
 /// Converts a reference into a [`NonNull`].
@@ -439,6 +442,19 @@ pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
     }
 
     ManuallyDrop::into_inner(Either { src: ManuallyDrop::new(src) }.dst)
+}
+
+/// Returns `true` if `lhs` is an integer multiple of `rhs`, and false otherwise.
+///
+/// This function is equivalent to `lhs % rhs == 0`, except that it will not panic
+/// for `rhs == 0`. Instead, `0.is_multiple_of(0) == true`, and for any non-zero `n`,
+/// `n.is_multiple_of(0) == false`.
+#[must_use]
+pub const fn is_multiple_of(lhs: usize, rhs: usize) -> bool {
+    match rhs {
+        0 => lhs == 0,
+        _ => lhs % rhs == 0
+    }
 }
 
 #[rustversion::before(1.49)]
@@ -864,6 +880,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
         if uncloned == 0 { Ok(()) } else { Err(uncloned) }
     }
 
+    //noinspection RsExperimentalTraitObligations
     // error shows, but it seems to be fine since it compiles
     //noinspection RsAssociatedTypeMismatch
     /// Initializes the next elements of the slice with the elements from `iter`.
@@ -872,14 +889,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// Returns `Err((iter, elem))` if the slice is filled before iteration finishes. The
     /// contained iterator will have been partially consumed.
-    pub fn extend_init<I>(&mut self, iter: I) -> Result<(), I::IntoIter>
-    where
-        I: IntoIterator<
-                Item = T,
-                // my ide is dumb today so i have to specify this exactly to stop the error
-                IntoIter: Iterator + Sized
-            >
-    {
+    pub fn extend_init<I: IntoIterator<Item = T>>(&mut self, iter: I) -> Result<(), I::IntoIter> {
         let mut iter = iter.into_iter();
         loop {
             if self.init == self.full {
