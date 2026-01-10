@@ -3,13 +3,18 @@
 use {
     core::ptr,
     memapi2::{
+        error::{ArithErr, ArithOp},
+        helpers::{
+            align_up,
+            byte_sub,
+            checked_op,
+            slice_ptr_from_parts_mut,
+            varsized_ptr_from_parts_mut
+        },
         Alloc,
         Dealloc,
         DefaultAlloc,
-        Layout,
-        data::type_props::varsized_ptr_from_parts_mut,
-        error::{AlignErr, ArithErr, ArithOp, InvLayout, LayoutErr},
-        helpers::{align_up, align_up_unchecked, byte_sub, checked_op, slice_ptr_from_parts_mut}
+        Layout
     }
 };
 
@@ -85,26 +90,15 @@ fn checked_op_basic_and_errors() {
     assert_eq!(checked_op(10, ArithOp::Sub, 3).unwrap(), 7);
     assert_eq!(checked_op(4, ArithOp::Mul, 5).unwrap(), 20);
     // div by zero results in overflow err
-    assert_eq!(
-        checked_op(10, ArithOp::Div, 0).unwrap_err(),
-        ArithErr::Overflow(10, ArithOp::Div, 0)
-    );
+    assert_eq!(checked_op(10, ArithOp::Div, 0).unwrap_err(), ArithErr(10, ArithOp::Div, 0));
     // pow with too-large rhs
     let big = (u32::MAX as usize) + 1;
-    assert_eq!(checked_op(2, ArithOp::Pow, big).unwrap_err(), ArithErr::TooLargeRhs(big));
+    assert_eq!(checked_op(2, ArithOp::Pow, big).unwrap_err(), ArithErr(2, ArithOp::Pow, big));
 }
 
 #[test]
 fn align_up_and_unchecked() {
-    // safe wrapper
-    assert_eq!(align_up(6, 8).unwrap(), 8);
-    // zero align should err
-    let err = align_up(1, 0).unwrap_err();
-    assert_eq!(err, InvLayout(1, 0, LayoutErr::Align(AlignErr::ZeroAlign)));
-
-    //
-    let v = unsafe { align_up_unchecked(7, 8) };
-    assert_eq!(v, 8);
+    assert_eq!(align_up(7, 8), 8);
 }
 
 #[test]

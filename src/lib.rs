@@ -15,6 +15,7 @@
 //! - [`Thin`](data::marker::Thin)
 
 // TODO: add more tests. ALWAYS MORE TESTS.
+//  for error cases specifically
 
 #![allow(unknown_lints)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
@@ -32,16 +33,22 @@
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
 // TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
+// TODO: consider behavior of all allocation methods in all possible cases for all allocators and
+//  make sure they match and make sense
+
+// TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
+//  (removed stuff is stuff which would go in new crates)
+//  a lot of helpers would be good to have in another crate too, like .*AllocGuard, checked_op, etc.
 
 extern crate alloc;
 extern crate core;
 
 /// This macro is theoretically faster than `<fallible>?`.
 macro_rules! tri {
-    (AllocError::$err:ident $($fallible:expr)+) => {
+    (::$err:ident $($fallible:expr)+) => {
         match $($fallible)+ {
-            Ok(x)  => x,
-            Err(e)  => return Err(AllocError::$err(e)),
+            Ok(x) => x,
+            Err(e) => return Err(Error::$err(e)),
         }
     };
     (opt $($fallible:expr)+) => {
@@ -58,33 +65,9 @@ macro_rules! tri {
     };
 }
 
-// TODO: use elsewhere
-macro_rules! assume {
-    (!$e:expr, $($msg:tt)+) => {
-        if $e {
-            #[cfg(debug_assertions)]
-            {
-                panic!($($msg)+);
-            }
-            // SAFETY: guarded in debug by the above, UB in release builds if used improperly
-            #[cfg(not(debug_assertions))]
-            #[allow(unused_unsafe)]
-            unsafe {
-                switch!(core::hint::unreachable_unchecked(););
-            }
-        }
-    };
-    ($e:expr, $($msg:tt)+) => {
-        assume!(!!$e, $($msg)+)
-    };
-}
-
-// TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
-//  (removed stuff is stuff which would go in new crates)
-//  a lot of helpers would be good to have in another crate too, like .*AllocGuard
-
 #[cfg(feature = "c_alloc")]
-/// An allocator which uses C's `aligned_alloc` set of allocation functions.
+/// An allocator which uses C's [`aligned_alloc`](c_alloc::ffi::aligned_alloc) set of allocation
+/// functions.
 pub mod c_alloc;
 /// Module for anything related specifically to data.
 ///
@@ -97,11 +80,7 @@ pub use traits::*;
 
 /// Errors that can occur during allocation.
 pub mod error;
-#[doc(hidden)] pub mod layout;
-
-// TODO: doc consistency. for example, layout used to refer to stdlib's layout as exactly that, but
-//  elsewhere we use the full path instead.
-// TODO: attr order consistency, its rather chaotic currently.
+mod layout;
 
 pub use layout::Layout;
 
@@ -118,10 +97,7 @@ macro_rules! default_alloc_impl {
         impl crate::Alloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
-            fn alloc(
-                &self,
-                layout: Layout
-            ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
+            fn alloc(&self, layout: Layout) -> Result<core::ptr::NonNull<u8>, crate::error::Error> {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
@@ -135,7 +111,7 @@ macro_rules! default_alloc_impl {
             fn zalloc(
                 &self,
                 layout: Layout
-            ) -> Result<core::ptr::NonNull<u8>, crate::error::AllocError> {
+            ) -> Result<core::ptr::NonNull<u8>, crate::error::Error> {
                 crate::helpers::null_q_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.

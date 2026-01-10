@@ -1,9 +1,10 @@
 #![cfg(feature = "c_alloc")]
 
 use {
-    memapi2::{Alloc, Dealloc, Grow, Layout, Shrink, c_alloc::CAlloc, error::AllocError},
+    memapi2::{Alloc, Dealloc, Grow, Layout, Shrink, c_alloc::CAlloc, error::Error},
     std::ptr
 };
+use memapi2::data::type_props::SizedProps;
 
 #[test]
 fn test_alloc_and_dealloc() {
@@ -37,10 +38,10 @@ fn test_alloc_zeroed() {
 #[test]
 fn test_shrink_and_error_cases() {
     let allocator = CAlloc;
-    let old = Layout::from_size_align(8, 1).unwrap();
+    let old = Layout::from_size_align(32, usize::SZ).unwrap();
     // 1 is fine here though because we already satisfy the alignment, and
     //  1 < MAXIMUM_GUARANTEED_ALIGNMENT
-    let new = Layout::from_size_align(4, 1).unwrap();
+    let new = Layout::from_size_align(16, usize::SZ).unwrap();
     let ptr = allocator.alloc(old).unwrap();
     unsafe {
         ptr::write_bytes(ptr.as_ptr(), 0xCC, old.size());
@@ -54,11 +55,11 @@ fn test_shrink_and_error_cases() {
 
     // error: shrink to a larger size
     let err = unsafe { allocator.shrink(shr, new, old).unwrap_err() };
-    assert_eq!(err, AllocError::ShrinkLargerNewLayout(new.size(), old.size()));
+    assert_eq!(err, Error::ShrinkLargerNewLayout(new.size(), old.size()));
 
     // error: grow to a smaller size
     let err2 = unsafe { allocator.grow(shr, old, new).unwrap_err() };
-    assert_eq!(err2, AllocError::GrowSmallerNewLayout(old.size(), new.size()));
+    assert_eq!(err2, Error::GrowSmallerNewLayout(old.size(), new.size()));
 
     unsafe {
         allocator.dealloc(shr, new);

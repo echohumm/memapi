@@ -2,7 +2,7 @@
 
 use {
     core::ptr,
-    memapi2::{DefaultAlloc, Layout, error::AllocError, traits::*}
+    memapi2::{DefaultAlloc, Layout, error::Error, traits::*}
 };
 
 #[test]
@@ -54,11 +54,11 @@ fn test_shrink_and_error_cases() {
 
     // error: shrink to a larger size
     let err = unsafe { allocator.shrink(shr, new, old).unwrap_err() };
-    assert_eq!(err, AllocError::ShrinkLargerNewLayout(new.size(), old.size()));
+    assert_eq!(err, Error::ShrinkLargerNewLayout(new.size(), old.size()));
 
     // error: grow to a smaller size
     let err2 = unsafe { allocator.grow(shr, old, new).unwrap_err() };
-    assert_eq!(err2, AllocError::GrowSmallerNewLayout(old.size(), new.size()));
+    assert_eq!(err2, Error::GrowSmallerNewLayout(old.size(), new.size()));
 
     unsafe {
         allocator.dealloc(shr, new);

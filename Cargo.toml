@@ -49,12 +49,11 @@ std = []
 # specific std features
 os_err_reporting = ["std"]
 
-full = [
-    "os_err_reporting",
-    "c_str",
-    "c_alloc"
-]
 full_msrv = ["os_err_reporting", "c_alloc"]
+full = [
+    "full_msrv",
+    "c_str",
+]
 full_nightly = ["full", "all_nightly"]
 
 

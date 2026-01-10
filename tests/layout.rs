@@ -1,10 +1,11 @@
 use {
     memapi2::{
-        error::{AlignErr, LayoutErr},
-        layout::Layout
+        error::{LayoutErr},
+        Layout
     },
     std::alloc::Layout as StdLayout
 };
+use memapi2::error::Error;
 
 #[test]
 fn layout_from_stdlib() {
@@ -35,13 +36,13 @@ fn layout_to_stdlib() {
 #[test]
 fn from_size_align_invalid_zero_align() {
     let err = Layout::from_size_align(8, 0).unwrap_err();
-    assert_eq!(err, LayoutErr::Align(AlignErr::ZeroAlign));
+    assert_eq!(err, Error::InvalidLayout(8, 0, LayoutErr::ZeroAlign));
 }
 
 #[test]
 fn from_size_align_invalid_non_power_of_two() {
     let err = Layout::from_size_align(8, 3).unwrap_err();
-    assert_eq!(err, LayoutErr::Align(AlignErr::NonPowerOfTwoAlign(3)));
+    assert_eq!(err, Error::InvalidLayout(8, 3, LayoutErr::NonPowerOfTwoAlign));
 }
 
 #[test]
@@ -67,7 +68,7 @@ fn align_to() {
 #[test]
 fn padding_needed_for_invalid() {
     let l = Layout::from_size_align(6, 8).unwrap();
-    assert_eq!(l.padding_needed_for(3), usize::MAX);
+    assert_eq!(l.padding_needed_for(3), Err(LayoutErr::NonPowerOfTwoAlign));
 }
 
 #[test]
