@@ -188,6 +188,8 @@ impl Layout {
         Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
     }
 
+    // TODO: docs for this function.
+
     /// <placeholder docs>
     pub const fn aligned_alloc_compatible_from_size_align(
         size: usize,

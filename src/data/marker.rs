@@ -10,7 +10,7 @@ pub unsafe trait UnsizedCopy {}
 unsafe impl<T: Copy> UnsizedCopy for T {}
 // SAFETY: And so are slices containing copyable T.
 unsafe impl<T: Copy> UnsizedCopy for [T] {}
-// SAFETY: `str == [u8]` and `u8: Copy`.
+// SAFETY: `str == [u8]` and `u8: Copy`, so, above.
 unsafe impl UnsizedCopy for str {}
 #[cfg(feature = "c_str")]
 // SAFETY: `CStr == [u8]`

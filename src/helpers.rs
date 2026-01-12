@@ -257,8 +257,8 @@ pub fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
 pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
-        *((&ptr::slice_from_raw_parts_mut::<T::Subtype>(p.cast(), meta)
-            as *const *mut [T::Subtype])
+        *((&ptr::slice_from_raw_parts_mut::<T::SubType>(p.cast(), meta)
+            as *const *mut [T::SubType])
             .cast::<*mut T>())
     }
 }
@@ -285,8 +285,8 @@ pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize
 pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
-        *((&ptr::slice_from_raw_parts::<T::Subtype>(p.cast(), meta)
-            as *const *const [T::Subtype])
+        *((&ptr::slice_from_raw_parts::<T::SubType>(p.cast(), meta)
+            as *const *const [T::SubType])
             .cast::<*const T>())
     }
 }

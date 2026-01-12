@@ -102,7 +102,6 @@ impl Alloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        // SAFETY: A
         pad_then_alloc(layout, aligned_alloc)
     }
 

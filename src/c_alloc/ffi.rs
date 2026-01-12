@@ -137,7 +137,14 @@ pub unsafe fn shrink_aligned(
 }
 
 extern "C" {
-    /// Allocate `size` bytes with at least `align` alignment.
+    /// Allocates `size` bytes.
+    ///
+    /// Closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout parameter's alignment being <code>[align_of]::\<usize\>()</code>
+    pub fn malloc(size: usize) -> *mut c_void;
+
+    /// Allocates `size` bytes with at least `align` alignment.
+    ///
+    /// Closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
     ///
     /// # Returns
     ///
@@ -150,12 +157,27 @@ extern "C" {
     /// - `size` must be a multiple of `align`.
     pub fn aligned_alloc(align: usize, size: usize) -> *mut c_void;
 
-    /// Free memory previously returned by [`aligned_alloc`] (or other allocator helpers here).
+    /// Frees memory previously returned by the primary C allocator.
+    ///
+    /// Closest Rust equivalent is [`dealloc`](alloc::alloc::dealloc).
     pub fn free(ptr: *mut c_void);
 
-    /// Set `count` bytes at `ptr` to `val`. The returned pointer is a copy of `ptr`.
+    /// Sets `count` bytes at `ptr` to `val`. The returned pointer is a copy of `ptr`.
+    ///
+    /// Rust equivalent is [`write_bytes`](core::ptr::write_bytes).
     pub fn memset(ptr: *mut c_void, val: i32, count: usize) -> *mut c_void;
 
-    /// Copy `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
+    /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
+    ///
+    /// `src` and `dest` may not overlap.
+    ///
+    /// Rust equivalent is [`copy_nonoverlapping`](core::ptr::copy_nonoverlapping)
     pub fn memcpy(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
+
+    /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
+    ///
+    /// `src` and `dest` may overlap.
+    ///
+    /// Rust equivalent is [`copy`](core::ptr::copy)
+    pub fn memmove(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 }
