@@ -71,13 +71,14 @@ impl Layout {
         T::LAYOUT
     }
 
-    // TODO: can be deduped with repeat_packed, decide whether or not to
+    // could be deduped with repeat*, but stdlib doesn't, and it's logically meaningfully faster, so
+    // i won't
     /// Creates a layout representing an array of `n` `T`.
     ///
     /// # Errors
     ///
     /// Returns <code>Err([Error::InvalidLayout]\([T::SZ], [T::ALN],
-    /// [LayoutErr:ExceedsMax]\))</code> if the length of the computed array, in bytes, would
+    /// [LayoutErr::ExceedsMax]\))</code> if the length of the computed array, in bytes, would
     /// exceed [`USIZE_MAX_NO_HIGH_BIT`].
     pub const fn array<T>(n: usize) -> Result<Layout, Error> {
         let (sz, align) = (T::SZ, T::ALN);
@@ -309,6 +310,13 @@ impl Layout {
     /// isn't guaranteed that all elements in the array will be properly aligned.
     ///
     /// Note that this is only `const` on Rust versions 1.47 and above.
+    ///
+    /// # Errors
+    ///
+    /// - <code>Err([Error::ArithmeticError])</code> if multiplying [`layout.size()`](Layout::size)
+    ///   by `count` would overflow.
+    /// - Propagates the error from <code>[Layout::from_size_align]\([self.size()](Layout::size),
+    ///   [self.align()](Layout::align)\)</code> if it fails.
     #[rustversion::attr(since(1.47), const)]
     #[inline]
     pub fn repeat_packed(&self, count: usize) -> Result<Layout, Error> {
@@ -317,8 +325,7 @@ impl Layout {
             Ok(s) => s,
             Err(e) => return Err(Error::ArithmeticError(e))
         };
-        let align = self.align();
-        match Layout::from_size_align(size, align) {
+        match Layout::from_size_align(size, self.align()) {
             Ok(layout) => Ok(layout),
             Err(e) => Err(e)
         }
@@ -349,11 +356,24 @@ impl Layout {
     /// This method instead rounds the current alignment up to a multiple of the provided
     /// `align`.
     ///
+    /// # Errors
+    ///
+    /// - <code>Err([Error::InvalidLayout]\([self.align()](Layout::align), align,
+    ///   [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
+    /// - <code>Err([Error::InvalidLayout]\([self.align()](Layout::align), align,
+    ///   [LayoutErr::NonPowerOfTwoAlign]\))</code> if `align` is not a power of two.
+    /// - <code>Err([Error::InvalidLayout]\([self.align()](Layout::align), align,
+    ///   [LayoutErr::ExceedsMax]\))</code> if rounding the current alignment up to a multiple of
+    ///   `align` would exceed the maximum allowed alignment.
+    /// - Propagates the error from <code>[Layout::from_size_align]\([self.size()](Layout::size),
+    ///   new_alignment\)</code>, where `new_alignment` is the result of rounding
+    ///   [`self.align()`](Layout::align) up to `align`, if it fails.
+    ///
     /// # Examples
     ///
     /// ```
     /// # use memapi2::Layout;
-    /// // current alignment 8, round up to a multiple of 6 => next multiple is 12
+    /// // current alignment 8, round up to a multiple of 16 => next multiple is 16
     /// let l = unsafe { Layout::from_size_align_unchecked(30, 8) };
     /// let rounded = l.align_to_multiple_of(16).unwrap();
     /// assert_eq!(rounded.align(), 16);
