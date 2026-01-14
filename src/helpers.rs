@@ -4,7 +4,7 @@ use {
         BasicAlloc,
         Layout,
         data::type_props::{PtrProps, SizedProps, VarSized},
-        error::{ArithErr, ArithOp, Cause, Error}
+        error::{ArithErr, ArithOp, Cause, Error, LayoutErr}
     },
     core::{
         mem::forget,
@@ -110,28 +110,43 @@ pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
     }
 }
 
-/// Aligns the given value up to an alignment.
+/// Aligns the given value `v` up to the next multiple of `align`.
 ///
 /// # Safety
 ///
-/// This function is safe to call, but the returned value may be  if:
-/// - `align` is zero
-/// - `align` is not a power of two
-/// - `val + align - 1` exceeds [`usize::MAX`]
+/// This function is safe to call, but the returned value may be incorrect if `align` is not a power
+/// of two. An overflow or underflow may also occur if:
+/// - `align == 0`
+/// - `v + (align - 1)` exceeds [`usize::MAX`]
 #[must_use]
 #[inline]
-pub const fn align_up(val: usize, align: usize) -> usize {
+pub const fn align_up(v: usize, align: usize) -> usize {
     let m1 = align - 1;
-    (val + m1) & !m1
+    (v + m1) & !m1
 }
 
-/// Converts a reference into a [`NonNull`].
-pub const fn nonnull_from_ref<T: ?Sized>(r: &T) -> NonNull<T> {
-    // SAFETY: all references are valid non-null pointers
-    unsafe { NonNull::new_unchecked(r as *const T as *mut T) }
+/// Attempts to align the given value `v` up to the next multiple of `align`.
+///
+/// # Errors
+///
+/// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
+/// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::NonPowerOfTwoAlign]\))</code> if
+///   `align` is not a power of two.
+/// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if
+///   `v + (align - 1)` would overflow.
+#[rustversion::attr(since(1.47), const)]
+pub fn round_up_checked(v: usize, align: usize) -> Result<usize, Error> {
+    if align == 0 {
+        return Err(Error::InvalidLayout(v, align, LayoutErr::ZeroAlign));
+    } else if !align.is_power_of_two() {
+        return Err(Error::InvalidLayout(v, align, LayoutErr::NonPowerOfTwoAlign));
+    }
+
+    // align isn't 0, so align - 1 can't underflow
+    let m1 = align - 1;
+    Ok(tri!(::ArithmeticError checked_op(v, ArithOp::Add, m1)) & !m1)
 }
 
-// TODO: better dangling delegation system
 /// Returns a [`NonNull`] which has the given alignment as its address.
 ///
 /// # Safety
@@ -163,7 +178,7 @@ pub fn check_ptr_overlap(a: NonNull<u8>, b: NonNull<u8>, sz: usize) -> bool {
     let a = a.as_ptr() as usize;
     let b = b.as_ptr() as usize;
 
-    if a <= b { (b - a) < sz } else { (a - b) < sz }
+    if a < b { (b - a) < sz } else { (a - b) < sz }
 }
 
 /// Creates a <code>[NonNull]<\[T\]></code> from a pointer and a length.
@@ -396,7 +411,7 @@ pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
 }
 
 // TODO: lower const msrv and generally improve these. will require some testing regarding effects
-//  of current and alternative (transmute may work?) implementations on provenance
+//  of current and alternative implementations on provenance
 #[rustversion::since(1.75)]
 /// Subtracts `n` bytes from a pointer's address.
 ///
@@ -923,7 +938,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
         let uncloned = slice.len() - to_clone;
         if uncloned == 0 { Ok(()) } else { Err(uncloned) }
     }
-    
+
     /// Initializes the next elements of the slice with the elements from `iter`.
     ///
     /// # Errors
@@ -932,7 +947,6 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// elements. The returned iterator will be partially or fully consumed.
     pub fn extend_init<I: IntoIterator<Item = T>>(&mut self, iter: I) -> Result<(), I::IntoIter> {
         let mut iter = iter.into_iter();
-        // TODO: put this into do-while format
         loop {
             if self.init == self.full && iter.size_hint().0 != 0 {
                 return Err(iter);

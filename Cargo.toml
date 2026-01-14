@@ -65,6 +65,16 @@ rustversion = "1.0.22"
 
 
 
+[dev-dependencies]
+criterion = "0.8.1"
+
+[[bench]]
+name = "lyt"
+path = "benches/layout.rs"
+harness = false
+
+
+
 [[test]]
 name = "alc"
 path = "tests/alloc.rs"

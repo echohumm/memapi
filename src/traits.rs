@@ -370,7 +370,8 @@ unsafe fn shrink<A: Shrink + ?Sized>(
 /// # Safety
 ///
 /// This function doesn't check for layout validity.
-/// Callers must ensure [`new_layout.size()`](Layout::size) is greater than [`old_layout.size()`](Layout::size).
+/// Callers must ensure [`new_layout.size()`](Layout::size) is greater than
+/// [`old_layout.size()`](Layout::size).
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(miri, track_caller)]
 unsafe fn grow_unchecked<A: Grow + ?Sized>(
@@ -400,7 +401,8 @@ unsafe fn grow_unchecked<A: Grow + ?Sized>(
 /// # Safety
 ///
 /// This function doesn't check for layout validity.
-/// Callers must ensure [`new_layout.size()`](Layout::size) is greater than [`old_layout.size()`](Layout::size).
+/// Callers must ensure [`new_layout.size()`](Layout::size) is greater than
+/// [`old_layout.size()`](Layout::size).
 #[cfg_attr(miri, track_caller)]
 unsafe fn shrink_unchecked<A: Shrink + ?Sized>(
     a: &A,

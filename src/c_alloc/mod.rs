@@ -10,18 +10,16 @@ use {
         helpers::{null_q_dyn, null_q_zsl_check}
     },
     core::{ffi::c_void, ptr::NonNull},
-    ffi::{aligned_alloc, aligned_zalloc, free, grow_aligned, shrink_aligned},
+    ffi::{c_alloc, aligned_zalloc, c_dealloc, grow_aligned, shrink_aligned},
     std::cmp::Ordering
 };
-
-// TODO: switch to posix_memalign? it has clearer requirements than aligned_alloc
 
 // TODO: actually consider what attrs fit to match the rest of the crate
 
 #[cfg_attr(miri, track_caller)]
 fn pad_then_alloc(
     layout: Layout,
-    alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void
+    alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
     null_q_zsl_check(
         tri!(do layout.to_aligned_alloc_compatible()),
@@ -36,7 +34,7 @@ unsafe fn pad_then_grow(
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void
+    alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
     let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
     let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
@@ -57,7 +55,7 @@ unsafe fn pad_then_realloc(
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
-    alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void
+    alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
     let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
     let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
@@ -93,10 +91,10 @@ unsafe fn pad_then_realloc(
     )
 }
 
-/// An allocator which uses C's [`aligned_alloc`] set of allocation methods.
+/// An allocator which uses C's [`c_alloc`] set of allocation methods.
 ///
 /// Note that layouts passed to this allocator's allocation methods will have their size and
-/// alignment rounded up to meet C's [`aligned_alloc`] requirements. See
+/// alignment rounded up to meet C's [`c_alloc`] requirements. See
 /// [`Layout::to_aligned_alloc_compatible`] for details.
 pub struct CAlloc;
 
@@ -104,7 +102,7 @@ impl Alloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        pad_then_alloc(layout, aligned_alloc)
+        pad_then_alloc(layout, c_alloc)
     }
 
     #[cfg_attr(miri, track_caller)]
@@ -117,7 +115,7 @@ impl Dealloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, _: Layout) {
-        free(ptr.as_ptr().cast());
+        c_dealloc(ptr.as_ptr().cast());
     }
 }
 impl Grow for CAlloc {
@@ -128,7 +126,7 @@ impl Grow for CAlloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error> {
-        pad_then_grow(ptr, old_layout, new_layout, aligned_alloc)
+        pad_then_grow(ptr, old_layout, new_layout, c_alloc)
     }
     #[cfg_attr(miri, track_caller)]
     unsafe fn zgrow(
@@ -169,7 +167,7 @@ impl Realloc for CAlloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error> {
-        pad_then_realloc(ptr, old_layout, new_layout, aligned_alloc)
+        pad_then_realloc(ptr, old_layout, new_layout, c_alloc)
     }
     #[cfg_attr(miri, track_caller)]
     unsafe fn rezalloc(

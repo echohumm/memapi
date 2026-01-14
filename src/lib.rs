@@ -67,7 +67,7 @@ macro_rules! tri {
 }
 
 #[cfg(feature = "c_alloc")]
-/// An allocator which uses C's [`aligned_alloc`](c_alloc::ffi::aligned_alloc) set of allocation
+/// An allocator which uses C's [`aligned_alloc`](c_alloc::ffi::c_alloc) set of allocation
 /// functions.
 pub mod c_alloc;
 /// Module for anything related specifically to data.

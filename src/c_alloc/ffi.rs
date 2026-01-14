@@ -2,6 +2,51 @@ use core::{ffi::c_void, ptr::null_mut};
 
 const NULL: *mut c_void = null_mut();
 
+/// Allocates `size` bytes with at least `align` alignment.
+///
+/// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
+///
+/// # Returns
+///
+/// - On success returns a nonnull pointer to the allocated memory.
+/// - On allocation failure returns `NULL`.
+#[must_use = "this function allocates memory on success, and dropping the returned pointer will \
+              leak memory"]
+pub fn c_alloc(align: usize, size: usize) -> *mut c_void {
+    #[cfg(windows)]
+    // SAFETY: this function is safe to call
+    unsafe {
+        _aligned_malloc(size, align)
+    }
+    #[cfg(not(windows))]
+    // SAFETY: this function is safe to call
+    unsafe {
+        aligned_alloc(align, size)
+    }
+}
+
+/// Frees memory previously returned by the primary C allocator.
+///
+/// The closest Rust equivalent is [`dealloc`](alloc::alloc::dealloc).
+///
+/// # Safety
+///
+// TODO: make sure all safety docs are in this format: * must ensure: bullets w/ periods
+//  - `Err(*)` if for multi error docs, no bullet for single
+/// The caller must ensure:
+/// - `ptr` points to the start of a valid allocation returned by this allocator.
+/// - `ptr` has not yet been deallocated.
+pub unsafe fn c_dealloc(ptr: *mut c_void) {
+    #[cfg(windows)]
+    {
+        _aligned_free(ptr);
+    }
+    #[cfg(not(windows))]
+    {
+        free(ptr);
+    }
+}
+
 /// Allocate `size` bytes with at least `align` alignment and zero the allocation.
 ///
 /// # Returns
@@ -14,12 +59,11 @@ const NULL: *mut c_void = null_mut();
 ///
 /// - `align` must be a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
 /// - `size` must be a multiple of `align`.
-// must be extern "C" to have an fn pointer type compatible with pad_then_alloc
 #[allow(clippy::must_use_candidate)]
-pub unsafe extern "C" fn aligned_zalloc(align: usize, size: usize) -> *mut c_void {
+pub unsafe fn aligned_zalloc(align: usize, size: usize) -> *mut c_void {
     // allocate
     // SAFETY: requirements are passed on to the caller.
-    let ptr = unsafe { aligned_alloc(align, size) };
+    let ptr = unsafe { c_alloc(align, size) };
 
     // zero memory if allocation was successful
     if ptr != NULL {
@@ -57,7 +101,7 @@ pub unsafe fn grow_aligned(
     old_size: usize,
     align: usize,
     size: usize,
-    alloc: unsafe extern "C" fn(usize, usize) -> *mut c_void
+    alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> *mut c_void {
     // allocate new aligned memory
     // SAFETY: requirements are passed on to the caller
@@ -73,7 +117,7 @@ pub unsafe fn grow_aligned(
         }
         // SAFETY: caller guarantees that `old_ptr` is valid
         unsafe {
-            free(old_ptr);
+            c_dealloc(old_ptr);
         }
     }
 
@@ -109,14 +153,14 @@ pub unsafe fn shrink_aligned(
     if size == 0 {
         // SAFETY: caller guarantees that `old_ptr` is valid
         unsafe {
-            free(old_ptr);
+            c_dealloc(old_ptr);
         }
         return NULL;
     }
 
     // allocate new aligned memory
     // SAFETY: requirements are passed on to the caller
-    let ptr = unsafe { aligned_alloc(align, size) };
+    let ptr = unsafe { c_alloc(align, size) };
 
     // if successful, copy data to new pointer, then free old pointer
     if ptr != NULL && old_ptr != NULL {
@@ -127,7 +171,7 @@ pub unsafe fn shrink_aligned(
         }
         // SAFETY: caller guarantees that `old_ptr` is valid
         unsafe {
-            free(old_ptr);
+            c_dealloc(old_ptr);
         }
     }
 
@@ -138,9 +182,11 @@ pub unsafe fn shrink_aligned(
 extern "C" {
     /// Allocates `size` bytes.
     ///
-    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout parameter's alignment being <code>[align_of]::\<usize\>()</code>
+    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout parameter's
+    /// alignment being <code>[align_of]::\<usize\>()</code>
     pub fn malloc(size: usize) -> *mut c_void;
 
+    #[cfg(not(windows))]
     /// Allocates `size` bytes with at least `align` alignment.
     ///
     /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
@@ -152,14 +198,30 @@ extern "C" {
     ///
     /// # Safety
     ///
-    /// - `align` must be a power of two and a multiple of `size_of::<*mut c_void>()`.
-    /// - `size` must be a multiple of `align`.
+    /// This function is safe to call, but may return `NULL` if:
+    /// - `align` is not a power of two and a multiple of `size_of::<*mut c_void>()`.
+    /// - `size` is not a multiple of `align`.
     pub fn aligned_alloc(align: usize, size: usize) -> *mut c_void;
 
+    #[cfg(not(windows))]
     /// Frees memory previously returned by the primary C allocator.
     ///
     /// The closest Rust equivalent is [`dealloc`](alloc::alloc::dealloc).
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - `ptr` points to the start of a valid allocation returned by this allocator
+    /// - `ptr` has not yet been deallocated
     pub fn free(ptr: *mut c_void);
+
+    #[cfg(windows)]
+    /// Windows version of [`aligned_alloc`]. I don't know the difference and am too lazy to read
+    /// Windows docs.
+    pub fn _aligned_malloc(size: usize, alignment: usize) -> *mut c_void;
+    #[cfg(windows)]
+    /// Windows version of [`free`] specifically for memory returned by [`_aligned_malloc`].
+    pub fn _aligned_free(ptr: *mut c_void);
 
     /// Sets `count` bytes at `ptr` to `val`. The returned pointer is a copy of `ptr`.
     ///

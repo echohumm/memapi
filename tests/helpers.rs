@@ -3,6 +3,10 @@
 use {
     core::ptr,
     memapi2::{
+        Alloc,
+        Dealloc,
+        DefaultAlloc,
+        Layout,
         error::{ArithErr, ArithOp},
         helpers::{
             align_up,
@@ -10,11 +14,7 @@ use {
             checked_op,
             slice_ptr_from_parts_mut,
             varsized_ptr_from_parts_mut
-        },
-        Alloc,
-        Dealloc,
-        DefaultAlloc,
-        Layout
+        }
     }
 };
 

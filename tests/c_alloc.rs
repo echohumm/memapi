@@ -1,10 +1,18 @@
 #![cfg(feature = "c_alloc")]
 
 use {
-    memapi2::{Alloc, Dealloc, Grow, Layout, Shrink, c_alloc::CAlloc, error::Error},
+    memapi2::{
+        Alloc,
+        Dealloc,
+        Grow,
+        Layout,
+        Shrink,
+        c_alloc::CAlloc,
+        data::type_props::SizedProps,
+        error::Error
+    },
     std::ptr
 };
-use memapi2::data::type_props::SizedProps;
 
 #[test]
 fn test_alloc_and_dealloc() {
