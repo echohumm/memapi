@@ -22,13 +22,20 @@
         <feature name="auto_traits" enabled="true" />
         <feature name="negative_impls" enabled="true" />
         <feature name="auto_impl_varsized" enabled="true" />
+        <feature name="dev" enabled="true" />
       </package>
     </cargoProject>
   </component>
   <component name="ChangeListManager">
     <list default="true" id="3b7ad9bf-94c3-4aff-97aa-87698f3c8c1f" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/c_alloc/ffi.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/c_alloc/ffi.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/c_alloc/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/c_alloc/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/data/type_props.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/data/type_props.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/helpers.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/helpers.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/layout.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/layout.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -36,7 +43,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="EmbeddingIndexingInfo">
-    <option name="cachedIndexableFilesCount" value="26" />
+    <option name="cachedIndexableFilesCount" value="33" />
     <option name="fileBasedEmbeddingIndicesEnabled" value="true" />
   </component>
   <component name="FileTemplateManagerImpl">
@@ -69,7 +76,7 @@
     <urls />
   </component>
   <component name="ProblemsViewState">
-    <option name="selectedTabId" value="CurrentFile" />
+    <option name="selectedTabId" value="ProjectErrors" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 2
@@ -101,11 +108,18 @@
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
     "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
     "run.code.analysis.last.selected.profile": "pProject Default",
-    "settings.editor.selected.configurable": "Errors",
+    "settings.editor.selected.configurable": "discord-application",
     "to.speed.mode.migration.done": "true",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
+  <component name="RecapSpentCounter">
+    <option name="endsOfQuotaMs" value="1769954476636" />
+    <option name="spentUsd" value="0.083143994" />
+  </component>
+  <component name="RecapUselessUpdatesCounter">
+    <option name="suspendCountdown" value="7" />
+  </component>
   <component name="RsExternalLinterProjectSettings">
     <option name="additionalArguments" value="-- -W clippy::all -W clippy::pedantic -W clippy::nursery" />
     <option name="tool" value="Clippy" />
@@ -134,11 +148,14 @@
       <workItem from="1768251607691" duration="2310000" />
       <workItem from="1768335313891" duration="33000" />
       <workItem from="1768336196977" duration="1192000" />
+      <workItem from="1768347082380" duration="982000" />
+      <workItem from="1768348725779" duration="1411000" />
+      <workItem from="1768350159936" duration="3995000" />
     </task>
     <servers />
   </component>
   <component name="TerminalProjectNonSharedOptionsProvider">
-    <option name="startingDirectory" value="/proj/memapi2" />
+    <option name="startingDirectory" value="$PROJECT_DIR$" />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
     <option name="version" value="3" />

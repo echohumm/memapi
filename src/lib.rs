@@ -21,6 +21,7 @@
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
 #![allow(clippy::borrow_as_ptr)]
 #![warn(unknown_lints)]
+#![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
 #![allow(
     // does anyone else hate the Self keyword? that capital letter there looks so ugly idk why
     clippy::use_self,

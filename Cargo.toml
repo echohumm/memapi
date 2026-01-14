@@ -30,6 +30,8 @@ maintenance = { status = "actively-developed" }
 [features]
 default = []
 
+dev = []
+
 c_alloc = []
 
 # msrv-changing features

@@ -14,6 +14,8 @@ use {
     std::cmp::Ordering
 };
 
+// TODO: switch to posix_memalign? it has clearer requirements than aligned_alloc
+
 // TODO: actually consider what attrs fit to match the rest of the crate
 
 #[cfg_attr(miri, track_caller)]
@@ -69,7 +71,7 @@ unsafe fn pad_then_realloc(
 
             let size = l.size();
             let align = l.align();
-            
+
             match old_size.cmp(&new_padded.size()) {
                 // SAFETY: caller guarantees that `old_ptr` and `old_size` are valid, we just
                 // checked that `size >= old_size`

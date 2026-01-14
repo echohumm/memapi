@@ -923,10 +923,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
         let uncloned = slice.len() - to_clone;
         if uncloned == 0 { Ok(()) } else { Err(uncloned) }
     }
-
-    //noinspection RsExperimentalTraitObligations
-    // error shows, but it seems to be fine since it compiles
-    //noinspection RsAssociatedTypeMismatch
+    
     /// Initializes the next elements of the slice with the elements from `iter`.
     ///
     /// # Errors

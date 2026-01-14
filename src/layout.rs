@@ -170,7 +170,6 @@ impl Layout {
         val.layout()
     }
 
-    //noinspection LongLine
     /// Creates a layout with the given size and alignment.
     ///
     /// # Errors
@@ -189,22 +188,61 @@ impl Layout {
         Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
     }
 
-    // TODO: docs for this function.
-
-    /// <placeholder docs>
+    /// Creates a layout compatible with C's `aligned_alloc` requirements from the given `size` and
+    /// `align`.
+    ///
+    /// C's `aligned_alloc(alignment, size)` requires:
+    /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
+    ///   [c_void]>()</code>.
+    /// - `size` is a multiple of `alignment`.
+    ///
+    /// Therefore:
+    /// - `align` will be rounded up to the nearest multiple of <code>[size_of]::<*mut
+    ///   [c_void]>()</code> if it isn't already.
+    /// - `size` will be rounded up to the nearest multiple of the resulting alignment.
+    ///
+    /// This is semantically equivalent to <code>[Layout::from_size_align]\(size,
+    /// align\).[and_then](Result::and_then)\(|l|
+    /// l.[to_aligned_alloc_compatible](Layout::to_aligned_alloc_compatible)\(\)\)</code>.
+    ///
+    /// # Errors
+    ///
+    /// Returns <code>Err([Error::InvalidLayout]\([self.size()](Layout::size), [self.align()](Layout::align), [LayoutErr::CRoundUp]\))</code> if:
+    /// - `align == 0`.
+    /// - `align` is not a power of two.
+    /// - `align` rounded up to <code>[size_of]::<*mut [c_void]>()</code> would exceed the maximum
+    ///   allowed alignment.
+    /// - `size` rounded up to the new alignment would exceed the maximum allowed size.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use memapi2::{Layout, data::type_props::SizedProps};
+    /// let l = Layout::aligned_alloc_compatible_from_size_align(10, 1).unwrap();
+    ///
+    /// assert!(l.align() >= usize::SZ);
+    /// assert_eq!(l.size() % l.align(), 0);
+    /// assert!(l.size() >= 10);
+    /// // on 64-bit systems, l == Layout(size = 16, align = 8).
+    /// // 32-bit, l == Layout(size = 12, align = 4)
+    /// ```
     pub const fn aligned_alloc_compatible_from_size_align(
         size: usize,
         align: usize
     ) -> Result<Layout, Error> {
+        // mostly for semantic equivalence with to_aligned_alloc_compatible
+        if align == 0 {
+            return Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp));
+        }
         let align_rounded = tri!(do align_up_checked(align, usize::SZ));
         if size > USIZE_HIGH_BIT - align_rounded {
-            return Err(Error::InvalidLayout(size, align_rounded, LayoutErr::ExceedsMax));
+            return Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp));
         }
         // SAFETY: we just checked that it would be valid
         let aligned_sz = unsafe { align_up(size, align_rounded) };
         match Layout::from_size_align(aligned_sz, align_rounded) {
             Ok(l) => Ok(l),
-            Err(e) => Err(e)
+            Err(_) => Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp))
         }
     }
 
@@ -331,7 +369,6 @@ impl Layout {
         }
     }
 
-    //noinspection LongLine
     /// Creates a layout with the same size as `self` but an alignment meeting `align`. If
     /// <code>[self.align()](Layout::align) >= align</code>, returns `self`.
     ///
@@ -389,29 +426,48 @@ impl Layout {
         }
     }
 
-    /// Produce a layout that is compatible with C's `aligned_alloc` requirements.
+    /// Converts this layout into one compatible with C's `aligned_alloc` requirements.
     ///
     /// C's `aligned_alloc(alignment, size)` requires:
     /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
     ///   [c_void]>()</code>.
     /// - `size` is a multiple of `alignment`.
     ///
+    /// Therefore:
+    /// - The alignment will be rounded up to the nearest multiple of <code>[size_of]::<*mut
+    ///   [c_void]>()</code> if it isn't already.
+    /// - The size will be rounded up to the nearest multiple of the resulting alignment.
+    ///
     /// # Errors
     ///
-    /// Returns <code>Err([Error::InvalidLayout]\([self.size()](Layout::size),
-    /// [self.align()](Layout::align), [LayoutErr::CRoundUp]\))</code> if the call to
-    /// <code>[self.align_to_multiple_of](Layout::align_to_multiple_of)\([usize::SZ]\)</code> fails.
+    /// Returns <code>Err([Error::InvalidLayout]\([self.size()](Layout::size), [self.align()](Layout::align), [LayoutErr::CRoundUp]\))</code> if:
+    /// - `align == 0`.
+    /// - `align` is not a power of two.
+    /// - `align` rounded up to <code>[size_of]::<*mut [c_void]>()</code> would exceed the maximum
+    ///   allowed alignment.
+    /// - `size` rounded up to the new alignment would exceed the maximum allowed size.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use memapi2::{Layout, data::type_props::SizedProps};
+    /// let l = Layout::from_size_align(10, 1).unwrap();
+    /// let compatible = l.to_aligned_alloc_compatible().unwrap();
+    ///
+    /// assert!(compatible.align() >= usize::SZ);
+    /// assert_eq!(compatible.size() % compatible.align(), 0);
+    /// assert!(compatible.size() >= 10);
+    /// // on 64-bit systems, compatible == Layout(size = 16, align = 8).
+    /// // 32-bit, compatible == Layout(size = 12, align = 4)
+    /// ```
     #[inline]
     pub const fn to_aligned_alloc_compatible(&self) -> Result<Layout, Error> {
         // first, make the alignment a multiple of `size_of::<*mut c_void>()`.
-        let aligned = match self.align_to_multiple_of(usize::SZ) {
-            Ok(l) => l,
-            Err(_) => {
-                return Err(Error::InvalidLayout(self.size(), self.align(), LayoutErr::CRoundUp));
-            }
-        };
-        // then pad the size up to a multiple of the new alignment
-        Ok(aligned.pad_to_align())
+        match self.align_to_multiple_of(usize::SZ) {
+            // then pad the size up to a multiple of the new alignment
+            Ok(l) => Ok(l.pad_to_align()),
+            Err(_) => Err(Error::InvalidLayout(self.size(), self.align(), LayoutErr::CRoundUp))
+        }
     }
 
     /// Converts this layout to an [`alloc::alloc::Layout`].

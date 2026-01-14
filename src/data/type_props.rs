@@ -219,7 +219,7 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
 ///
 /// # Safety
 ///
-/// Implementors must ensure that [`Subtype`](VarSized::SubType) is the actual element type
+/// Implementors must ensure that [`SubType`](VarSized::SubType) is the actual element type
 /// contained, that the [`ALN`](VarSized::ALN) constant accurately reflects the type's alignment
 /// requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
 /// Pointee>::Metadata = usize`).
@@ -228,13 +228,13 @@ pub unsafe trait VarSized {
     ///
     /// [`VarSized`] types are either slices of another type or include a slice tail; this is that
     /// element type.
-    type Subtype: Sized;
+    type SubType: Sized;
 
     /// The alignment of the type.
     ///
     /// Override this if the type contains more than just a slice of its
-    /// [`Subtype`](VarSized::SubType).
-    const ALN: usize = Self::Subtype::ALN;
+    /// [`SubType`](VarSized::SubType).
+    const ALN: usize = Self::SubType::ALN;
 }
 
 #[cfg(feature = "metadata")]
@@ -242,7 +242,7 @@ pub unsafe trait VarSized {
 ///
 /// # Safety
 ///
-/// Implementors must ensure that [`Subtype`](VarSized::SubType) is the actual element type
+/// Implementors must ensure that [`SubType`](VarSized::SubType) is the actual element type
 /// contained, and that the [`ALN`](VarSized::ALN) constant accurately reflects the type's alignment
 /// requirement in all safe contexts.
 pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
@@ -255,7 +255,7 @@ pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
     /// The alignment of the type.
     ///
     /// Override this if the type contains more than just a slice of its
-    /// [`Subtype`](VarSized::SubType).
+    /// [`SubType`](VarSized::SubType).
     const ALN: usize = Self::SubType::ALN;
 }
 

@@ -2,8 +2,6 @@ use core::{ffi::c_void, ptr::null_mut};
 
 const NULL: *mut c_void = null_mut();
 
-// TODO: consider must_use and other attrs
-
 /// Allocate `size` bytes with at least `align` alignment and zero the allocation.
 ///
 /// # Returns
@@ -136,15 +134,16 @@ pub unsafe fn shrink_aligned(
     ptr
 }
 
+// public in case the user wants them for some reason
 extern "C" {
     /// Allocates `size` bytes.
     ///
-    /// Closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout parameter's alignment being <code>[align_of]::\<usize\>()</code>
+    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout parameter's alignment being <code>[align_of]::\<usize\>()</code>
     pub fn malloc(size: usize) -> *mut c_void;
 
     /// Allocates `size` bytes with at least `align` alignment.
     ///
-    /// Closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
+    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
     ///
     /// # Returns
     ///
@@ -159,25 +158,25 @@ extern "C" {
 
     /// Frees memory previously returned by the primary C allocator.
     ///
-    /// Closest Rust equivalent is [`dealloc`](alloc::alloc::dealloc).
+    /// The closest Rust equivalent is [`dealloc`](alloc::alloc::dealloc).
     pub fn free(ptr: *mut c_void);
 
     /// Sets `count` bytes at `ptr` to `val`. The returned pointer is a copy of `ptr`.
     ///
-    /// Rust equivalent is [`write_bytes`](core::ptr::write_bytes).
+    /// The closest Rust equivalent is [`write_bytes`](core::ptr::write_bytes).
     pub fn memset(ptr: *mut c_void, val: i32, count: usize) -> *mut c_void;
 
     /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
     ///
-    /// `src` and `dest` may not overlap.
+    /// `src` and `dest` may not overlap, or the result stored in `dest` may be unexpected.
     ///
-    /// Rust equivalent is [`copy_nonoverlapping`](core::ptr::copy_nonoverlapping)
+    /// The closest Rust equivalent is [`copy_nonoverlapping`](core::ptr::copy_nonoverlapping)
     pub fn memcpy(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 
     /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
     ///
     /// `src` and `dest` may overlap.
     ///
-    /// Rust equivalent is [`copy`](core::ptr::copy)
+    /// The closest Rust equivalent is [`copy`](core::ptr::copy)
     pub fn memmove(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 }
