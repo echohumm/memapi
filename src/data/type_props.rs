@@ -34,8 +34,8 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is:
-    /// - non-null1
+    /// The caller must ensure `self` is:
+    /// - non-null
     /// - non-dangling
     /// - aligned
     ///
@@ -45,7 +45,7 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is:
+    /// The caller must ensure `self` is:
     /// - non-null
     /// - non-dangling
     /// - aligned
@@ -56,7 +56,7 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is:
+    /// The caller must ensure `self` is:
     /// - non-null
     /// - non-dangling
     /// - aligned
@@ -72,7 +72,7 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is:
+    /// The caller must ensure `self` is:
     /// - non-null
     /// - non-dangling
     /// - aligned
@@ -84,7 +84,7 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is:
+    /// The caller must ensure `self` is:
     /// - non-null
     /// - non-dangling
     /// - aligned
@@ -98,7 +98,7 @@ pub trait PtrProps<T: ?Sized> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the pointer is:
+    /// The caller must ensure `self` is:
     /// - non-null
     /// - non-dangling
     /// - aligned
@@ -219,7 +219,7 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
 ///
 /// # Safety
 ///
-/// Implementors must ensure that [`SubType`](VarSized::SubType) is the actual element type
+/// The implementor must ensure that [`SubType`](VarSized::SubType) is the actual element type
 /// contained, that the [`ALN`](VarSized::ALN) constant accurately reflects the type's alignment
 /// requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
 /// Pointee>::Metadata = usize`).
@@ -242,7 +242,7 @@ pub unsafe trait VarSized {
 ///
 /// # Safety
 ///
-/// Implementors must ensure that [`SubType`](VarSized::SubType) is the actual element type
+/// The implementor must ensure that [`SubType`](VarSized::SubType) is the actual element type
 /// contained, and that the [`ALN`](VarSized::ALN) constant accurately reflects the type's alignment
 /// requirement in all safe contexts.
 pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
@@ -264,9 +264,9 @@ pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
 ///
 /// # Safety
 ///
-/// Implementors must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type contained,
-/// that the [`ALN`](VarSizedStruct::ALN) constant accurately reflects the type's alignment
-/// requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
+/// The implementor must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type
+/// contained, that the [`ALN`](VarSizedStruct::ALN) constant accurately reflects the type's
+/// alignment requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
 /// Pointee>::Metadata = usize`).
 pub unsafe trait VarSizedStruct {
     /// The [`VarSized`] tail type.
@@ -318,9 +318,9 @@ pub unsafe trait VarSizedStruct {
 ///
 /// # Safety
 ///
-/// Implementors must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type contained,
-/// and that the [`ALN`](VarSizedStruct::ALN) constant accurately reflects the type's alignment
-/// requirement in all safe contexts.
+/// The implementor must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type
+/// contained, and that the [`ALN`](VarSizedStruct::ALN) constant accurately reflects the type's
+/// alignment requirement in all safe contexts.
 pub unsafe trait VarSizedStruct: core::ptr::Pointee<Metadata = usize> {
     /// The [`VarSized`] tail type.
     ///

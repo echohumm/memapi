@@ -2,7 +2,7 @@
 ///
 /// # Safety
 ///
-/// Implementing `UnsizedCopy` indicates the type's memory representation can be duplicated without
+/// The implementor must ensure `Self` has a memory representation which can be duplicated without
 /// violating soundness or causing double frees.
 pub unsafe trait UnsizedCopy {}
 
@@ -29,7 +29,7 @@ unsafe impl UnsizedCopy for std::path::Path {}
 ///
 /// # Safety
 ///
-/// Implementors must ensure this type has no metadata (`<Self as Pointee>::Metadata = ()`).
+/// The implementor must ensure this type has no metadata (`<Self as Pointee>::Metadata = ()`).
 ///
 /// # Example
 ///
@@ -95,7 +95,8 @@ pub unsafe trait Thin:
 ///
 /// # Safety
 ///
-/// Implementors must ensure this type has `usize` metadata (`<Self as Pointee>::Metadata = usize`).
+/// The implementor must ensure this type has `usize` metadata (`<Self as Pointee>::Metadata =
+/// usize`).
 ///
 /// # Example
 ///
@@ -113,7 +114,8 @@ pub unsafe trait SizeMeta {}
 ///
 /// # Safety
 ///
-/// Implementors must ensure this type has `usize` metadata (`<Self as Pointee>::Metadata = usize`).
+/// The implementor must ensure this type has `usize` metadata (`<Self as Pointee>::Metadata =
+/// usize`).
 ///
 /// # Example
 ///

@@ -31,8 +31,6 @@ pub fn c_alloc(align: usize, size: usize) -> *mut c_void {
 ///
 /// # Safety
 ///
-// TODO: make sure all safety docs are in this format: * must ensure: bullets w/ periods
-//  - `Err(*)` if for multi error docs, no bullet for single
 /// The caller must ensure:
 /// - `ptr` points to the start of a valid allocation returned by this allocator.
 /// - `ptr` has not yet been deallocated.
@@ -57,8 +55,9 @@ pub unsafe fn c_dealloc(ptr: *mut c_void) {
 ///
 /// # Safety
 ///
-/// - `align` must be a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
-/// - `size` must be a multiple of `align`.
+/// The caller must ensure:
+/// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
+/// - `size` is a multiple of `align`.
 #[allow(clippy::must_use_candidate)]
 pub unsafe fn aligned_zalloc(align: usize, size: usize) -> *mut c_void {
     // allocate
@@ -90,11 +89,11 @@ pub unsafe fn aligned_zalloc(align: usize, size: usize) -> *mut c_void {
 ///
 /// # Safety
 ///
-/// - `old_ptr` must have been allocated by this allocator and be valid for reads of `old_size`
-///   bytes.
-/// - `old_size` must equal the size of the allocation at `old_ptr`.
-/// - `align` must be a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
-/// - `size` must be greater than or equal to `old_size` and a multiple of `align`.
+/// The caller must ensure
+/// - `old_ptr` was allocated by this allocator and is valid for reads of `old_size` bytes.
+/// - `old_size` equals the size of the allocation requested at `old_ptr`.
+/// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
+/// - `size` is greater than or equal to `old_size` and a multiple of `align`.
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn grow_aligned(
     old_ptr: *mut c_void,
@@ -138,10 +137,10 @@ pub unsafe fn grow_aligned(
 ///
 /// # Safety
 ///
-/// - `old_ptr` must have been allocated by this allocator and be valid for reads of at least `size`
-///   bytes.
-/// - `align` must be a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
-/// - `size` must be less than or equal to the size of the allocation at `old_ptr` and a multiple of
+/// The caller must ensure:
+/// - `old_ptr` was allocated by this allocator and is valid for reads of at least `size` bytes.
+/// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
+/// - `size` is less than or equal to the size of the allocation at `old_ptr` and a multiple of
 ///   `align`.
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn shrink_aligned(

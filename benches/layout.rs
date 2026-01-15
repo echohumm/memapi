@@ -4,7 +4,7 @@ extern crate memapi2;
 use {
     core::hint::black_box,
     criterion::Criterion,
-    memapi2::{Layout, data::type_props::SizedProps},
+    memapi2::{Layout, data::type_props::SizedProps}
 };
 
 fn to_aligned_alloc_compatible(c: &mut Criterion) {

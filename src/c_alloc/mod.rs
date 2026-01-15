@@ -10,11 +10,9 @@ use {
         helpers::{null_q_dyn, null_q_dyn_zsl_check}
     },
     core::{ffi::c_void, ptr::NonNull},
-    ffi::{c_alloc, aligned_zalloc, c_dealloc, grow_aligned, shrink_aligned},
+    ffi::{aligned_zalloc, c_alloc, c_dealloc, grow_aligned, shrink_aligned},
     std::cmp::Ordering
 };
-
-// TODO: actually consider what attrs fit to match the rest of the crate
 
 #[cfg_attr(miri, track_caller)]
 fn pad_then_alloc(
@@ -24,7 +22,7 @@ fn pad_then_alloc(
     null_q_dyn_zsl_check(
         tri!(do layout.to_aligned_alloc_compatible()),
         // SAFETY: we rounded up the layout's values to satisfy the requirements.
-        |l| unsafe { alloc(l.align(), l.size()) },
+        |l| unsafe { alloc(l.align(), l.size()) }
     )
 }
 
@@ -42,10 +40,9 @@ unsafe fn pad_then_grow(
         return Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()));
     }
 
-    null_q_dyn_zsl_check(
-        new_padded,
-        |l| grow_aligned(ptr.as_ptr().cast(), old_padded.size(), l.align(), l.size(), alloc),
-    )
+    null_q_dyn_zsl_check(new_padded, |l| {
+        grow_aligned(ptr.as_ptr().cast(), old_padded.size(), l.align(), l.size(), alloc)
+    })
 }
 
 #[cfg_attr(miri, track_caller)]
@@ -58,34 +55,31 @@ unsafe fn pad_then_realloc(
     let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
     let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
 
-    null_q_dyn_zsl_check(
-        new_padded,
-        |l| {
-            let old_ptr = ptr.as_ptr().cast();
-            let old_size = old_padded.size();
-            let old_align = old_padded.align();
+    null_q_dyn_zsl_check(new_padded, |l| {
+        let old_ptr = ptr.as_ptr().cast();
+        let old_size = old_padded.size();
+        let old_align = old_padded.align();
 
-            let size = l.size();
-            let align = l.align();
+        let size = l.size();
+        let align = l.align();
 
-            match old_size.cmp(&new_padded.size()) {
-                // SAFETY: caller guarantees that `old_ptr` and `old_size` are valid, we just
-                // checked that `size >= old_size`
-                Ordering::Less => unsafe { grow_aligned(old_ptr, old_size, align, size, alloc) },
-                Ordering::Equal => {
-                    if align > old_align {
-                        // SAFETY: above
-                        unsafe { grow_aligned(old_ptr, old_size, align, size, alloc) }
-                    } else {
-                        old_ptr
-                    }
+        match old_size.cmp(&new_padded.size()) {
+            // SAFETY: caller guarantees that `old_ptr` and `old_size` are valid, we just
+            // checked that `size >= old_size`
+            Ordering::Less => unsafe { grow_aligned(old_ptr, old_size, align, size, alloc) },
+            Ordering::Equal => {
+                if align > old_align {
+                    // SAFETY: above
+                    unsafe { grow_aligned(old_ptr, old_size, align, size, alloc) }
+                } else {
+                    old_ptr
                 }
-                // SAFETY: caller guarantees that `old_ptr` and `size` are valid, we just checked
-                // that `size <= old_size`
-                Ordering::Greater => unsafe { shrink_aligned(old_ptr, align, size) }
             }
-        },
-    )
+            // SAFETY: caller guarantees that `old_ptr` and `size` are valid, we just checked
+            // that `size <= old_size`
+            Ordering::Greater => unsafe { shrink_aligned(old_ptr, align, size) }
+        }
+    })
 }
 
 /// An allocator which uses C's [`c_alloc`] set of allocation methods.

@@ -38,8 +38,8 @@
 // TODO: consider behavior of all allocation methods in all possible cases for all allocators and
 //  make sure they match and make sense
 
-// TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, etc.)
-//  (removed stuff is stuff which would go in new crates)
+// TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, memapi-std (Vec and
+//  stuff), etc.)  (removed stuff is stuff which would go in new crates)
 //  a lot of helpers would be good to have in another crate too, like .*AllocGuard, checked_op, etc.
 
 extern crate alloc;
@@ -103,7 +103,7 @@ macro_rules! default_alloc_impl {
                 crate::helpers::null_q_dyn_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { alloc::alloc::alloc(layout.to_stdlib()) },
+                    |layout| unsafe { alloc::alloc::alloc(layout.to_stdlib()) }
                 )
             }
 
@@ -116,7 +116,7 @@ macro_rules! default_alloc_impl {
                 crate::helpers::null_q_dyn_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { alloc::alloc::alloc_zeroed(layout.to_stdlib()) },
+                    |layout| unsafe { alloc::alloc::alloc_zeroed(layout.to_stdlib()) }
                 )
             }
         }

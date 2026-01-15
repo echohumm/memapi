@@ -11,6 +11,7 @@ pub trait Alloc {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
     /// # Errors
+    // TODO: give standard errors too
     ///
     /// Errors are implementation-defined, refer to [`Error`].
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error>;
@@ -41,8 +42,9 @@ pub trait Dealloc: Alloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `layout` must describe exactly the same block.
+    /// The caller must ensure:
+    /// - `ptr` points to a block of memory allocated using this allocator.
+    /// - `layout` describes exactly the same block.
     ///
     /// # Panics
     ///
@@ -62,8 +64,9 @@ pub trait Grow: Alloc + Dealloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `old_layout` must describe exactly the same block.
+    /// The caller must ensure:
+    /// - `ptr` points to a block of memory allocated using this allocator.
+    /// - `old_layout` describes exactly the same block.
     ///
     /// # Errors
     ///
@@ -85,8 +88,9 @@ pub trait Grow: Alloc + Dealloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `old_layout` must describe exactly the same block.
+    /// The caller must ensure:
+    /// - `ptr` points to a block of memory allocated using this allocator.
+    /// - `old_layout` describes exactly the same block.
     ///
     /// # Errors
     ///
@@ -110,8 +114,9 @@ pub trait Shrink: Alloc + Dealloc {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block of memory allocated using this allocator.
-    /// - `old_layout` must describe exactly the same block.
+    /// The caller must ensure:
+    /// - `ptr` points to a block of memory allocated using this allocator.
+    /// - `old_layout` describes exactly the same block.
     ///
     /// # Errors
     ///
@@ -138,8 +143,9 @@ pub trait Realloc: Grow + Shrink {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block previously allocated with this allocator.
-    /// - `old_layout` must describe exactly that block.
+    /// The caller must ensure:
+    /// - `ptr` points to a block previously allocated with this allocator.
+    /// - `old_layout` describes exactly the same block.
     ///
     /// # Errors
     ///
@@ -163,8 +169,9 @@ pub trait Realloc: Grow + Shrink {
     ///
     /// # Safety
     ///
-    /// - `ptr` must point to a block previously allocated with this allocator.
-    /// - `old_layout` must describe exactly that block.
+    /// The caller must ensure:
+    /// - `ptr` points to a block previously allocated with this allocator.
+    /// - `old_layout` describes exactly the same block.
     ///
     /// # Errors
     ///
@@ -287,7 +294,7 @@ impl Alloc for std::alloc::System {
         crate::helpers::null_q_dyn_zsl_check(
             layout,
             // SAFETY: System::alloc is only called after the layout is verified non-zero-sized.
-            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc(self, layout.to_stdlib()) },
+            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc(self, layout.to_stdlib()) }
         )
     }
 
@@ -298,7 +305,7 @@ impl Alloc for std::alloc::System {
             layout,
             // SAFETY: System::alloc_zeroed is only called after the layout is verified
             //  non-zero-sized.
-            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc_zeroed(self, layout.to_stdlib()) },
+            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc_zeroed(self, layout.to_stdlib()) }
         )
     }
 }
@@ -368,7 +375,7 @@ unsafe fn shrink<A: Shrink + ?Sized>(
 /// # Safety
 ///
 /// This function doesn't check for layout validity.
-/// Callers must ensure [`new_layout.size()`](Layout::size) is greater than
+/// The caller must ensure [`new_layout.size()`](Layout::size) is greater than
 /// [`old_layout.size()`](Layout::size).
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(miri, track_caller)]
@@ -399,7 +406,7 @@ unsafe fn grow_unchecked<A: Grow + ?Sized>(
 /// # Safety
 ///
 /// This function doesn't check for layout validity.
-/// Callers must ensure [`new_layout.size()`](Layout::size) is greater than
+/// The caller must ensure [`new_layout.size()`](Layout::size) is greater than
 /// [`old_layout.size()`](Layout::size).
 #[cfg_attr(miri, track_caller)]
 unsafe fn shrink_unchecked<A: Shrink + ?Sized>(

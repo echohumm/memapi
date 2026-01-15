@@ -37,8 +37,8 @@ pub const fn usize_bit(bit: u8) -> usize {
 ///
 /// # Errors
 ///
-/// Returns <code>Err([ArithErr]\(l, op, r\))</code> if the requested operation would cause an
-/// overflow, underflow, or conversion error.
+/// <code>Err([ArithErr]\(l, op, r\))</code> if the requested operation would cause an overflow,
+/// underflow, or conversion error.
 #[rustversion::attr(since(1.47), const)]
 pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
     #[rustversion::since(1.52)]
@@ -132,8 +132,8 @@ pub const fn align_up(v: usize, align: usize) -> usize {
 /// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
 /// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::NonPowerOfTwoAlign]\))</code> if
 ///   `align` is not a power of two.
-/// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if
-///   `v + (align - 1)` would overflow.
+/// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if `v
+///   + (align - 1)` would overflow.
 #[rustversion::attr(since(1.47), const)]
 pub fn round_up_checked(v: usize, align: usize) -> Result<usize, Error> {
     if align == 0 {
@@ -151,7 +151,7 @@ pub fn round_up_checked(v: usize, align: usize) -> Result<usize, Error> {
 ///
 /// # Safety
 ///
-/// Callers must ensure the `align` is a valid power of two.
+/// The caller must ensure `align` is a valid power of two.
 #[must_use]
 #[inline]
 pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
@@ -220,7 +220,7 @@ pub fn slice_ptr_from_parts<T>(p: *const T, len: usize) -> *const [T] {
 ///
 /// # Safety
 ///
-/// Callers must ensure `ptr` is aligned and non-dangling.
+/// The caller must ensure `ptr` is aligned and non-dangling.
 #[rustversion::attr(since(1.58), const)]
 #[must_use]
 #[inline]
@@ -323,10 +323,7 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
 /// result of `f(layout)`.
 #[allow(clippy::missing_errors_doc)]
-pub fn zsl_check<T, F: Fn(Layout) -> Result<T, Error>>(
-    layout: Layout,
-    f: F
-) -> Result<T, Error> {
+pub fn zsl_check<T, F: Fn(Layout) -> Result<T, Error>>(layout: Layout, f: F) -> Result<T, Error> {
     if layout.size() == 0 { Err(Error::ZeroSizedLayout(layout.dangling())) } else { f(layout) }
 }
 
@@ -388,7 +385,7 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
-    f: F,
+    f: F
 ) -> Result<NonNull<u8>, Error> {
     zsl_check(layout, |layout: Layout| null_q_dyn(f(layout), layout))
 }
@@ -574,7 +571,7 @@ impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
     ///
     /// # Safety
     ///
-    /// Callers must guarantee `ptr` is a valid, readable, writable pointer allocated using
+    /// The caller must ensure `ptr` is a valid, readable, writable pointer allocated using
     /// `alloc`.
     #[rustversion::attr(since(1.61), const)]
     #[inline]
@@ -692,7 +689,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure that `ptr` was allocated using `alloc`, has space for `full`
+    /// The caller must ensure that `ptr` was allocated using `alloc`, has space for `full`
     /// `T`, and is readable, writable, valid, and aligned.
     #[rustversion::attr(since(1.61), const)]
     #[inline]
@@ -706,7 +703,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Safety
     ///
-    /// In addition to the restrictions of [`SliceAllocGuard::new`], callers must ensure
+    /// In addition to the restrictions of [`SliceAllocGuard::new`], the caller must ensure
     /// that `init` is the number of existing initialized elements in the slice.
     #[rustversion::attr(since(1.61), const)]
     #[inline]
@@ -787,7 +784,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure the new count is correct.
+    /// The caller must ensure the new count is correct.
     #[rustversion::attr(since(1.83), const)]
     #[inline]
     pub unsafe fn set_init(&mut self, init: usize) {
@@ -800,7 +797,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Errors
     ///
-    /// Returns `Err(elem)` if there is not enough capacity for another element.
+    /// `Err(elem)` if there is not enough capacity for another element.
     #[rustversion::attr(since(1.83), const)]
     #[inline]
     pub fn init(&mut self, elem: T) -> Result<(), T> {
@@ -820,7 +817,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Safety
     ///
-    /// Callers must ensure that the slice is not at capacity.
+    /// The caller must ensure that the slice is not at capacity.
     /// (<code>[self.initialized()](SliceAllocGuard::initialized) <
     /// [self.full()](SliceAllocGuard::full)</code>)
     #[rustversion::attr(since(1.83), const)]
@@ -880,7 +877,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Errors
     ///
-    /// Returns `Err(excess)` if some elements could not be copied from the slice due to a lack of
+    /// `Err(excess)` if some elements could not be copied from the slice due to a lack of
     /// capacity.
     #[rustversion::attr(since(1.83), const)]
     pub fn copy_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
@@ -911,7 +908,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Errors
     ///
-    /// Returns `Err(excess)` if some elements could not be cloned due to a lack of capacity.
+    /// `Err(excess)` if some elements could not be cloned due to a lack of capacity.
     pub fn clone_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
     where
         T: Clone
@@ -942,8 +939,8 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// # Errors
     ///
-    /// Returns `Err(iter)` if the slice ran out of capacity before the iterator ran out of
-    /// elements. The returned iterator will be partially or fully consumed.
+    /// `Err(iter)` if the slice ran out of capacity before the iterator ran out of elements. The
+    /// returned iterator will be partially or fully consumed.
     pub fn extend_init<I: IntoIterator<Item = T>>(&mut self, iter: I) -> Result<(), I::IntoIter> {
         let mut iter = iter.into_iter();
         loop {
