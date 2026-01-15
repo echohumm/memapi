@@ -5,7 +5,6 @@ use {
     core::hint::black_box,
     criterion::Criterion,
     memapi2::{Layout, data::type_props::SizedProps},
-    std::time::Duration
 };
 
 fn to_aligned_alloc_compatible(c: &mut Criterion) {
@@ -86,17 +85,104 @@ fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
     });
 }
 
+fn array(c: &mut Criterion) {
+    let mut group = c.benchmark_group("array");
+
+    let sizes = [1024, 2048, 729, 2187];
+
+    for sz in sizes {
+        group.bench_function(&format!("{}_u8", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(Layout::array::<u8>(black_box(black_box(sz))));
+            });
+        });
+
+        group.bench_function(&format!("{}_u32", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(Layout::array::<u32>(black_box(black_box(sz))));
+            });
+        });
+
+        group.bench_function(&format!("{}_u64", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(Layout::array::<u64>(black_box(black_box(sz))));
+            });
+        });
+    }
+}
+
+fn repeat(c: &mut Criterion) {
+    let mut group = c.benchmark_group("array");
+
+    let u8 = u8::LAYOUT;
+    let u32 = u32::LAYOUT;
+    let u64 = u64::LAYOUT;
+
+    let sizes = [1024, 2048, 729, 2187];
+
+    for sz in sizes {
+        group.bench_function(&format!("{}_u8", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(black_box(u8).repeat(black_box(sz)));
+            });
+        });
+
+        group.bench_function(&format!("{}_u32", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(black_box(u32).repeat(black_box(sz)));
+            });
+        });
+
+        group.bench_function(&format!("{}_u64", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(black_box(u64).repeat(black_box(sz)));
+            });
+        });
+    }
+}
+
+fn repeat_packed(c: &mut Criterion) {
+    let mut group = c.benchmark_group("array");
+
+    let u8 = u8::LAYOUT;
+    let u32 = u32::LAYOUT;
+    let u64 = u64::LAYOUT;
+
+    let sizes = [1024, 2048, 729, 2187];
+
+    for sz in sizes {
+        group.bench_function(&format!("{}_u8", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(black_box(u8).repeat_packed(black_box(sz)));
+            });
+        });
+
+        group.bench_function(&format!("{}_u32", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(black_box(u32).repeat_packed(black_box(sz)));
+            });
+        });
+
+        group.bench_function(&format!("{}_u64", sz), |c| {
+            c.iter(|| {
+                let _ = black_box(black_box(u64).repeat_packed(black_box(sz)));
+            });
+        });
+    }
+}
+
 fn main() {
     let mut c = Criterion::default()
-        .measurement_time(Duration::from_millis(5_000))
+        .sample_size(512)
+        .nresamples(200_000)
         .confidence_level(0.99)
-        .noise_threshold(0.02)
-        .nresamples(500_000)
-        .sample_size(1000)
         .configure_from_args();
 
     to_aligned_alloc_compatible(&mut c);
     aligned_alloc_compatible_from_size_align(&mut c);
+    array(&mut c);
+    repeat(&mut c);
+    repeat_packed(&mut c);
 
     c.final_summary();
 }

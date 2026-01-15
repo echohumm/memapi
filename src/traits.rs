@@ -284,23 +284,21 @@ impl Alloc for std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        crate::helpers::null_q_zsl_check(
+        crate::helpers::null_q_dyn_zsl_check(
             layout,
             // SAFETY: System::alloc is only called after the layout is verified non-zero-sized.
             |layout| unsafe { alloc::alloc::GlobalAlloc::alloc(self, layout.to_stdlib()) },
-            crate::helpers::null_q_dyn
         )
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        crate::helpers::null_q_zsl_check(
+        crate::helpers::null_q_dyn_zsl_check(
             layout,
             // SAFETY: System::alloc_zeroed is only called after the layout is verified
             //  non-zero-sized.
             |layout| unsafe { alloc::alloc::GlobalAlloc::alloc_zeroed(self, layout.to_stdlib()) },
-            crate::helpers::null_q_dyn
         )
     }
 }

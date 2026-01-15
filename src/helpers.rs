@@ -323,10 +323,10 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
 /// result of `f(layout)`.
 #[allow(clippy::missing_errors_doc)]
-pub fn zsl_check<Ret, F: Fn(Layout) -> Result<Ret, Error>>(
+pub fn zsl_check<T, F: Fn(Layout) -> Result<T, Error>>(
     layout: Layout,
     f: F
-) -> Result<Ret, Error> {
+) -> Result<T, Error> {
     if layout.size() == 0 { Err(Error::ZeroSizedLayout(layout.dangling())) } else { f(layout) }
 }
 
@@ -386,12 +386,11 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise attempting
 /// allocation using `f(layout)`.
 #[allow(clippy::missing_errors_doc)]
-pub fn null_q_zsl_check<T, F: Fn(Layout) -> *mut T>(
+pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F,
-    nq: fn(*mut T, Layout) -> Result<NonNull<u8>, Error>
 ) -> Result<NonNull<u8>, Error> {
-    zsl_check(layout, |layout: Layout| nq(f(layout), layout))
+    zsl_check(layout, |layout: Layout| null_q_dyn(f(layout), layout))
 }
 
 /// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.

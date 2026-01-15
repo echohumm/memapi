@@ -16,6 +16,7 @@
 
 // TODO: add more tests. ALWAYS MORE TESTS.
 //  for error cases specifically
+//  and benches too
 
 #![allow(unknown_lints)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
@@ -99,11 +100,10 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             fn alloc(&self, layout: Layout) -> Result<core::ptr::NonNull<u8>, crate::error::Error> {
-                crate::helpers::null_q_zsl_check(
+                crate::helpers::null_q_dyn_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
                     |layout| unsafe { alloc::alloc::alloc(layout.to_stdlib()) },
-                    crate::helpers::null_q_dyn
                 )
             }
 
@@ -113,11 +113,10 @@ macro_rules! default_alloc_impl {
                 &self,
                 layout: Layout
             ) -> Result<core::ptr::NonNull<u8>, crate::error::Error> {
-                crate::helpers::null_q_zsl_check(
+                crate::helpers::null_q_dyn_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
                     |layout| unsafe { alloc::alloc::alloc_zeroed(layout.to_stdlib()) },
-                    crate::helpers::null_q_dyn
                 )
             }
         }

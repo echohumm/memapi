@@ -187,8 +187,6 @@ impl Layout {
         Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
     }
 
-    // TODO: either this can be deduped by just calling
-    //  Layout::from_size_align()?.to_aligned_alloc_compatible(), or ...
     /// Creates a layout compatible with C's `aligned_alloc` requirements from the given `size` and
     /// `align`.
     ///
@@ -429,8 +427,6 @@ impl Layout {
         }
     }
 
-    // TODO: ...this can be deduped by just calling
-    //  Layout::aligned_alloc_compatible_from_size_align()
     /// Converts this layout into one compatible with C's `aligned_alloc` requirements.
     ///
     /// C's `aligned_alloc(alignment, size)` requires:
