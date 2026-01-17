@@ -380,8 +380,6 @@ impl Layout {
     /// - <code>Err([Error::InvalidLayout]\([self.size()](Layout::size), align,
     ///   [LayoutErr::ExceedsMax]\))</code> if [`self.size()`](Layout::size) rounded up to the
     ///   nearest multiple of `align` would exceed [`USIZE_MAX_NO_HIGH_BIT`].
-    #[must_use = "this function returns a new layout, it doesn't modify the original one"]
-    #[allow(clippy::double_must_use)]
     #[inline]
     pub const fn align_to(&self, align: usize) -> Result<Layout, Error> {
         if align > self.align() { Layout::from_size_align(self.size(), align) } else { Ok(*self) }

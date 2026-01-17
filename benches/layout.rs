@@ -4,7 +4,7 @@ extern crate memapi2;
 use {
     core::hint::black_box,
     criterion::Criterion,
-    memapi2::{Layout, data::type_props::SizedProps}
+    memapi2::{Layout, data::type_props::SizedProps, helpers::USIZE_MAX_NO_HIGH_BIT}
 };
 
 fn to_aligned_alloc_compatible(c: &mut Criterion) {
@@ -38,6 +38,8 @@ fn to_aligned_alloc_compatible(c: &mut Criterion) {
             let _ = black_box(black_box(round_both).to_aligned_alloc_compatible());
         });
     });
+
+    group.finish();
 }
 
 fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
@@ -83,32 +85,32 @@ fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
             ));
         });
     });
+
+    group.finish();
 }
 
 fn array(c: &mut Criterion) {
     let mut group = c.benchmark_group("array");
 
-    let sizes = [1024, 2048, 729, 2187];
-
-    for sz in sizes {
-        group.bench_function(&format!("{}_u8", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(Layout::array::<u8>(black_box(black_box(sz))));
-            });
+    group.bench_function("1024_u8", |c| {
+        c.iter(|| {
+            let _ = black_box(Layout::array::<u8>(black_box(black_box(1024))));
         });
+    });
 
-        group.bench_function(&format!("{}_u32", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(Layout::array::<u32>(black_box(black_box(sz))));
-            });
+    group.bench_function("1024_u32", |c| {
+        c.iter(|| {
+            let _ = black_box(Layout::array::<u32>(black_box(black_box(1024))));
         });
+    });
 
-        group.bench_function(&format!("{}_u64", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(Layout::array::<u64>(black_box(black_box(sz))));
-            });
+    group.bench_function("1024_u64", |c| {
+        c.iter(|| {
+            let _ = black_box(Layout::array::<u64>(black_box(black_box(1024))));
         });
-    }
+    });
+
+    group.finish();
 }
 
 fn repeat(c: &mut Criterion) {
@@ -118,27 +120,25 @@ fn repeat(c: &mut Criterion) {
     let u32 = u32::LAYOUT;
     let u64 = u64::LAYOUT;
 
-    let sizes = [1024, 2048, 729, 2187];
-
-    for sz in sizes {
-        group.bench_function(&format!("{}_u8", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(black_box(u8).repeat(black_box(sz)));
-            });
+    group.bench_function("1024_u8", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u8).repeat(black_box(1024)));
         });
+    });
 
-        group.bench_function(&format!("{}_u32", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(black_box(u32).repeat(black_box(sz)));
-            });
+    group.bench_function("1024_u32", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u32).repeat(black_box(1024)));
         });
+    });
 
-        group.bench_function(&format!("{}_u64", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(black_box(u64).repeat(black_box(sz)));
-            });
+    group.bench_function("1024_u64", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u64).repeat(black_box(1024)));
         });
-    }
+    });
+
+    group.finish();
 }
 
 fn repeat_packed(c: &mut Criterion) {
@@ -148,27 +148,70 @@ fn repeat_packed(c: &mut Criterion) {
     let u32 = u32::LAYOUT;
     let u64 = u64::LAYOUT;
 
-    let sizes = [1024, 2048, 729, 2187];
+    group.bench_function("1024_u8", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u8).repeat_packed(black_box(1024)));
+        });
+    });
 
-    for sz in sizes {
-        group.bench_function(&format!("{}_u8", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(black_box(u8).repeat_packed(black_box(sz)));
+    group.bench_function("1024_u32", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u32).repeat_packed(black_box(1024)));
+        });
+    });
+
+    group.bench_function("1024_u64", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u64).repeat_packed(black_box(1024)));
+        });
+    });
+
+    group.finish();
+}
+
+fn from_size_align(c: &mut Criterion) {
+    let mut group = c.benchmark_group("fsa");
+
+    let valid: (usize, usize) = (usize::SZ, usize::ALN);
+    let nonpow2: (usize, usize) = (usize::SZ, usize::ALN - 1);
+    let zero: (usize, usize) = (usize::SZ, 0);
+    let too_big: (usize, usize) = (USIZE_MAX_NO_HIGH_BIT, 2);
+
+    group.bench_function("valid", |c| {
+        c.iter(|| {
+            let _ = black_box(Layout::from_size_align(black_box(valid.0), black_box(valid.1)));
+        });
+    });
+
+    group.bench_function("nonpow2", |c| {
+        c.iter(|| {
+            let _ = black_box(Layout::from_size_align(black_box(nonpow2.0), black_box(nonpow2.1)));
+        });
+    });
+
+    group.bench_function("zero", |c| {
+        c.iter(|| {
+            let _ = black_box(Layout::from_size_align(black_box(zero.0), black_box(zero.1)));
+        });
+    });
+
+    group.bench_function("too_big", |c| {
+        c.iter(|| {
+            let _ = black_box(Layout::from_size_align(black_box(too_big.0), black_box(too_big.1)));
+        });
+    });
+
+    group.bench_function("valid_unchecked", |c| {
+        c.iter(|| {
+            // SAFETY: the input is known to be valid; even if it wasn't, this only causes UB if the
+            // layout is used, and it isn't.
+            let _ = black_box(unsafe {
+                Layout::from_size_align_unchecked(black_box(valid.0), black_box(valid.1))
             });
         });
+    });
 
-        group.bench_function(&format!("{}_u32", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(black_box(u32).repeat_packed(black_box(sz)));
-            });
-        });
-
-        group.bench_function(&format!("{}_u64", sz), |c| {
-            c.iter(|| {
-                let _ = black_box(black_box(u64).repeat_packed(black_box(sz)));
-            });
-        });
-    }
+    group.finish();
 }
 
 fn main() {
@@ -183,6 +226,7 @@ fn main() {
     array(&mut c);
     repeat(&mut c);
     repeat_packed(&mut c);
+    from_size_align(&mut c);
 
     c.final_summary();
 }

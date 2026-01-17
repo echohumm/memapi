@@ -11,9 +11,18 @@ pub trait Alloc {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
     /// # Errors
-    // TODO: give standard errors too
     ///
     /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
+    ///   <code>[layout.size()](Layout::size) == 0</code>.
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
@@ -21,6 +30,16 @@ pub trait Alloc {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
+    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
@@ -49,10 +68,6 @@ pub trait Dealloc: Alloc {
     /// # Panics
     ///
     /// Some implementations may choose to panic if `ptr` or `layout` are invalid.
-    ///
-    /// # Errors
-    ///
-    /// Errors are implementation-defined, refer to [`Error`].
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout);
 }
 
@@ -61,6 +76,14 @@ pub trait Grow: Alloc + Dealloc {
     /// Grow the given block to a new, larger layout.
     ///
     /// On failure, the original memory will not be deallocated.
+    ///
+    /// Note that the default implementation simply:
+    /// 1. Checks that the new layout is larger or the same size. If both layouts are the same,
+    ///    `ptr` is returned and no operation is performed.
+    /// 2. Allocates a new block of memory via [`Alloc::alloc`].
+    /// 3. Copies [`old_layout.size()`](Layout::size) bytes from the old block to the new block.
+    /// 4. Deallocates the old block.
+    /// 5. Returns a pointer to the new block.
     ///
     /// # Safety
     ///
@@ -71,6 +94,17 @@ pub trait Grow: Alloc + Dealloc {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
+    ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
+    ///   [new_layout.size()](Layout::size)</code>.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow(
@@ -82,9 +116,17 @@ pub trait Grow: Alloc + Dealloc {
         grow(self, ptr, old_layout, new_layout, Bytes::Uninitialized)
     }
 
-    /// Grows the given block to a new, larger layout, zeroing any newly allocated bytes.
+    /// Grows the given block to a new, larger layout, with extra bytes being zeroed.
     ///
     /// On failure, the original memory will not be deallocated.
+    ///
+    /// Note that the default implementation simply:
+    /// 1. Checks that the new layout is larger or the same size. If both layouts are the same,
+    ///    `ptr` is returned and no operation is performed.
+    /// 2. Allocates a new block of memory via [`Alloc::zalloc`].
+    /// 3. Copies [`old_layout.size()`](Layout::size) bytes from the old block to the new block.
+    /// 4. Deallocates the old block.
+    /// 5. Returns a pointer to the new block.
     ///
     /// # Safety
     ///
@@ -95,6 +137,17 @@ pub trait Grow: Alloc + Dealloc {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
+    ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
+    ///   [new_layout.size()](Layout::size)</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn zgrow(
         &self,
@@ -112,6 +165,15 @@ pub trait Shrink: Alloc + Dealloc {
     ///
     /// On failure, the original memory will not be deallocated.
     ///
+    /// Note that the default implementation simply:
+    /// 1. Checks that the new layout is smaller or the same size. If both layouts are the same,
+    ///    `ptr` is returned and no operation is performed.
+    /// 2. Allocates a new block of memory via [`Alloc::alloc`].
+    /// 3. Copies [`new_layout.size()`](Layout::size) bytes from the old block to the new block.
+    ///    This will discard any extra bytes from the old block.
+    /// 4. Deallocates the old block.
+    /// 5. Returns a pointer to the new block.
+    ///
     /// # Safety
     ///
     /// The caller must ensure:
@@ -121,6 +183,17 @@ pub trait Shrink: Alloc + Dealloc {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
+    ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
+    ///   [new_layout.size()](Layout::size)</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink(
         &self,
@@ -128,7 +201,19 @@ pub trait Shrink: Alloc + Dealloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error> {
-        shrink(self, ptr, old_layout, new_layout)
+        match old_layout.size().cmp(&new_layout.size()) {
+            Ordering::Less => {
+                Err(Error::ShrinkLargerNewLayout(old_layout.size(), new_layout.size()))
+            }
+            Ordering::Equal => {
+                if new_layout.align() > old_layout.align() {
+                    shrink_unchecked(self, ptr, old_layout, new_layout)
+                } else {
+                    Ok(ptr)
+                }
+            }
+            Ordering::Greater => shrink_unchecked(self, ptr, old_layout, new_layout)
+        }
     }
 }
 
@@ -150,6 +235,15 @@ pub trait Realloc: Grow + Shrink {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    // TODO: zsl becomes possible again with shrink/realloc, need to doc that error
     #[cfg_attr(miri, track_caller)]
     unsafe fn realloc(
         &self,
@@ -160,7 +254,7 @@ pub trait Realloc: Grow + Shrink {
         ralloc(self, ptr, old_layout, new_layout, Bytes::Uninitialized)
     }
 
-    /// Reallocates a block, growing or shrinking as needed, zeroing any newly allocated bytes.
+    /// Reallocates a block, growing or shrinking as needed, with extra bytes being zeroed.
     ///
     /// On grow, preserves existing contents up to [`old_layout.size()`](Layout::size), and on
     /// shrink, truncates to [`new_layout.size()`](Layout::size).
@@ -176,6 +270,14 @@ pub trait Realloc: Grow + Shrink {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn rezalloc(
         &self,
@@ -326,7 +428,7 @@ impl Shrink for std::alloc::System {}
 #[cfg(feature = "std")]
 impl Realloc for std::alloc::System {}
 
-#[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
+// TODO: might just remove these, already removed shrink()
 #[cfg_attr(miri, track_caller)]
 unsafe fn grow<A: Grow + ?Sized>(
     a: &A,
@@ -345,27 +447,6 @@ unsafe fn grow<A: Grow + ?Sized>(
             }
         }
         Ordering::Greater => Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()))
-    }
-}
-
-#[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
-#[cfg_attr(miri, track_caller)]
-unsafe fn shrink<A: Shrink + ?Sized>(
-    a: &A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout
-) -> Result<NonNull<u8>, Error> {
-    match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => Err(Error::ShrinkLargerNewLayout(old_layout.size(), new_layout.size())),
-        Ordering::Equal => {
-            if new_layout.align() > old_layout.align() {
-                shrink_unchecked(&a, ptr, old_layout, new_layout)
-            } else {
-                Ok(ptr)
-            }
-        }
-        Ordering::Greater => shrink_unchecked(a, ptr, old_layout, new_layout)
     }
 }
 
@@ -425,7 +506,6 @@ unsafe fn shrink_unchecked<A: Shrink + ?Sized>(
     Ok(new_ptr)
 }
 
-#[allow(clippy::missing_errors_doc, clippy::missing_safety_doc)]
 #[cfg_attr(miri, track_caller)]
 unsafe fn ralloc<A: Realloc + ?Sized>(
     a: &A,

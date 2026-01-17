@@ -60,6 +60,7 @@ pub unsafe fn c_dealloc(ptr: *mut c_void) {
 /// - `size` is a multiple of `align`.
 #[allow(clippy::must_use_candidate)]
 pub unsafe fn aligned_zalloc(align: usize, size: usize) -> *mut c_void {
+    // TODO: just use _aligned_calloc on windows? have to check semantics
     // allocate
     // SAFETY: requirements are passed on to the caller.
     let ptr = unsafe { c_alloc(align, size) };

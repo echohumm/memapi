@@ -322,14 +322,22 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
 /// result of `f(layout)`.
-#[allow(clippy::missing_errors_doc)]
+///
+/// # Errors
+///
+/// <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
+/// <code>[layout.size()](Layout::size) == 0</code>.
 pub fn zsl_check<T, F: Fn(Layout) -> Result<T, Error>>(layout: Layout, f: F) -> Result<T, Error> {
     if layout.size() == 0 { Err(Error::ZeroSizedLayout(layout.dangling())) } else { f(layout) }
 }
 
 #[cfg(feature = "os_err_reporting")]
 /// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
-#[allow(clippy::missing_errors_doc)]
+///
+/// # Errors
+///
+/// <code>Err([Error::AllocFailed]\(layout, [Cause::OSErr]\(oserr\)\)</code>, where `oserr` is the
+/// error from [`io::Error::last_os_error`](std::io::Error::last_os_error), if `ptr.is_null()`.
 pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     if ptr.is_null() {
         Err(Error::AllocFailed(
@@ -352,7 +360,10 @@ pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error
 }
 
 /// Converts a possibly null pointer into a [`NonNull`] result.
-#[allow(clippy::missing_errors_doc)]
+///
+/// # Errors
+///
+/// <code>Err([Error::AllocFailed]\(layout, [Cause::Unknown]\)</code> if `ptr.is_null()`.
 pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     if ptr.is_null() {
         Err(Error::AllocFailed(layout, Cause::Unknown))

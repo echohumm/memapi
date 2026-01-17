@@ -20,7 +20,6 @@ macro_rules! impl_error {
 }
 
 /// Errors for allocator operations.
-#[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Error {
@@ -99,11 +98,13 @@ pub enum Cause {
     /// This should only be used when the __allocator__ runs out of memory and doesn't grow. Use
     /// [`OSErr`](Cause::OSErr) if the system runs out of memory.
     OutOfMemory,
+    /// Any other cause, in the form of a string.
+    Other(&'static str),
     #[cfg(feature = "os_err_reporting")]
     /// The cause is described in the contained OS error.
     ///
     /// The error may or may not be accurate depending on the environment.
-    OSErr(i32)
+    OSErr(i32),
 }
 
 impl Display for Cause {
@@ -111,6 +112,7 @@ impl Display for Cause {
         match self {
             Cause::Unknown => write!(f, "unknown"),
             Cause::OutOfMemory => write!(f, "out of memory"),
+            Cause::Other(other) => write!(f, "{}", other),
             #[cfg(feature = "os_err_reporting")]
             Cause::OSErr(e) => write!(f, "os error:\n\t{}", std::io::Error::from_raw_os_error(*e))
         }

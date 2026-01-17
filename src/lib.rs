@@ -20,15 +20,10 @@
 
 #![allow(unknown_lints)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
-#![allow(clippy::borrow_as_ptr)]
+#![allow(clippy::borrow_as_ptr, clippy::module_name_repetitions, clippy::use_self, unused_unsafe)]
+#![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
 #![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
-#![allow(
-    // does anyone else hate the Self keyword? that capital letter there looks so ugly idk why
-    clippy::use_self,
-    unused_unsafe
-)]
-#![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "nightly", feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
@@ -93,7 +88,6 @@ pub type StdLayout = alloc::alloc::Layout;
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DefaultAlloc;
 
-#[allow(unused_macros)]
 macro_rules! default_alloc_impl {
     ($ty:ty) => {
         impl crate::Alloc for $ty {
