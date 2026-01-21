@@ -13,6 +13,8 @@ use {
     }
 };
 
+// TODO: cleanup + remove useless
+
 /// The maximum value of a `usize` with no high bit.
 ///
 /// Equivalent to <code>[usize::MAX] >> 1</code> or <code>[isize::MAX] as usize</code>.
@@ -396,22 +398,6 @@ pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     f: F
 ) -> Result<NonNull<u8>, Error> {
     zsl_check(layout, |layout: Layout| null_q_dyn(f(layout), layout))
-}
-
-/// Allocates memory, then calls a predicate on a pointer to the memory and an extra piece of data.
-///
-/// This is intended for initializing the memory and/or mapping the success value to another.
-#[allow(clippy::missing_errors_doc)]
-pub fn alloc_then<Ret, A: Alloc + ?Sized, E, F: Fn(NonNull<u8>, E) -> Ret>(
-    a: &A,
-    layout: Layout,
-    e: E,
-    then: F
-) -> Result<Ret, Error> {
-    match a.alloc(layout) {
-        Ok(ptr) => Ok(then(ptr, e)),
-        Err(e) => Err(e)
-    }
 }
 
 // TODO: lower const msrv and generally improve these. will require some testing regarding effects

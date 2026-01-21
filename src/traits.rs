@@ -1,5 +1,5 @@
 use {
-    crate::{Layout, error::Error, helpers::alloc_then},
+    crate::{Layout, error::Error},
     core::{
         cmp::Ordering,
         ptr::{self, NonNull}
@@ -43,13 +43,14 @@ pub trait Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        // SAFETY: alloc returns at least layout.size() allocated bytes
-        unsafe {
-            alloc_then(self, layout, (), |p, ()| {
+        let res = self.alloc(layout);
+        if let Ok(p) = res {
+            // SAFETY: alloc returns at least layout.size() allocated bytes
+            unsafe {
                 ptr::write_bytes(p.as_ptr(), 0, layout.size());
-                p
-            })
+            }
         }
+        res
     }
 }
 
@@ -294,6 +295,7 @@ pub trait Realloc: Grow + Shrink {
     }
 }
 
+// TODO: actually doc these and their functions
 #[cfg(feature = "mut_alloc")]
 /// <placeholder>
 pub trait AllocMut {
