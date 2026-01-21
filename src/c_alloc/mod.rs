@@ -9,9 +9,8 @@ use {
         error::Error,
         helpers::{null_q_dyn, null_q_dyn_zsl_check}
     },
-    core::{ffi::c_void, ptr::NonNull},
-    ffi::{aligned_zalloc, c_alloc, c_dealloc, grow_aligned, shrink_aligned},
-    std::cmp::Ordering
+    core::{cmp::Ordering, ffi::c_void, ptr::NonNull},
+    ffi::{aligned_zalloc, c_alloc, c_dealloc, grow_aligned, shrink_aligned}
 };
 
 #[cfg_attr(miri, track_caller)]

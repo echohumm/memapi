@@ -24,6 +24,7 @@
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
 #![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
+// TODO: no_implicit_prelude?
 #![cfg_attr(not(feature = "std"), no_std)]
 // nightly is set by the build.rs
 #![cfg_attr(nightly, feature(allocator_api))]

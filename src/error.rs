@@ -104,7 +104,7 @@ pub enum Cause {
     /// The cause is described in the contained OS error.
     ///
     /// The error may or may not be accurate depending on the environment.
-    OSErr(i32),
+    OSErr(i32)
 }
 
 impl Display for Cause {
