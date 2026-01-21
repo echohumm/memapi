@@ -194,6 +194,8 @@ pub trait Shrink: Alloc + Dealloc {
     /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
     ///   [new_layout.size()](Layout::size)</code>.
+    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
+    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink(
         &self,
@@ -243,7 +245,8 @@ pub trait Realloc: Grow + Shrink {
     ///   `oserr` will be the error from
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
-    // TODO: zsl becomes possible again with shrink/realloc, need to doc that error
+    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
+    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn realloc(
         &self,
@@ -278,6 +281,8 @@ pub trait Realloc: Grow + Shrink {
     ///   `oserr` will be the error from
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
+    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
+    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn rezalloc(
         &self,
