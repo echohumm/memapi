@@ -66,7 +66,6 @@ impl Layout {
     /// Creates a layout for the given type.
     ///
     /// This just delegates to <code><T as [SizedProps>::LAYOUT]</code>.
-    #[allow(clippy::inline_always)]
     #[inline(always)]
     #[must_use]
     pub const fn new<T>() -> Layout {
@@ -146,7 +145,6 @@ impl Layout {
     /// Creates a layout for the value behind the given reference
     ///
     /// This just delegates to <code><&T as [PtrProps]>::[layout](PtrProps::layout)\(\)</code>.
-    #[allow(clippy::inline_always)]
     #[inline(always)]
     pub fn for_value<T: ?Sized>(val: &T) -> Layout {
         // SAFETY: references are always valid
@@ -164,7 +162,6 @@ impl Layout {
     /// - non-null
     /// - non-dangling
     /// - aligned
-    #[allow(clippy::inline_always)]
     #[inline(always)]
     pub unsafe fn for_value_raw<T: ?Sized>(val: *const T) -> Layout {
         val.layout()

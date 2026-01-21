@@ -294,6 +294,75 @@ pub trait Realloc: Grow + Shrink {
     }
 }
 
+#[cfg(feature = "mut_alloc")]
+/// <placeholder>
+pub trait AllocMut {
+    /// See [`Alloc::alloc`].
+    fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
+
+    /// See [`Alloc::zalloc`]. No default implementation yet.
+    fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
+}
+
+#[cfg(feature = "mut_alloc")]
+/// <placeholder>
+pub trait DeallocMut: AllocMut {
+    /// See [`Dealloc::dealloc`].
+    unsafe fn dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout);
+}
+
+#[cfg(feature = "mut_alloc")]
+/// <placeholder>
+pub trait GrowMut: AllocMut + DeallocMut {
+    /// See [`Grow::grow`]. No default implementation yet.
+    unsafe fn grow_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error>;
+
+    /// See [`Grow::zgrow`].
+    unsafe fn zgrow_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error>;
+}
+
+#[cfg(feature = "mut_alloc")]
+/// <placeholder>
+pub trait ShrinkMut: AllocMut + DeallocMut {
+    /// See [`Shrink::shrink`]. No default implementation yet.
+    unsafe fn shrink_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error>;
+}
+
+#[cfg(feature = "mut_alloc")]
+/// <placeholder>
+pub trait ReallocMut: GrowMut + ShrinkMut {
+    /// See [`Realloc::realloc`]. No default implementation yet.
+    unsafe fn realloc_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error>;
+
+    /// See [`Realloc::rezalloc`]. No default implementation yet.
+    unsafe fn rezalloc_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error>;
+}
+
 /// A memory allocation interface which can allocate and deallocate.
 ///
 /// This exists solely because it reads more nicely than <code>A: [Dealloc]</code>; the two are the
@@ -309,7 +378,18 @@ pub trait FullAlloc: Realloc + Grow + Shrink + Alloc + Dealloc {}
 impl<A: Alloc + Dealloc> BasicAlloc for A {}
 impl<A: Realloc + Grow + Shrink + Alloc + Dealloc> FullAlloc for A {}
 
-#[allow(clippy::inline_always)]
+#[cfg(feature = "mut_alloc")]
+/// <placeholder>
+pub trait BasicAllocMut: AllocMut + DeallocMut {}
+#[cfg(feature = "mut_alloc")]
+/// <placeholder>
+pub trait FullAllocMut: ReallocMut + GrowMut + ShrinkMut + AllocMut + DeallocMut {}
+
+#[cfg(feature = "mut_alloc")]
+impl<A: AllocMut + DeallocMut> BasicAllocMut for A {}
+#[cfg(feature = "mut_alloc")]
+impl<A: ReallocMut + GrowMut + ShrinkMut + AllocMut + DeallocMut> FullAllocMut for A {}
+
 impl<A: Alloc + ?Sized> Alloc for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
@@ -323,7 +403,6 @@ impl<A: Alloc + ?Sized> Alloc for &A {
         (**self).zalloc(layout)
     }
 }
-#[allow(clippy::inline_always)]
 impl<A: Dealloc + ?Sized> Dealloc for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
@@ -331,7 +410,6 @@ impl<A: Dealloc + ?Sized> Dealloc for &A {
         (**self).dealloc(ptr, layout);
     }
 }
-#[allow(clippy::inline_always)]
 impl<A: Grow + ?Sized> Grow for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
@@ -355,7 +433,6 @@ impl<A: Grow + ?Sized> Grow for &A {
         (**self).zgrow(ptr, old_layout, new_layout)
     }
 }
-#[allow(clippy::inline_always)]
 impl<A: Shrink + ?Sized> Shrink for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
@@ -368,7 +445,6 @@ impl<A: Shrink + ?Sized> Shrink for &A {
         (**self).shrink(ptr, old_layout, new_layout)
     }
 }
-#[allow(clippy::inline_always)]
 impl<A: Realloc + ?Sized> Realloc for &A {
     #[cfg_attr(miri, track_caller)]
     #[inline(always)]
@@ -433,7 +509,90 @@ impl Shrink for std::alloc::System {}
 #[cfg(feature = "std")]
 impl Realloc for std::alloc::System {}
 
-// TODO: might just remove these, already removed shrink()
+#[cfg(feature = "mut_alloc")]
+impl<A: Alloc + ?Sized> AllocMut for A {
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
+        (*self).alloc(layout)
+    }
+
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
+        (*self).zalloc(layout)
+    }
+}
+#[cfg(feature = "mut_alloc")]
+impl<A: Dealloc + ?Sized> DeallocMut for A {
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    unsafe fn dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) {
+        (*self).dealloc(ptr, layout);
+    }
+}
+#[cfg(feature = "mut_alloc")]
+impl<A: Grow + ?Sized> GrowMut for A {
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    unsafe fn grow_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error> {
+        (*self).grow(ptr, old_layout, new_layout)
+    }
+
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    unsafe fn zgrow_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error> {
+        (*self).zgrow(ptr, old_layout, new_layout)
+    }
+}
+#[cfg(feature = "mut_alloc")]
+impl<A: Shrink + ?Sized> ShrinkMut for A {
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    unsafe fn shrink_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error> {
+        (*self).shrink(ptr, old_layout, new_layout)
+    }
+}
+#[cfg(feature = "mut_alloc")]
+impl<A: Realloc + ?Sized> ReallocMut for A {
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    unsafe fn realloc_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error> {
+        (*self).realloc(ptr, old_layout, new_layout)
+    }
+
+    #[cfg_attr(miri, track_caller)]
+    #[inline(always)]
+    unsafe fn rezalloc_mut(
+        &mut self,
+        ptr: NonNull<u8>,
+        old_layout: Layout,
+        new_layout: Layout
+    ) -> Result<NonNull<u8>, Error> {
+        (*self).rezalloc(ptr, old_layout, new_layout)
+    }
+}
+
 #[cfg_attr(miri, track_caller)]
 unsafe fn grow<A: Grow + ?Sized>(
     a: &A,

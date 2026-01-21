@@ -20,7 +20,13 @@
 
 #![allow(unknown_lints)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
-#![allow(clippy::borrow_as_ptr, clippy::module_name_repetitions, clippy::use_self, unused_unsafe)]
+#![allow(
+    clippy::inline_always,
+    clippy::borrow_as_ptr,
+    clippy::module_name_repetitions,
+    clippy::use_self,
+    unused_unsafe
+)]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
 #![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]

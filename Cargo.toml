@@ -38,6 +38,7 @@ c_alloc = []
 ## that make small changes
 c_str = []
 
+mut_alloc = []
 
 # nightly support
 ## allows disabling allocator_api even on nightly

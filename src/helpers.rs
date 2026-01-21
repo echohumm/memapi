@@ -42,7 +42,6 @@ pub const fn usize_bit(bit: u8) -> usize {
 #[rustversion::attr(since(1.47), const)]
 pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
     #[rustversion::since(1.52)]
-    #[allow(clippy::inline_always)]
     #[inline(always)]
     const fn checked_div(l: usize, r: usize) -> Option<usize> {
         l.checked_div(r)
@@ -53,7 +52,6 @@ pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
     }
 
     #[rustversion::since(1.52)]
-    #[allow(clippy::inline_always)]
     #[inline(always)]
     const fn checked_rem(l: usize, r: usize) -> Option<usize> {
         l.checked_rem(r)
@@ -64,7 +62,6 @@ pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
     }
 
     #[rustversion::since(1.50)]
-    #[allow(clippy::inline_always)]
     #[inline(always)]
     const fn checked_pow(l: usize, r: u32) -> Option<usize> {
         l.checked_pow(r)
