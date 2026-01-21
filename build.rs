@@ -1,7 +1,24 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
+
 fn main() {
     let failures = run_checks();
     if failures.is_empty() {
+        println!("cargo:rustc-check-cfg=cfg(nightly)");
+        // all success, now enable "nightly" if on the nightly toolchain
+        #[rustversion::nightly]
+        #[allow(clippy::items_after_statements, dead_code)]
+        const fn is_nightly() -> bool {
+            true
+        }
+        #[rustversion::not(nightly)]
+        #[allow(clippy::items_after_statements, dead_code)]
+        const fn is_nightly() -> bool {
+            false
+        }
+        #[cfg(not(feature = "no_nightly"))]
+        if is_nightly() {
+            println!("cargo:rustc-cfg=nightly");
+        }
         return;
     }
 

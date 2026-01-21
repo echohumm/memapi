@@ -38,10 +38,12 @@ c_alloc = []
 ## that make small changes
 c_str = []
 
+
 # nightly support
-nightly = []
-metadata = ["nightly"]
-sized_hierarchy = ["nightly"]
+## allows disabling allocator_api even on nightly
+no_nightly = []
+metadata = []
+sized_hierarchy = []
 
 all_nightly = ["metadata", "sized_hierarchy"]
 
@@ -63,15 +65,16 @@ full_nightly = ["full", "all_nightly"]
 [dependencies]
 rustversion = "1.0.22"
 
+[build-dependencies]
+rustversion = "1.0.22"
 
-
-[dev-dependencies]
-criterion = "0.8.1"
-
-[[bench]]
-name = "lyt"
-path = "benches/layout.rs"
-harness = false
+#[dev-dependencies]
+#criterion = "0.8.1"
+#
+#[[bench]]
+#name = "lyt"
+#path = "benches/layout.rs"
+#harness = false
 
 
 

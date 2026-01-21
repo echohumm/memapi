@@ -132,8 +132,8 @@ pub const fn align_up(v: usize, align: usize) -> usize {
 /// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
 /// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::NonPowerOfTwoAlign]\))</code> if
 ///   `align` is not a power of two.
-/// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if `v
-///   + (align - 1)` would overflow.
+/// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if
+///   <code>v + (align - 1)</code> would overflow.
 #[rustversion::attr(since(1.47), const)]
 pub fn round_up_checked(v: usize, align: usize) -> Result<usize, Error> {
     if align == 0 {

@@ -25,7 +25,8 @@
 #![warn(unknown_lints)]
 #![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(feature = "nightly", feature(allocator_api))]
+// nightly is set by the build.rs
+#![cfg_attr(nightly, feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 #![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
@@ -158,7 +159,7 @@ unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
 
 default_alloc_impl!(DefaultAlloc);
 
-#[cfg(feature = "nightly")]
+#[cfg(nightly)]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
     use crate::{Layout, StdLayout};
