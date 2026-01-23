@@ -1,6 +1,5 @@
 use {
     crate::{
-        Alloc,
         BasicAlloc,
         Layout,
         data::type_props::{PtrProps, SizedProps, VarSized},
@@ -13,8 +12,6 @@ use {
     }
 };
 
-// TODO: cleanup + remove useless
-
 /// The maximum value of a `usize` with no high bit.
 ///
 /// Equivalent to <code>[usize::MAX] >> 1</code> or <code>[isize::MAX] as usize</code>.
@@ -25,13 +22,6 @@ pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
 /// Equivalent to <code>[usize::MAX] ^ ([usize::MAX] >> 1)</code>, <code>[usize::MAX] <<
 /// [usize::BITS] - 1</code>, or <code>[USIZE_MAX_NO_HIGH_BIT] + 1</code>
 pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (USIZE_MAX_NO_HIGH_BIT);
-
-/// A small helper to generate a `usize` in which only the bit at the given index is set.
-#[must_use]
-#[inline]
-pub const fn usize_bit(bit: u8) -> usize {
-    USIZE_HIGH_BIT >> bit
-}
 
 /// Performs a checked arithmetic operation on two `usize`s.
 ///
@@ -134,7 +124,7 @@ pub const fn align_up(v: usize, align: usize) -> usize {
 /// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if
 ///   <code>v + (align - 1)</code> would overflow.
 #[rustversion::attr(since(1.47), const)]
-pub fn round_up_checked(v: usize, align: usize) -> Result<usize, Error> {
+pub fn align_up_checked(v: usize, align: usize) -> Result<usize, Error> {
     if align == 0 {
         return Err(Error::InvalidLayout(v, align, LayoutErr::ZeroAlign));
     } else if !align.is_power_of_two() {
@@ -150,7 +140,7 @@ pub fn round_up_checked(v: usize, align: usize) -> Result<usize, Error> {
 ///
 /// # Safety
 ///
-/// The caller must ensure `align` is a valid power of two.
+/// The caller must ensure `align` is non-zero.
 #[must_use]
 #[inline]
 pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
@@ -164,20 +154,6 @@ pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
 pub fn ptr_max_align(ptr: NonNull<u8>) -> usize {
     let p = ptr.as_ptr() as usize;
     p & p.wrapping_neg()
-}
-
-/// Checks if two pointers to data of size `sz` overlap.
-#[must_use]
-#[inline]
-pub fn check_ptr_overlap(a: NonNull<u8>, b: NonNull<u8>, sz: usize) -> bool {
-    if sz == 0 {
-        return false;
-    }
-
-    let a = a.as_ptr() as usize;
-    let b = b.as_ptr() as usize;
-
-    if a < b { (b - a) < sz } else { (a - b) < sz }
 }
 
 /// Creates a <code>[NonNull]<\[T\]></code> from a pointer and a length.
@@ -318,6 +294,8 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
 }
 
 // Allocation/Result helpers
+
+// TODO: condense these. a lot are just not used in favor of higher-level versions
 
 /// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
 /// result of `f(layout)`.

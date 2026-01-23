@@ -67,6 +67,12 @@ macro_rules! tri {
             Err(e) => return Err(e),
         }
     };
+    (cmap($err:expr) $($fallible:expr)+) => {
+        match $($fallible)+ {
+            Ok(s) => s,
+            Err(_) => return Err($err)
+        }
+    }
 }
 
 #[cfg(feature = "c_alloc")]
@@ -128,6 +134,13 @@ macro_rules! default_alloc_impl {
                 if layout.size() != 0 {
                     alloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
+            }
+            
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn try_dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) -> Result<(), crate::error::Error> {
+                self.dealloc(ptr, layout);
+                Ok(())
             }
         }
         impl crate::Grow for $ty {}

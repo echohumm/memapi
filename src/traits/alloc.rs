@@ -1,5 +1,6 @@
 use {
-    crate::{Layout, error::Error},
+    super::helpers::{Bytes, grow, ralloc, shrink_unchecked},
+    crate::{Layout, error::Error, traits::helpers::default_dealloc_panic},
     core::{
         cmp::Ordering,
         ptr::{self, NonNull}
@@ -60,6 +61,9 @@ pub trait Dealloc: Alloc {
     ///
     /// This is a noop if <code>[layout.size()](Layout::size) == 0</code>.
     ///
+    /// The default implementation simply calls [`try_dealloc`](Dealloc::try_dealloc) and panics if
+    /// it returns an error.
+    ///
     /// # Safety
     ///
     /// The caller must ensure:
@@ -68,8 +72,35 @@ pub trait Dealloc: Alloc {
     ///
     /// # Panics
     ///
-    /// Some implementations may choose to panic if `ptr` or `layout` are invalid.
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout);
+    /// This function may panic if `ptr` or `layout` are invalid, or deallocation fails for any
+    /// other reason.
+    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+        if let Err(e) = self.try_dealloc(ptr, layout) {
+            default_dealloc_panic(ptr, layout, e)
+        }
+    }
+
+    /// Attempts to deallocate a previously allocated block.
+    ///
+    /// This is a noop if <code>[layout.size()](Layout::size) == 0</code>.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - `ptr` points to a block of memory allocated using this allocator.
+    /// - `layout` describes exactly the same block.
+    ///
+    ///
+    /// # Errors
+    ///
+    /// Errors are implementation-defined, refer to [`Error`].
+    /// 
+    // TODO: write this better.
+    /// The standard implementations do not return any errors, as the methods backing them are
+    /// infallible. However, implementations of this function for <code>sync<A: AllocMut></code>,
+    /// where sync is any synchronization primitive, may panic if access through the primitive
+    /// fails.
+    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error>;
 }
 
 /// A memory allocation interface which can also grow allocations.
@@ -295,76 +326,6 @@ pub trait Realloc: Grow + Shrink {
     }
 }
 
-// TODO: actually doc these and their functions
-#[cfg(feature = "mut_alloc")]
-/// <placeholder>
-pub trait AllocMut {
-    /// See [`Alloc::alloc`].
-    fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
-
-    /// See [`Alloc::zalloc`]. No default implementation yet.
-    fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
-}
-
-#[cfg(feature = "mut_alloc")]
-/// <placeholder>
-pub trait DeallocMut: AllocMut {
-    /// See [`Dealloc::dealloc`].
-    unsafe fn dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout);
-}
-
-#[cfg(feature = "mut_alloc")]
-/// <placeholder>
-pub trait GrowMut: AllocMut + DeallocMut {
-    /// See [`Grow::grow`]. No default implementation yet.
-    unsafe fn grow_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error>;
-
-    /// See [`Grow::zgrow`].
-    unsafe fn zgrow_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error>;
-}
-
-#[cfg(feature = "mut_alloc")]
-/// <placeholder>
-pub trait ShrinkMut: AllocMut + DeallocMut {
-    /// See [`Shrink::shrink`]. No default implementation yet.
-    unsafe fn shrink_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error>;
-}
-
-#[cfg(feature = "mut_alloc")]
-/// <placeholder>
-pub trait ReallocMut: GrowMut + ShrinkMut {
-    /// See [`Realloc::realloc`]. No default implementation yet.
-    unsafe fn realloc_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error>;
-
-    /// See [`Realloc::rezalloc`]. No default implementation yet.
-    unsafe fn rezalloc_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error>;
-}
-
 /// A memory allocation interface which can allocate and deallocate.
 ///
 /// This exists solely because it reads more nicely than <code>A: [Dealloc]</code>; the two are the
@@ -379,18 +340,6 @@ pub trait FullAlloc: Realloc + Grow + Shrink + Alloc + Dealloc {}
 
 impl<A: Alloc + Dealloc> BasicAlloc for A {}
 impl<A: Realloc + Grow + Shrink + Alloc + Dealloc> FullAlloc for A {}
-
-#[cfg(feature = "mut_alloc")]
-/// <placeholder>
-pub trait BasicAllocMut: AllocMut + DeallocMut {}
-#[cfg(feature = "mut_alloc")]
-/// <placeholder>
-pub trait FullAllocMut: ReallocMut + GrowMut + ShrinkMut + AllocMut + DeallocMut {}
-
-#[cfg(feature = "mut_alloc")]
-impl<A: AllocMut + DeallocMut> BasicAllocMut for A {}
-#[cfg(feature = "mut_alloc")]
-impl<A: ReallocMut + GrowMut + ShrinkMut + AllocMut + DeallocMut> FullAllocMut for A {}
 
 impl<A: Alloc + ?Sized> Alloc for &A {
     #[cfg_attr(miri, track_caller)]
@@ -410,6 +359,10 @@ impl<A: Dealloc + ?Sized> Dealloc for &A {
     #[inline(always)]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         (**self).dealloc(ptr, layout);
+    }
+
+    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
+        (**self).try_dealloc(ptr, layout)
     }
 }
 impl<A: Grow + ?Sized> Grow for &A {
@@ -503,6 +456,11 @@ impl Dealloc for std::alloc::System {
             alloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
         }
     }
+
+    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
+        self.dealloc(ptr, layout);
+        Ok(())
+    }
 }
 #[cfg(feature = "std")]
 impl Grow for std::alloc::System {}
@@ -510,194 +468,3 @@ impl Grow for std::alloc::System {}
 impl Shrink for std::alloc::System {}
 #[cfg(feature = "std")]
 impl Realloc for std::alloc::System {}
-
-#[cfg(feature = "mut_alloc")]
-impl<A: Alloc + ?Sized> AllocMut for A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        (*self).alloc(layout)
-    }
-
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        (*self).zalloc(layout)
-    }
-}
-#[cfg(feature = "mut_alloc")]
-impl<A: Dealloc + ?Sized> DeallocMut for A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) {
-        (*self).dealloc(ptr, layout);
-    }
-}
-#[cfg(feature = "mut_alloc")]
-impl<A: Grow + ?Sized> GrowMut for A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn grow_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (*self).grow(ptr, old_layout, new_layout)
-    }
-
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn zgrow_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (*self).zgrow(ptr, old_layout, new_layout)
-    }
-}
-#[cfg(feature = "mut_alloc")]
-impl<A: Shrink + ?Sized> ShrinkMut for A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn shrink_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (*self).shrink(ptr, old_layout, new_layout)
-    }
-}
-#[cfg(feature = "mut_alloc")]
-impl<A: Realloc + ?Sized> ReallocMut for A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn realloc_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (*self).realloc(ptr, old_layout, new_layout)
-    }
-
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn rezalloc_mut(
-        &mut self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (*self).rezalloc(ptr, old_layout, new_layout)
-    }
-}
-
-#[cfg_attr(miri, track_caller)]
-unsafe fn grow<A: Grow + ?Sized>(
-    a: &A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout,
-    b: Bytes
-) -> Result<NonNull<u8>, Error> {
-    match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => grow_unchecked(a, ptr, old_layout, new_layout, b),
-        Ordering::Equal => {
-            if new_layout.align() > old_layout.align() {
-                grow_unchecked(&a, ptr, old_layout, new_layout, b)
-            } else {
-                Ok(ptr)
-            }
-        }
-        Ordering::Greater => Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()))
-    }
-}
-
-/// Internal helper to grow the allocation at `ptr` by deallocating using `old_layout` and
-/// reallocating using `new_layout`.
-///
-/// # Safety
-///
-/// This function doesn't check for layout validity.
-/// The caller must ensure [`new_layout.size()`](Layout::size) is greater than
-/// [`old_layout.size()`](Layout::size).
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(miri, track_caller)]
-unsafe fn grow_unchecked<A: Grow + ?Sized>(
-    a: &A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout,
-    b: Bytes
-) -> Result<NonNull<u8>, Error> {
-    let old_size = old_layout.size();
-    let new_ptr = match b {
-        Bytes::Uninitialized => tri!(do a.alloc(new_layout)),
-        Bytes::Zeroed => tri!(do a.zalloc(new_layout))
-    };
-
-    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_size);
-    if old_size != 0 {
-        a.dealloc(ptr, old_layout);
-    }
-
-    Ok(new_ptr)
-}
-
-/// Internal helper to shrink the allocation at `ptr` by deallocating using `old_layout` and
-/// reallocating using `new_layout`.
-///
-/// # Safety
-///
-/// This function doesn't check for layout validity.
-/// The caller must ensure [`new_layout.size()`](Layout::size) is greater than
-/// [`old_layout.size()`](Layout::size).
-#[cfg_attr(miri, track_caller)]
-unsafe fn shrink_unchecked<A: Shrink + ?Sized>(
-    a: &A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout
-) -> Result<NonNull<u8>, Error> {
-    let new_ptr = tri!(do a.alloc(new_layout));
-
-    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
-    if old_layout.size() != 0 {
-        a.dealloc(ptr, old_layout);
-    }
-
-    Ok(new_ptr)
-}
-
-#[cfg_attr(miri, track_caller)]
-unsafe fn ralloc<A: Realloc + ?Sized>(
-    a: &A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout,
-    b: Bytes
-) -> Result<NonNull<u8>, Error> {
-    match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => grow_unchecked(&a, ptr, old_layout, new_layout, b),
-        Ordering::Equal => {
-            if new_layout.align() > old_layout.align() {
-                grow_unchecked(&a, ptr, old_layout, new_layout, b)
-            } else {
-                Ok(ptr)
-            }
-        }
-        Ordering::Greater => shrink_unchecked(&a, ptr, old_layout, new_layout)
-    }
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(u8)]
-enum Bytes {
-    /// Uninitialized bytes.
-    Uninitialized,
-    /// Zeroed bytes.
-    Zeroed
-}

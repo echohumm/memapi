@@ -107,6 +107,13 @@ impl Dealloc for CAlloc {
     unsafe fn dealloc(&self, ptr: NonNull<u8>, _: Layout) {
         c_dealloc(ptr.as_ptr().cast());
     }
+
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, _: Layout) -> Result<(), Error> {
+        c_dealloc(ptr.as_ptr().cast());
+        Ok(())
+    }
 }
 impl Grow for CAlloc {
     #[cfg_attr(miri, track_caller)]
