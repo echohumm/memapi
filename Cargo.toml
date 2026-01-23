@@ -4,6 +4,7 @@ version = "0.8.1"
 edition = "2018"
 rust-version = "1.46.0"
 authors = ["echohumm"]
+#noinspection LongLine
 description = "A no_std/no-alloc-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "GPL-3.0 OR MIT"
 repository = "https://github.com/echohumm/memapi"

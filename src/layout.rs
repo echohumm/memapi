@@ -398,7 +398,7 @@ impl Layout {
     ///   [LayoutErr::NonPowerOfTwoAlign]\))</code> if `align` is not a power of two.
     /// - <code>Err([Error::InvalidLayout]\([self.size()](Layout::size), align,
     ///   [LayoutErr::ExceedsMax]\))</code> if [`self.size()`](Layout::size) rounded up to the
-    ///   nearest multiple of the new alignment would exceed [`USIZE_MAX_NO_HIGH_BIT`].
+    ///   nearest multiple of the new alignment exceeds [`USIZE_MAX_NO_HIGH_BIT`].
     ///
     /// # Examples
     ///

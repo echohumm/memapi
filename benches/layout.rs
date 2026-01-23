@@ -1,3 +1,5 @@
+#![allow(clippy::incompatible_msrv)]
+
 extern crate criterion;
 extern crate memapi2;
 
@@ -8,6 +10,7 @@ use {
 };
 
 fn to_aligned_alloc_compatible(c: &mut Criterion) {
+    // i'm not lazy wdym
     let mut group = c.benchmark_group("taac");
 
     let noop = unsafe { Layout::from_size_align_unchecked(usize::SZ, usize::ALN) };

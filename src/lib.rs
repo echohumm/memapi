@@ -30,7 +30,6 @@
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
 #![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
-// TODO: no_implicit_prelude?
 #![cfg_attr(not(feature = "std"), no_std)]
 // nightly is set by the build.rs
 #![cfg_attr(nightly, feature(allocator_api))]
@@ -172,7 +171,7 @@ pub(crate) mod nightly {
     use crate::{Layout, StdLayout};
 
     // SAFETY: DefaultAlloc's allocated memory isn't deallocated until a deallocation method is
-    //  called. as a ZST allocator, copying/cloning it doesn't change behavior or invalidate
+    //  called. as a ZST allocator, copying/cloning it doesn't change behaviour or invalidate
     //  allocations.
     unsafe impl alloc::alloc::Allocator for crate::DefaultAlloc {
         #[cfg_attr(miri, track_caller)]

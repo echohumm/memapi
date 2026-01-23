@@ -1,4 +1,4 @@
-use core::{ffi::c_void, ptr::null_mut};
+use ::core::{ffi::c_void, ptr::null_mut};
 
 const NULL: *mut c_void = null_mut();
 
@@ -58,7 +58,8 @@ pub unsafe fn c_dealloc(ptr: *mut c_void) {
 /// The caller must ensure:
 /// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
 /// - `size` is a multiple of `align`.
-#[allow(clippy::must_use_candidate)]
+#[must_use = "this function allocates memory on success, and dropping the returned pointer will \
+              leak memory"]
 pub unsafe fn aligned_zalloc(align: usize, size: usize) -> *mut c_void {
     // allocate
     // SAFETY: requirements are passed on to the caller.
@@ -131,7 +132,7 @@ pub unsafe fn grow_aligned(
 /// # Returns
 ///
 /// - On success returns a nonnull pointer to the new allocation.
-/// - If `size == 0` the old allocation is freed and `NULL` is returned.
+/// - If `size == 0`, the old allocation is freed and `NULL` is returned.
 /// - On allocation failure returns `NULL` and does **not** free the original allocation (unless
 ///   `size == 0`, which already frees).
 ///
