@@ -10,7 +10,7 @@ use {
         helpers::{null_q_dyn, null_q_dyn_zsl_check}
     },
     core::{cmp::Ordering, ffi::c_void, ptr::NonNull},
-    ffi::{aligned_zalloc, c_alloc, c_dealloc, grow_aligned, shrink_aligned}
+    ffi::{c_zalloc, c_alloc, c_dealloc, grow_aligned, shrink_aligned}
 };
 
 #[cfg_attr(miri, track_caller)]
@@ -18,7 +18,6 @@ fn pad_then_alloc(
     layout: Layout,
     alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
-    // TODO: make this less janky
     let l = tri!(do layout.to_aligned_alloc_compatible());
     null_q_dyn_zsl_check(
         layout,
@@ -100,7 +99,7 @@ impl Alloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        pad_then_alloc(layout, aligned_zalloc)
+        pad_then_alloc(layout, c_zalloc)
     }
 }
 impl Dealloc for CAlloc {
@@ -136,7 +135,7 @@ impl Grow for CAlloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error> {
-        pad_then_grow(ptr, old_layout, new_layout, aligned_zalloc)
+        pad_then_grow(ptr, old_layout, new_layout, c_zalloc)
     }
 }
 impl Shrink for CAlloc {
@@ -177,7 +176,7 @@ impl Realloc for CAlloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error> {
-        pad_then_realloc(ptr, old_layout, new_layout, aligned_zalloc)
+        pad_then_realloc(ptr, old_layout, new_layout, c_zalloc)
     }
 }
 

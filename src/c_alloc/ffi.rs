@@ -60,7 +60,7 @@ pub unsafe fn c_dealloc(ptr: *mut c_void) {
 /// - `size` is a multiple of `align`.
 #[must_use = "this function allocates memory on success, and dropping the returned pointer will \
               leak memory"]
-pub unsafe fn aligned_zalloc(align: usize, size: usize) -> *mut c_void {
+pub unsafe fn c_zalloc(align: usize, size: usize) -> *mut c_void {
     // allocate
     // SAFETY: requirements are passed on to the caller.
     let ptr = unsafe { c_alloc(align, size) };
