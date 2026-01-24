@@ -15,6 +15,8 @@ pub fn default_dealloc_panic(ptr: NonNull<u8>, layout: Layout, e: Error) -> ! {
     )
 }
 
+// TODO: fast path that just deallocates and returns dangling if new size is 0?
+
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn grow<A: Grow + ?Sized>(
     a: &A,
@@ -85,7 +87,7 @@ pub unsafe fn shrink_unchecked<A: Shrink + ?Sized>(
     let new_ptr = tri!(do a.alloc(new_layout));
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
-    if old_layout.size() != 0 {
+    if old_layout.is_nonzero_sized() {
         a.dealloc(ptr, old_layout);
     }
 

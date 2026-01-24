@@ -261,6 +261,20 @@ impl Layout {
     pub const fn align(&self) -> usize {
         self.align
     }
+    
+    /// Returns `true` if <code>[self.size()](Layout::size) == 0</code>.
+    #[must_use]
+    #[inline]
+    pub const fn is_zero_sized(&self) -> bool {
+        self.size == 0
+    }
+
+    /// Returns `true` if <code>[self.size()](Layout::size) != 0</code>.
+    #[must_use]
+    #[inline]
+    pub const fn is_nonzero_sized(&self) -> bool {
+        self.size != 0
+    }
 
     /// Returns the amount of padding necessary after `self` to ensure that the following address
     /// will satisfy `align`.

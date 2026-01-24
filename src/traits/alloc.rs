@@ -10,6 +10,8 @@ use {
 /// A memory allocation interface.
 pub trait Alloc {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
+    /// 
+    /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Errors
     ///
@@ -22,11 +24,11 @@ pub trait Alloc {
     ///   `oserr` will be the error from
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
-    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
-    ///   <code>[layout.size()](Layout::size) == 0</code>.
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
+    /// 
+    /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Errors
     ///
@@ -39,8 +41,6 @@ pub trait Alloc {
     ///   `oserr` will be the error from
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
-    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
-    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
@@ -94,7 +94,6 @@ pub trait Dealloc: Alloc {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
-    /// 
     // TODO: write this better.
     /// The standard implementations do not return any errors, as the methods backing them are
     /// infallible. However, implementations of this function for <code>sync<A: AllocMut></code>,
@@ -196,6 +195,8 @@ pub trait Shrink: Alloc + Dealloc {
     /// Shrink the given block to a new, smaller layout.
     ///
     /// On failure, the original memory will not be deallocated.
+    /// 
+    /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// Note that the default implementation simply:
     /// 1. Checks that the new layout is smaller or the same size. If both layouts are the same,
@@ -226,8 +227,6 @@ pub trait Shrink: Alloc + Dealloc {
     /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
     ///   [new_layout.size()](Layout::size)</code>.
-    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
-    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink(
         &self,
@@ -259,6 +258,8 @@ pub trait Realloc: Grow + Shrink {
     /// shrink, truncates to [`new_layout.size()`](Layout::size).
     ///
     /// On failure, the original memory will not be deallocated.
+    /// 
+    /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Safety
     ///
@@ -277,8 +278,6 @@ pub trait Realloc: Grow + Shrink {
     ///   `oserr` will be the error from
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
-    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
-    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn realloc(
         &self,
@@ -294,7 +293,9 @@ pub trait Realloc: Grow + Shrink {
     /// On grow, preserves existing contents up to [`old_layout.size()`](Layout::size), and on
     /// shrink, truncates to [`new_layout.size()`](Layout::size).
     ///
-    /// On failure, the original memory will not be deallocated.
+    /// On failure, the original memory will not be deallocated.\
+    /// 
+    /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Safety
     ///
@@ -313,8 +314,6 @@ pub trait Realloc: Grow + Shrink {
     ///   `oserr` will be the error from
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
-    /// - <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
-    ///   <code>[layout.size()](Layout::size) == 0</code>.
     #[cfg_attr(miri, track_caller)]
     unsafe fn rezalloc(
         &self,
@@ -341,88 +340,101 @@ pub trait FullAlloc: Realloc + Grow + Shrink + Alloc + Dealloc {}
 impl<A: Alloc + Dealloc> BasicAlloc for A {}
 impl<A: Realloc + Grow + Shrink + Alloc + Dealloc> FullAlloc for A {}
 
-impl<A: Alloc + ?Sized> Alloc for &A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        (**self).alloc(layout)
-    }
+macro_rules! impl_alloc_ref {
+    ($($t:ty),+) => {
+        $(
+        #[allow(unused_qualifications)]
+        impl<A: Alloc + ?Sized> Alloc for $t {
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
+                (**self).alloc(layout)
+            }
 
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        (**self).zalloc(layout)
-    }
-}
-impl<A: Dealloc + ?Sized> Dealloc for &A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        (**self).dealloc(ptr, layout);
-    }
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
+                (**self).zalloc(layout)
+            }
+        }
+        #[allow(unused_qualifications)]
+        impl<A: Dealloc + ?Sized> Dealloc for $t {
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+                (**self).dealloc(ptr, layout);
+            }
 
-    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        (**self).try_dealloc(ptr, layout)
-    }
-}
-impl<A: Grow + ?Sized> Grow for &A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn grow(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (**self).grow(ptr, old_layout, new_layout)
-    }
+            unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
+                (**self).try_dealloc(ptr, layout)
+            }
+        }
+        #[allow(unused_qualifications)]
+        impl<A: Grow + ?Sized> Grow for $t {
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn grow(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout
+            ) -> Result<NonNull<u8>, Error> {
+                (**self).grow(ptr, old_layout, new_layout)
+            }
 
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn zgrow(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (**self).zgrow(ptr, old_layout, new_layout)
-    }
-}
-impl<A: Shrink + ?Sized> Shrink for &A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn shrink(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (**self).shrink(ptr, old_layout, new_layout)
-    }
-}
-impl<A: Realloc + ?Sized> Realloc for &A {
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn realloc(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (**self).realloc(ptr, old_layout, new_layout)
-    }
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn zgrow(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout
+            ) -> Result<NonNull<u8>, Error> {
+                (**self).zgrow(ptr, old_layout, new_layout)
+            }
+        }
+        #[allow(unused_qualifications)]
+        impl<A: Shrink + ?Sized> Shrink for $t {
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn shrink(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout
+            ) -> Result<NonNull<u8>, Error> {
+                (**self).shrink(ptr, old_layout, new_layout)
+            }
+        }
+        #[allow(unused_qualifications)]
+        impl<A: Realloc + ?Sized> Realloc for $t {
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn realloc(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout
+            ) -> Result<NonNull<u8>, Error> {
+                (**self).realloc(ptr, old_layout, new_layout)
+            }
 
-    #[cfg_attr(miri, track_caller)]
-    #[inline(always)]
-    unsafe fn rezalloc(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
-        (**self).rezalloc(ptr, old_layout, new_layout)
-    }
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn rezalloc(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout
+            ) -> Result<NonNull<u8>, Error> {
+                (**self).rezalloc(ptr, old_layout, new_layout)
+            }
+        }
+        )+
+    };
 }
+
+impl_alloc_ref! { &A, alloc::boxed::Box<A>, alloc::rc::Rc<A>, alloc::sync::Arc<A> }
 
 #[cfg(feature = "std")]
 impl Alloc for std::alloc::System {
@@ -452,7 +464,7 @@ impl Dealloc for std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        if layout.size() != 0 {
+        if layout.is_nonzero_sized() {
             alloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
         }
     }

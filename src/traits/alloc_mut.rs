@@ -181,34 +181,190 @@ impl<A: Realloc + ?Sized> ReallocMut for A {
     }
 }
 
-// TODO: better error messages
-const MUTEX_ALLOC_FAIL: Error =
-    Error::Other("failed to lock Mutex<impl AllocMut> for Alloc allocation call");
-const MUTEX_DEALLOC_FAIL: Error =
-    Error::Other("failed to lock Mutex<impl DeallocMut> for Dealloc deallocation call");
+// no *Mut for &mut A: *Mut because rust is dumb and "downstream crates may implement * for &mut A:
+// *Mut"
 
-// TODO: doc all extra errors. switch to using like a doc include like stdlib does so i can extend existing docs easily instead of just copy pasting
-#[cfg(feature = "std")]
-impl<A: AllocMut + ?Sized> Alloc for std::sync::Mutex<A> {
-    fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        tri!(cmap(MUTEX_ALLOC_FAIL) self.lock()).alloc_mut(layout)
-    }
+macro_rules! impl_alloc_for_sync_mutalloc {
+    ($t:ty, $borrow_call:ident, $err_verb:literal, $t_desc:literal) => {
+        impl<A: AllocMut + ?Sized> Alloc for $t {
+            fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "AllocMut> for immutable allocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                ).alloc_mut(layout)
+            }
 
-    fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        tri!(cmap(MUTEX_ALLOC_FAIL) self.lock()).zalloc_mut(layout)
-    }
+            fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "AllocMut> for immutable allocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                ).zalloc_mut(layout)
+            }
+        }
+
+        impl<A: DeallocMut + ?Sized> Dealloc for $t {
+            unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+                match self.$borrow_call() {
+                    Ok(mut guard) => guard.dealloc_mut(ptr, layout),
+                    Err(_) => default_dealloc_panic(
+                        ptr,
+                        layout,
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "DeallocMut> for `Dealloc` deallocation call"
+                        )),
+                    ),
+                }
+            }
+
+            unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "DeallocMut> for `Dealloc` deallocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                )
+                .try_dealloc_mut(ptr, layout)
+            }
+        }
+
+        impl<A: GrowMut + ?Sized> Grow for $t {
+            unsafe fn grow(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout,
+            ) -> Result<NonNull<u8>, Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "GrowMut> for `Grow` reallocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                )
+                .grow_mut(ptr, old_layout, new_layout)
+            }
+
+            unsafe fn zgrow(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout,
+            ) -> Result<NonNull<u8>, Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "GrowMut> for `Grow` reallocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                )
+                .zgrow_mut(ptr, old_layout, new_layout)
+            }
+        }
+
+        impl<A: ShrinkMut + ?Sized> Shrink for $t {
+            unsafe fn shrink(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout,
+            ) -> Result<NonNull<u8>, Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "ShrinkMut> for `Shrink` reallocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                )
+                .shrink_mut(ptr, old_layout, new_layout)
+            }
+        }
+
+        impl<A: ReallocMut + ?Sized> Realloc for $t {
+            unsafe fn realloc(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout,
+            ) -> Result<NonNull<u8>, Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "ReallocMut> for `Realloc` reallocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                )
+                .realloc_mut(ptr, old_layout, new_layout)
+            }
+
+            unsafe fn rezalloc(
+                &self,
+                ptr: NonNull<u8>,
+                old_layout: Layout,
+                new_layout: Layout,
+            ) -> Result<NonNull<u8>, Error> {
+                tri!(
+                    cmap(
+                        Error::Other(concat!(
+                            "failed to ",
+                            $err_verb,
+                            $t_desc,
+                            "ReallocMut> for `Realloc` reallocation call"
+                        ))
+                    )
+                    self.$borrow_call()
+                )
+                .rezalloc_mut(ptr, old_layout, new_layout)
+            }
+        }
+    };
 }
 
 #[cfg(feature = "std")]
-impl<A: DeallocMut + ?Sized> Dealloc for std::sync::Mutex<A> {
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        match self.lock() {
-            Ok(mut lock) => lock.dealloc_mut(ptr, layout),
-            Err(_) => default_dealloc_panic(ptr, layout, MUTEX_DEALLOC_FAIL),
-        }
-    }
-
-    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        tri!(cmap(MUTEX_DEALLOC_FAIL) self.lock()).try_dealloc_mut(ptr, layout)
-    }
+impl_alloc_for_sync_mutalloc! {
+    std::sync::Mutex<A>, lock, "lock ", "Mutex<impl "
+}
+#[cfg(feature = "std")]
+impl_alloc_for_sync_mutalloc! {
+    std::sync::RwLock<A>, write, "lock ", "RwLock<impl "
+}
+impl_alloc_for_sync_mutalloc! {
+    core::cell::RefCell<A>, try_borrow_mut, "mutably borrow ", "RefCell<impl "
 }

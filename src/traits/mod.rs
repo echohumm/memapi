@@ -1,7 +1,9 @@
 mod alloc;
-pub use alloc::*;
+pub use self::alloc::*;
 
-#[cfg(feature = "mut_alloc")] mod alloc_mut;
-#[cfg(feature = "mut_alloc")] pub use alloc_mut::*;
+#[cfg(feature = "alloc_mut_traits")] mod alloc_mut;
+#[cfg(feature = "alloc_mut_traits")] pub use alloc_mut::*;
 
 pub(super) mod helpers;
+
+// TODO: data module is traits. it should be here.

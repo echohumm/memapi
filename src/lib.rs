@@ -131,7 +131,7 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
-                if layout.size() != 0 {
+                if layout.is_nonzero_sized() {
                     alloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
             }

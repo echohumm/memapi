@@ -31,15 +31,12 @@ maintenance = { status = "actively-developed" }
 [features]
 default = []
 
+# internal features
 dev = []
-
-c_alloc = []
 
 # msrv-changing features
 ## that make small changes
 c_str = []
-
-mut_alloc = []
 
 # nightly support
 ## allows disabling allocator_api even on nightly
@@ -52,10 +49,17 @@ all_nightly = ["metadata", "sized_hierarchy"]
 # std support
 std = []
 
-# specific std features
-os_err_reporting = ["std"]
+# allocator support
+## the standard c allocator
+c_alloc = []
 
-full_msrv = ["os_err_reporting", "c_alloc"]
+# actual features
+## support best-effort os error reporting from errno
+os_err_reporting = ["std"]
+## add a set of traits for allocating with an allocator behind a mutable reference
+alloc_mut_traits = []
+
+full_msrv = ["os_err_reporting", "c_alloc", "alloc_mut_traits"]
 full = [
     "full_msrv",
     "c_str",

@@ -297,17 +297,6 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
 
 // TODO: condense these. a lot are just not used in favor of higher-level versions
 
-/// Checks layout for being zero-sized, returning an error if it is, otherwise returning the
-/// result of `f(layout)`.
-///
-/// # Errors
-///
-/// <code>[Error::ZeroSizedLayout]\([layout.dangling()](Layout::dangling)\)</code> if
-/// <code>[layout.size()](Layout::size) == 0</code>.
-pub fn zsl_check<T, F: Fn(Layout) -> Result<T, Error>>(layout: Layout, f: F) -> Result<T, Error> {
-    if layout.size() == 0 { Err(Error::ZeroSizedLayout(layout.dangling())) } else { f(layout) }
-}
-
 #[cfg(feature = "os_err_reporting")]
 /// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
 ///
@@ -368,14 +357,18 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
     null_q(ptr, layout)
 }
 
-/// Checks layout for being zero-sized, returning an error if it is, otherwise attempting
+/// Checks layout for being zero-sized, returning a dangling pointer if it is, otherwise attempting
 /// allocation using `f(layout)`.
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F
 ) -> Result<NonNull<u8>, Error> {
-    zsl_check(layout, |layout: Layout| null_q_dyn(f(layout), layout))
+    if layout.is_zero_sized() {
+        Ok(layout.dangling())
+    } else {
+        null_q_dyn(f(layout), layout)
+    }
 }
 
 // TODO: lower const msrv and generally improve these. will require some testing regarding effects

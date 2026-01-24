@@ -1,9 +1,6 @@
 use {
     crate::{Layout, data::type_props::SizedProps},
-    core::{
-        fmt::{Debug, Display, Formatter, Result as FmtResult},
-        ptr::NonNull
-    }
+    core::fmt::{Debug, Display, Formatter, Result as FmtResult}
 };
 
 /// Helper macro to implement the Error trait based on its availability. Uses [`std::error::Error`]
@@ -29,11 +26,6 @@ pub enum Error {
     AllocFailed(Layout, Cause),
     /// The layout computed with the given size and alignment is invalid; see the contained reason.
     InvalidLayout(usize, usize, LayoutErr),
-    /// The given layout was zero-sized. The contained [`NonNull`] will be dangling and valid for
-    /// the requested alignment.
-    ///
-    /// This can, in many cases, be considered a success.
-    ZeroSizedLayout(NonNull<u8>),
     /// Attempted to grow to a smaller size.
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
@@ -53,7 +45,6 @@ impl Display for Error {
             InvalidLayout,
             Other,
             ShrinkLargerNewLayout,
-            ZeroSizedLayout
         };
 
         match self {
@@ -69,7 +60,6 @@ impl Display for Error {
                 "computed invalid layout:\n\tsize: {},\n\talign: {}\n\treason: {}",
                 sz, aln, e
             ),
-            ZeroSizedLayout(_) => write!(f, "received a zero-sized layout"),
             GrowSmallerNewLayout(old, new) => {
                 write!(f, "attempted to grow from a size of {} to a smaller size of {}", old, new)
             }

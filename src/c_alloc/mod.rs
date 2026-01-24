@@ -18,10 +18,12 @@ fn pad_then_alloc(
     layout: Layout,
     alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
+    // TODO: make this less janky
+    let l = tri!(do layout.to_aligned_alloc_compatible());
     null_q_dyn_zsl_check(
-        tri!(do layout.to_aligned_alloc_compatible()),
+        layout,
         // SAFETY: we rounded up the layout's values to satisfy the requirements.
-        |l| unsafe { alloc(l.align(), l.size()) }
+        |_| {unsafe { alloc(l.align(), l.size()) }}
     )
 }
 
@@ -104,14 +106,16 @@ impl Alloc for CAlloc {
 impl Dealloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, _: Layout) {
-        c_dealloc(ptr.as_ptr().cast());
+    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+        if layout.is_nonzero_sized() {
+            c_dealloc(ptr.as_ptr().cast());
+        }
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, _: Layout) -> Result<(), Error> {
-        c_dealloc(ptr.as_ptr().cast());
+    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
+        self.dealloc(ptr, layout);
         Ok(())
     }
 }
