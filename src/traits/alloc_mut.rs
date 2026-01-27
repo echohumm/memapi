@@ -181,11 +181,11 @@ impl<A: Realloc + ?Sized> ReallocMut for A {
     }
 }
 
-// no *Mut for &mut A: *Mut because rust is dumb and "downstream crates may implement * for &mut A:
-// *Mut"
+// no AllocMut for &mut A: AllocMut because rust is dumb and "downstream crates may implement Alloc
+// for &mut A: AllocMut"
 
 macro_rules! impl_alloc_for_sync_mutalloc {
-    ($t:ty, $borrow_call:ident, $err_verb:literal, $t_desc:literal) => {
+    ($t:ty, $borrow_call:ident, $($borrow_wrap:ident,)? $err_verb:literal, $t_desc:literal) => {
         impl<A: AllocMut + ?Sized> Alloc for $t {
             fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
                 tri!(
@@ -197,7 +197,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "AllocMut> for immutable allocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 ).alloc_mut(layout)
             }
 
@@ -211,14 +211,14 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "AllocMut> for immutable allocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 ).zalloc_mut(layout)
             }
         }
 
         impl<A: DeallocMut + ?Sized> Dealloc for $t {
             unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-                match self.$borrow_call() {
+                match $($borrow_wrap)?(self.$borrow_call()) {
                     Ok(mut guard) => guard.dealloc_mut(ptr, layout),
                     Err(_) => default_dealloc_panic(
                         ptr,
@@ -243,7 +243,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "DeallocMut> for `Dealloc` deallocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 )
                 .try_dealloc_mut(ptr, layout)
             }
@@ -265,7 +265,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "GrowMut> for `Grow` reallocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 )
                 .grow_mut(ptr, old_layout, new_layout)
             }
@@ -285,7 +285,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "GrowMut> for `Grow` reallocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 )
                 .zgrow_mut(ptr, old_layout, new_layout)
             }
@@ -307,7 +307,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "ShrinkMut> for `Shrink` reallocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 )
                 .shrink_mut(ptr, old_layout, new_layout)
             }
@@ -329,7 +329,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "ReallocMut> for `Realloc` reallocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 )
                 .realloc_mut(ptr, old_layout, new_layout)
             }
@@ -349,7 +349,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                             "ReallocMut> for `Realloc` reallocation call"
                         ))
                     )
-                    self.$borrow_call()
+                    $($borrow_wrap)?(self.$borrow_call())
                 )
                 .rezalloc_mut(ptr, old_layout, new_layout)
             }
@@ -363,7 +363,7 @@ impl_alloc_for_sync_mutalloc! {
 }
 #[cfg(feature = "std")]
 impl_alloc_for_sync_mutalloc! {
-    std::sync::RwLock<A>, write, "lock ", "RwLock<impl "
+    std::sync::RwLock<A>, write, "write lock ", "RwLock<impl "
 }
 impl_alloc_for_sync_mutalloc! {
     core::cell::RefCell<A>, try_borrow_mut, "mutably borrow ", "RefCell<impl "

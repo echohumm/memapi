@@ -298,7 +298,7 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
 // TODO: condense these. a lot are just not used in favor of higher-level versions
 
 #[cfg(feature = "os_err_reporting")]
-/// Converts a possibly null pointer into a [`NonNull`] result, including os error info.
+/// Converts a possibly null pointer into a [`NonNull`] result, including OS error info.
 ///
 /// # Errors
 ///

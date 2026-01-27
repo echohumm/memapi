@@ -94,7 +94,7 @@ pub trait Dealloc: Alloc {
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
-    // TODO: write this better.
+    /// 
     /// The standard implementations do not return any errors, as the methods backing them are
     /// infallible. However, implementations of this function for <code>sync<A: AllocMut></code>,
     /// where sync is any synchronization primitive, may panic if access through the primitive

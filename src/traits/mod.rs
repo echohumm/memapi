@@ -6,4 +6,7 @@ pub use self::alloc::*;
 
 pub(super) mod helpers;
 
-// TODO: data module is traits. it should be here.
+/// Module for anything related specifically to data.
+///
+/// This includes marker traits, type properties, and miscellaneous data-handling traits.
+pub mod data;

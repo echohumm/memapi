@@ -79,10 +79,6 @@ macro_rules! tri {
 /// An allocator which uses C's [`aligned_alloc`](c_alloc::ffi::c_alloc) set of allocation
 /// functions.
 pub mod c_alloc;
-/// Module for anything related specifically to data.
-///
-/// This includes marker traits, type properties, and miscellaneous data-handling traits.
-pub mod data;
 
 /// The library's main traits.
 pub mod traits;
