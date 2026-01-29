@@ -7,12 +7,7 @@ use {
 };
 
 pub fn default_dealloc_panic(ptr: NonNull<u8>, layout: Layout, e: Error) -> ! {
-    panic!(
-        "deallocation of block at {:p} with layout {:?} failed: {}",
-        ptr.as_ptr(),
-        layout,
-        e
-    )
+    panic!("deallocation of block at {:p} with layout {:?} failed: {}", ptr.as_ptr(), layout, e)
 }
 
 // TODO: fast path that just deallocates and returns dangling if new size is 0?

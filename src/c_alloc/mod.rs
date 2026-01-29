@@ -10,7 +10,7 @@ use {
         helpers::{null_q_dyn, null_q_dyn_zsl_check}
     },
     core::{cmp::Ordering, ffi::c_void, ptr::NonNull},
-    ffi::{c_zalloc, c_alloc, c_dealloc, grow_aligned, shrink_aligned}
+    ffi::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned}
 };
 
 #[cfg_attr(miri, track_caller)]
@@ -22,7 +22,7 @@ fn pad_then_alloc(
     null_q_dyn_zsl_check(
         layout,
         // SAFETY: we rounded up the layout's values to satisfy the requirements.
-        |_| {unsafe { alloc(l.align(), l.size()) }}
+        |_| unsafe { alloc(l.align(), l.size()) }
     )
 }
 

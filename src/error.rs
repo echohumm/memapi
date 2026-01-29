@@ -44,7 +44,7 @@ impl Display for Error {
             GrowSmallerNewLayout,
             InvalidLayout,
             Other,
-            ShrinkLargerNewLayout,
+            ShrinkLargerNewLayout
         };
 
         match self {

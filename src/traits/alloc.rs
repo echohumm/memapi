@@ -10,7 +10,7 @@ use {
 /// A memory allocation interface.
 pub trait Alloc {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
-    /// 
+    ///
     /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Errors
@@ -27,7 +27,7 @@ pub trait Alloc {
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
-    /// 
+    ///
     /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Errors
@@ -72,8 +72,8 @@ pub trait Dealloc: Alloc {
     ///
     /// # Panics
     ///
-    /// This function may panic if `ptr` or `layout` are invalid, or deallocation fails for any
-    /// other reason.
+    /// This function may panic if the [`try_dealloc`](Dealloc::try_dealloc) implementation returns
+    /// an error, or the implementation chooses to panic for any other reason.
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if let Err(e) = self.try_dealloc(ptr, layout) {
             default_dealloc_panic(ptr, layout, e)
@@ -90,14 +90,16 @@ pub trait Dealloc: Alloc {
     /// - `ptr` points to a block of memory allocated using this allocator.
     /// - `layout` describes exactly the same block.
     ///
-    ///
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Error`].
-    /// 
-    /// The standard implementations do not return any errors, as the methods backing them are
-    /// infallible. However, implementations of this function for <code>sync<A: AllocMut></code>,
-    /// where sync is any synchronization primitive, may panic if access through the primitive
+    ///
+    /// The standard implementations do not return any errors, as the library functions backing them
+    /// are infallible.
+    ///
+    /// However, if the `alloc_mut` feature is enabled, and using this method on a synchronization
+    /// primitive wrapping a type which implements [`AllocMut`](crate::AllocMut), an
+    /// [`Error::Other`] wrapping a generic error message will be returned if locking the primitive
     /// fails.
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error>;
 }
@@ -195,7 +197,7 @@ pub trait Shrink: Alloc + Dealloc {
     /// Shrink the given block to a new, smaller layout.
     ///
     /// On failure, the original memory will not be deallocated.
-    /// 
+    ///
     /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// Note that the default implementation simply:
@@ -258,7 +260,7 @@ pub trait Realloc: Grow + Shrink {
     /// shrink, truncates to [`new_layout.size()`](Layout::size).
     ///
     /// On failure, the original memory will not be deallocated.
-    /// 
+    ///
     /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Safety
@@ -294,7 +296,7 @@ pub trait Realloc: Grow + Shrink {
     /// shrink, truncates to [`new_layout.size()`](Layout::size).
     ///
     /// On failure, the original memory will not be deallocated.\
-    /// 
+    ///
     /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Safety

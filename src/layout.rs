@@ -261,7 +261,7 @@ impl Layout {
     pub const fn align(&self) -> usize {
         self.align
     }
-    
+
     /// Returns `true` if <code>[self.size()](Layout::size) == 0</code>.
     #[must_use]
     #[inline]

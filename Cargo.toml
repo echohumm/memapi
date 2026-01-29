@@ -39,7 +39,7 @@ dev = []
 c_str = []
 
 # nightly support
-## allows disabling allocator_api even on nightly
+## allows disabling allocator_api on nightly
 no_nightly = []
 metadata = []
 sized_hierarchy = []

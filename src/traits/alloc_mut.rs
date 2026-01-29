@@ -13,7 +13,7 @@ use {
 };
 // TODO: docs, actual impls
 
-/// A memory allocation interface which may require mutable access to itself to allocate.
+/// A memory allocation interface which may require mutable access to itself to perform operations.
 pub trait AllocMut {
     /// See [`Alloc::alloc`].
     fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
@@ -22,7 +22,8 @@ pub trait AllocMut {
     fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
 }
 
-/// <placeholder>
+/// A memory allocation interface which may require mutable access to itself to perform operations
+/// and can also deallocate memory.
 pub trait DeallocMut: AllocMut {
     /// See [`Dealloc::dealloc`].
     unsafe fn dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) {
@@ -45,7 +46,7 @@ pub trait GrowMut: AllocMut + DeallocMut {
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error>;
 
-    /// See [`Grow::zgrow`].
+    /// See [`Grow::zgrow`]. No default implementation.
     unsafe fn zgrow_mut(
         &mut self,
         ptr: NonNull<u8>,
