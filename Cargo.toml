@@ -52,14 +52,16 @@ std = []
 # allocator support
 ## the standard c allocator
 c_alloc = []
+alloc_stack = ["alloc_temp_trait", "c_alloc", "cc"]
 
 # actual features
 ## support best-effort os error reporting from errno
 os_err_reporting = ["std"]
 ## add a set of traits for allocating with an allocator behind a mutable reference
 alloc_mut_traits = []
+alloc_temp_trait = []
 
-full_msrv = ["os_err_reporting", "c_alloc", "alloc_mut_traits"]
+full_msrv = ["os_err_reporting", "c_alloc", "alloc_stack", "alloc_mut_traits"]
 full = [
     "full_msrv",
     "c_str",
@@ -73,6 +75,7 @@ rustversion = "1.0.22"
 
 [build-dependencies]
 rustversion = "1.0.22"
+cc = { version = "=1.0.79", optional = true }
 
 #[dev-dependencies]
 #criterion = "0.8.1"
@@ -87,6 +90,11 @@ rustversion = "1.0.22"
 [[test]]
 name = "alc"
 path = "tests/alloc.rs"
+
+[[test]]
+name = "stk"
+path = "tests/stack_alloc.rs"
+required-features = ["alloc_stack"]
 
 [[test]]
 name = "c_alc"

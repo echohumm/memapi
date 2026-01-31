@@ -86,14 +86,20 @@ pub use traits::*;
 
 /// Errors that can occur during allocation.
 pub mod error;
-mod layout;
 
+mod layout;
 pub use layout::Layout;
 
 /// A type alias for [`alloc::alloc::Layout`].
 pub type StdLayout = alloc::alloc::Layout;
 
 /// Default allocator, delegating to the global allocator.
+///
+/// # Note
+///
+/// This must _not_ be set as the global allocator (via `#[global_allocator]`). Doing so will lead
+/// to infinite recursion, as the allocation functions this calls (in [`alloc::alloc`]) delegate to
+/// the global allocator.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DefaultAlloc;
 

@@ -15,30 +15,30 @@ use {
 
 /// A memory allocation interface which may require mutable access to itself to perform operations.
 pub trait AllocMut {
-    /// See [`Alloc::alloc`].
+    /// <placeholder>
     fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
 
-    /// See [`Alloc::zalloc`]. No default implementation yet.
+    /// <placeholder>
     fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error>;
 }
 
 /// A memory allocation interface which may require mutable access to itself to perform operations
 /// and can also deallocate memory.
 pub trait DeallocMut: AllocMut {
-    /// See [`Dealloc::dealloc`].
+    /// <placeholder>
     unsafe fn dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) {
         if let Err(e) = self.try_dealloc_mut(ptr, layout) {
             default_dealloc_panic(ptr, layout, e)
         }
     }
 
-    /// See [`Dealloc::try_dealloc`].
+    /// <placeholder>
     unsafe fn try_dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error>;
 }
 
 /// <placeholder>
 pub trait GrowMut: AllocMut + DeallocMut {
-    /// See [`Grow::grow`]. No default implementation yet.
+    /// <placeholder>
     unsafe fn grow_mut(
         &mut self,
         ptr: NonNull<u8>,
@@ -46,7 +46,7 @@ pub trait GrowMut: AllocMut + DeallocMut {
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error>;
 
-    /// See [`Grow::zgrow`]. No default implementation.
+    /// <placeholder>
     unsafe fn zgrow_mut(
         &mut self,
         ptr: NonNull<u8>,
@@ -57,7 +57,7 @@ pub trait GrowMut: AllocMut + DeallocMut {
 
 /// <placeholder>
 pub trait ShrinkMut: AllocMut + DeallocMut {
-    /// See [`Shrink::shrink`]. No default implementation yet.
+    /// <placeholder>
     unsafe fn shrink_mut(
         &mut self,
         ptr: NonNull<u8>,
@@ -68,7 +68,7 @@ pub trait ShrinkMut: AllocMut + DeallocMut {
 
 /// <placeholder>
 pub trait ReallocMut: GrowMut + ShrinkMut {
-    /// See [`Realloc::realloc`]. No default implementation yet.
+    /// <placeholder>
     unsafe fn realloc_mut(
         &mut self,
         ptr: NonNull<u8>,
@@ -76,7 +76,7 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error>;
 
-    /// See [`Realloc::rezalloc`]. No default implementation yet.
+    /// <placeholder>
     unsafe fn rezalloc_mut(
         &mut self,
         ptr: NonNull<u8>,

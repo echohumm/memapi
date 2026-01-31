@@ -1,6 +1,9 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 
 fn main() {
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=src/c_alloc/c/calloca.h");
+
     let failures = run_checks();
     if failures.is_empty() {
         println!("cargo:rustc-check-cfg=cfg(nightly)");
@@ -19,6 +22,12 @@ fn main() {
         if is_nightly() {
             println!("cargo:rustc-cfg=nightly");
         }
+
+        #[cfg(feature = "alloc_stack")]
+        {
+            cc::Build::new().file("src/c_alloc/c/calloca.c").compile("calloca");
+        }
+
         return;
     }
 

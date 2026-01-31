@@ -1,6 +1,9 @@
 use {
-    super::helpers::{Bytes, grow, ralloc, shrink_unchecked},
-    crate::{Layout, error::Error, traits::helpers::default_dealloc_panic},
+    crate::{
+        Layout,
+        error::Error,
+        traits::helpers::{Bytes, default_dealloc_panic, grow, ralloc, shrink_unchecked}
+    },
     core::{
         cmp::Ordering,
         ptr::{self, NonNull}
@@ -80,7 +83,9 @@ pub trait Dealloc: Alloc {
         }
     }
 
-    /// Attempts to deallocate a previously allocated block.
+    /// Attempts to deallocate a previously allocated block. If this allocator is backed by an
+    /// allocation library which does not provide fallible deallocation operations, this may panic,
+    /// abort, or incorrectly return `Ok(())`.
     ///
     /// This is a noop if <code>[layout.size()](Layout::size) == 0</code>.
     ///

@@ -89,6 +89,28 @@ unsafe fn pad_then_realloc(
 /// [`Layout::to_aligned_alloc_compatible`] for details.
 pub struct CAlloc;
 
+#[cfg(feature = "alloc_stack")]
+/// An allocator which uses C's `alloca` allocation method.
+///
+/// # WARNING
+///
+/// This is experimental. The C code and ffi backing this is custom, and I don't know C so this may
+/// or may not work. As far as I can tell, it works, but use at your own risk until I have properly
+/// validated this is fine.
+///
+/// # Note
+///
+/// Allocations made by this allocator are aligned by allocating extra space and manually aligning
+/// within that space.
+///
+/// If `size + (align - 1)` exceeds the stack allocation limit, a stack overflow will occur.
+///
+/// # Safety
+///
+/// The closure passed to this allocator's methods must NOT panic/unwind:
+/// <https://doc.rust-lang.org/nomicon/ffi.html#ffi-and-unwinding>.
+pub struct StackAlloc;
+
 impl Alloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -177,6 +199,24 @@ impl Realloc for CAlloc {
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error> {
         pad_then_realloc(ptr, old_layout, new_layout, c_zalloc)
+    }
+}
+
+// TODO: clean up the whole alloca implementation
+
+#[cfg(feature = "alloc_stack")]
+impl crate::AllocTemp for StackAlloc {
+    #[cfg_attr(miri, track_caller)]
+    unsafe fn alloc_temp<R, F: FnOnce(Result<NonNull<u8>, Error>) -> R>(
+        &self,
+        layout: Layout,
+        with_mem: F
+    ) -> R {
+        let closure = |ptrres, uninit: *mut R| {
+            uninit.write(with_mem(ptrres));
+        };
+
+        ffi::alloc_stack::with_alloca(layout.size(), layout.align(), closure)
     }
 }
 

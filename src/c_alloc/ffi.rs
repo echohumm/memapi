@@ -1,4 +1,4 @@
-use ::core::{ffi::c_void, ptr::null_mut};
+use core::{ffi::c_void, ptr::null_mut};
 
 const NULL: *mut c_void = null_mut();
 
@@ -241,4 +241,56 @@ extern "C" {
     ///
     /// The closest Rust equivalent is [`copy`](core::ptr::copy)
     pub fn memmove(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
+}
+
+#[cfg(feature = "alloc_stack")]
+pub(crate) mod alloc_stack {
+    use {
+        crate::error::Error,
+        core::{
+            ffi::c_void,
+            mem::{ManuallyDrop, MaybeUninit},
+            ptr::NonNull
+        }
+    };
+
+    pub fn with_alloca<R, F: FnOnce(Result<NonNull<u8>, Error>, *mut R)>(
+        size: usize,
+        align: usize,
+        f: F
+    ) -> R {
+        let mut ret = MaybeUninit::uninit();
+        let mut data = ManuallyDrop::new(f);
+
+        // SAFETY: TODO
+        unsafe {
+            c_alloca(
+                size,
+                align,
+                c_call_closure::<R, F>,
+                &mut data as *mut _ as *mut c_void,
+                &mut ret as *mut _ as *mut c_void
+            );
+            ret.assume_init()
+        }
+    }
+
+    unsafe extern "C" fn c_call_closure<R, F: FnOnce(Result<NonNull<u8>, Error>, *mut R)>(
+        ptr: *mut u8,
+        data: *mut c_void,
+        out: *mut c_void
+    ) {
+        let f = ManuallyDrop::take(&mut *data.cast::<ManuallyDrop<F>>());
+        f(Ok(NonNull::new_unchecked(ptr)), out.cast());
+    }
+
+    extern "C" {
+        pub fn c_alloca(
+            size: usize,
+            align: usize,
+            cb: unsafe extern "C" fn(*mut u8, *mut c_void, *mut c_void),
+            closure: *mut c_void,
+            out: *mut c_void
+        );
+    }
 }
