@@ -32,6 +32,9 @@ pub enum Error {
     ShrinkLargerNewLayout(usize, usize),
     /// An arithmetic error.
     ArithmeticError(ArithErr),
+    /// An unwinding panic occurred in a function which does not support unwinding; likely FFI.
+    #[allow(unused_qualifications)]
+    CaughtUnwind,
     /// Any other kind of error, in the form of a string.
     Other(&'static str)
 }
@@ -41,6 +44,7 @@ impl Display for Error {
         use Error::{
             AllocFailed,
             ArithmeticError,
+            CaughtUnwind,
             GrowSmallerNewLayout,
             InvalidLayout,
             Other,
@@ -67,6 +71,9 @@ impl Display for Error {
                 write!(f, "attempted to shrink from a size of {} to a larger size of {}", old, new)
             }
             ArithmeticError(overflow) => write!(f, "{}", overflow),
+            CaughtUnwind => {
+                write!(f, "unwind caught in unsupported function")
+            }
             Other(other) => write!(f, "{}", other)
         }
     }

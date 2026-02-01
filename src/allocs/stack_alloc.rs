@@ -23,8 +23,8 @@ use {
 /// The caller must ensure:
 /// - attempting to allocate <code>[layout.size()](Layout::size) + ([layout.align()](Layout::align)
 ///   \- 1)</code> bytes on the stack will not cause a stack overflow.
-/// - the `with_mem` parameter passed to implemented methods will _never_ unwind, only abort or
-///   return.
+/// - if compiling with a Rust version below `1.71` and the `catch_unwind` feature is disabled, the
+///   `with_mem` function passed to allocation methods must never unwind.
 pub struct StackAlloc;
 
 // TODO: clean up the whole alloca implementation

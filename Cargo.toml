@@ -57,8 +57,11 @@ stack_alloc = ["alloc_temp_trait", "c_alloc", "cc"]
 # actual features
 ## support best-effort os error reporting from errno
 os_err_reporting = ["std"]
+## adds support for catching unwinds to stack_alloc
+catch_unwind = ["std", "stack_alloc"]
 ## add a set of traits for allocating with an allocator behind a mutable reference
 alloc_mut_traits = []
+## adds a trait for temporary, scoped allocations
 alloc_temp_trait = []
 
 full_msrv = ["os_err_reporting", "c_alloc", "stack_alloc", "alloc_mut_traits"]

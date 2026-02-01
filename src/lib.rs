@@ -97,8 +97,7 @@ pub use layout::Layout;
 mod ffi;
 
 mod allocs;
-#[allow(unused_imports)]
-pub use allocs::*;
+#[allow(unused_imports)] pub use allocs::*;
 
 /// A type alias for [`alloc::alloc::Layout`].
 pub type StdLayout = alloc::alloc::Layout;

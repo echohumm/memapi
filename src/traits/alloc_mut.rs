@@ -68,7 +68,8 @@ pub trait AllocMut {
 /// A memory allocation interface which may require mutable access to itself to perform operations
 /// and can also deallocate memory.
 ///
-/// All types which are [`Dealloc`] are also [`DeallocMut`], making this more generic than [`Dealloc`].
+/// All types which are [`Dealloc`] are also [`DeallocMut`], making this more generic than
+/// [`Dealloc`].
 pub trait DeallocMut: AllocMut {
     /// Deallocates a previously allocated block.
     ///
