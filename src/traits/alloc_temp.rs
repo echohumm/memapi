@@ -5,53 +5,107 @@ use {
 
 /// A memory allocation interface which may only be able to provide temporary, scoped allocations.
 pub trait AllocTemp {
-    /// <placeholder>
-    unsafe fn alloc_temp<R, F: FnOnce(Result<NonNull<u8>, Error>) -> R>(
+    /// Attempts to allocate a block of memory fitting the given [`Layout`], and calls `with_mem` on
+    /// the returned pointer on success.
+    ///
+    /// The pointer will be dangling if <code>[layout.size()](Layout::size) == 0</code>.
+    ///
+    /// # Errors
+    ///
+    /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - attempting to allocate <code>[layout.size()](Layout::size) +
+    ///   ([layout.align()](Layout::align) - 1)</code> bytes on the stack will not cause a stack
+    ///   overflow.
+    /// - `with_mem` will _never_ unwind, only abort or return.
+    unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
-    ) -> R;
-    /// <placeholder>
-    unsafe fn zalloc_temp<R, F: FnOnce(Result<NonNull<u8>, Error>) -> R>(
-        &self,
-        layout: Layout,
-        with_mem: F
-    ) -> R {
-        let closure = |ptrres: Result<NonNull<u8>, Error>| {
-            if let Ok(ptr) = ptrres {
-                ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
-            }
-            with_mem(ptrres)
-        };
+    ) -> Result<R, Error>;
 
-        self.alloc_temp(layout, closure)
+    /// Attempts to allocate a block of zeroed memory fitting the given [`Layout`], and calls
+    /// `with_mem` on the returned pointer on success.
+    ///
+    /// The pointer will be dangling if <code>[layout.size()](Layout::size) == 0</code>.
+    ///
+    /// # Errors
+    ///
+    /// Errors are implementation-defined, refer to [`Error`].
+    ///
+    /// The standard implementations may return:
+    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
+    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
+    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
+    ///   `oserr` will be the error from
+    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
+    ///   code>.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - attempting to allocate <code>[layout.size()](Layout::size) +
+    ///   ([layout.align()](Layout::align) - 1)</code> bytes on the stack will not cause a stack
+    ///   overflow.
+    /// - `with_mem` will _never_ unwind, only abort or return.
+    #[cfg_attr(miri, track_caller)]
+    unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+        &self,
+        layout: Layout,
+        with_mem: F
+    ) -> Result<R, Error> {
+        self.alloc_temp(layout, |ptr: NonNull<u8>| {
+            ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
+            with_mem(ptr)
+        })
     }
 }
 
 impl<A: BasicAlloc> AllocTemp for A {
-    unsafe fn alloc_temp<R, F: FnOnce(Result<NonNull<u8>, Error>) -> R>(
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
-    ) -> R {
-        let ptr = self.alloc(layout);
-        let ret = with_mem(ptr);
-        if let Ok(ptr) = ptr {
-            self.dealloc(ptr, layout);
-        }
-        ret
+    ) -> Result<R, Error> {
+        alloc_temp_with(self, layout, with_mem, A::alloc)
     }
 
-    unsafe fn zalloc_temp<R, F: FnOnce(Result<NonNull<u8>, Error>) -> R>(
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
-    ) -> R {
-        let ptr = self.zalloc(layout);
-        let ret = with_mem(ptr);
-        if let Ok(ptr) = ptr {
-            self.dealloc(ptr, layout);
+    ) -> Result<R, Error> {
+        alloc_temp_with(self, layout, with_mem, A::zalloc)
+    }
+}
+
+unsafe fn alloc_temp_with<A: BasicAlloc, R, F: FnOnce(NonNull<u8>) -> R>(
+    a: &A,
+    layout: Layout,
+    f: F,
+    alloc: fn(&A, Layout) -> Result<NonNull<u8>, Error>
+) -> Result<R, Error> {
+    match alloc(a, layout) {
+        Ok(ptr) => {
+            let ret = f(ptr);
+            tri!(err a.try_dealloc(ptr, layout));
+            Ok(ret)
         }
-        ret
+        Err(e) => Err(e)
     }
 }

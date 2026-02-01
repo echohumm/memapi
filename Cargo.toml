@@ -52,7 +52,7 @@ std = []
 # allocator support
 ## the standard c allocator
 c_alloc = []
-alloc_stack = ["alloc_temp_trait", "c_alloc", "cc"]
+stack_alloc = ["alloc_temp_trait", "c_alloc", "cc"]
 
 # actual features
 ## support best-effort os error reporting from errno
@@ -61,7 +61,7 @@ os_err_reporting = ["std"]
 alloc_mut_traits = []
 alloc_temp_trait = []
 
-full_msrv = ["os_err_reporting", "c_alloc", "alloc_stack", "alloc_mut_traits"]
+full_msrv = ["os_err_reporting", "c_alloc", "stack_alloc", "alloc_mut_traits"]
 full = [
     "full_msrv",
     "c_str",
@@ -94,7 +94,7 @@ path = "tests/alloc.rs"
 [[test]]
 name = "stk"
 path = "tests/stack_alloc.rs"
-required-features = ["alloc_stack"]
+required-features = ["stack_alloc"]
 
 [[test]]
 name = "c_alc"

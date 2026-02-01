@@ -2,7 +2,7 @@
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=src/c_alloc/c/calloca.h");
+    println!("cargo:rerun-if-changed=src/ffi/c/calloca.c");
 
     let failures = run_checks();
     if failures.is_empty() {
@@ -23,9 +23,9 @@ fn main() {
             println!("cargo:rustc-cfg=nightly");
         }
 
-        #[cfg(feature = "alloc_stack")]
+        #[cfg(feature = "stack_alloc")]
         {
-            cc::Build::new().file("src/c_alloc/c/calloca.c").compile("calloca");
+            cc::Build::new().file("src/ffi/c/calloca.c").compile("calloca");
         }
 
         return;

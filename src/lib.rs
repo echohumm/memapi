@@ -25,6 +25,7 @@
     clippy::borrow_as_ptr,
     clippy::module_name_repetitions,
     clippy::use_self,
+    clippy::question_mark,
     unused_unsafe
 )]
 #![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
@@ -67,6 +68,11 @@ macro_rules! tri {
             Err(e) => return Err(e),
         }
     };
+    (err $($fallible:expr)+) => {
+        if let Err(e) = $($fallible)+ {
+            return Err(e);
+        }
+    };
     (cmap($err:expr) $($fallible:expr)+) => {
         match $($fallible)+ {
             Ok(s) => s,
@@ -75,20 +81,24 @@ macro_rules! tri {
     }
 }
 
-#[cfg(feature = "c_alloc")]
-/// An allocator which uses C's [`aligned_alloc`](c_alloc::ffi::c_alloc) set of allocation
-/// functions.
-pub mod c_alloc;
-
 /// The library's main traits.
 pub mod traits;
 pub use traits::*;
+
+/// Helpers that tend to be useful in other libraries as well.
+pub mod helpers;
 
 /// Errors that can occur during allocation.
 pub mod error;
 
 mod layout;
 pub use layout::Layout;
+
+mod ffi;
+
+mod allocs;
+#[allow(unused_imports)]
+pub use allocs::*;
 
 /// A type alias for [`alloc::alloc::Layout`].
 pub type StdLayout = alloc::alloc::Layout;
@@ -263,6 +273,3 @@ pub(crate) mod nightly {
 
     default_alloc_impl!(alloc::alloc::Global);
 }
-
-/// Helpers that tend to be useful in other libraries as well.
-pub mod helpers;

@@ -80,8 +80,8 @@ pub unsafe fn c_zalloc(align: usize, size: usize) -> *mut c_void {
 ///
 /// Allocates a new block of `size` bytes with at least `align` alignment, copies `old_size`
 /// bytes from `old_ptr` into the new block, frees the old block, and returns the new pointer.
-/// New bytes are set by `alloc` and may be uninitialized depending on what allocation function is
-/// passed.
+/// New bytes are set by `alloc` and may be uninitialized depending on what allocation function
+/// is passed.
 ///
 /// # Returns
 ///
@@ -109,9 +109,9 @@ pub unsafe fn grow_aligned(
 
     // if successful, copy data to new pointer, then free old pointer
     if ptr != NULL && old_ptr != NULL {
-        // SAFETY: `ptr` and `old_ptr` are nonnull. caller guarantees `old_size < size`, so copying
-        // that  many bytes is safe as `ptr` points to an allocation of at least `size`
-        // bytes.
+        // SAFETY: `ptr` and `old_ptr` are nonnull. caller guarantees `old_size < size`, so
+        // copying that  many bytes is safe as `ptr` points to an allocation of at
+        // least `size` bytes.
         unsafe {
             memcpy(ptr, old_ptr, old_size);
         }
@@ -164,8 +164,9 @@ pub unsafe fn shrink_aligned(
 
     // if successful, copy data to new pointer, then free old pointer
     if ptr != NULL && old_ptr != NULL {
-        // SAFETY: `ptr` and `old_ptr` are nonnull. caller guarantees `size <= old_size`, so copying
-        // that many bytes is safe as `ptr` points to an allocation of at least `size` bytes.
+        // SAFETY: `ptr` and `old_ptr` are nonnull. caller guarantees `size <= old_size`, so
+        // copying that many bytes is safe as `ptr` points to an allocation of at
+        // least `size` bytes.
         unsafe {
             memcpy(ptr, old_ptr, size);
         }
@@ -182,8 +183,8 @@ pub unsafe fn shrink_aligned(
 extern "C" {
     /// Allocates `size` bytes.
     ///
-    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout parameter's
-    /// alignment being <code>[align_of]::\<usize\>()</code>
+    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout
+    /// parameter's alignment being <code>[align_of]::\<usize\>()</code>
     pub fn malloc(size: usize) -> *mut c_void;
 
     #[cfg(not(windows))]
@@ -216,8 +217,8 @@ extern "C" {
     pub fn free(ptr: *mut c_void);
 
     #[cfg(windows)]
-    /// Windows version of [`aligned_alloc`]. I don't know the difference and am too lazy to read
-    /// Windows docs.
+    /// Windows version of [`aligned_alloc`]. I don't know the difference and am too lazy to
+    /// read Windows docs.
     pub fn _aligned_malloc(size: usize, alignment: usize) -> *mut c_void;
     #[cfg(windows)]
     /// Windows version of [`free`] specifically for memory returned by [`_aligned_malloc`].
@@ -241,56 +242,4 @@ extern "C" {
     ///
     /// The closest Rust equivalent is [`copy`](core::ptr::copy)
     pub fn memmove(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
-}
-
-#[cfg(feature = "alloc_stack")]
-pub(crate) mod alloc_stack {
-    use {
-        crate::error::Error,
-        core::{
-            ffi::c_void,
-            mem::{ManuallyDrop, MaybeUninit},
-            ptr::NonNull
-        }
-    };
-
-    pub fn with_alloca<R, F: FnOnce(Result<NonNull<u8>, Error>, *mut R)>(
-        size: usize,
-        align: usize,
-        f: F
-    ) -> R {
-        let mut ret = MaybeUninit::uninit();
-        let mut data = ManuallyDrop::new(f);
-
-        // SAFETY: TODO
-        unsafe {
-            c_alloca(
-                size,
-                align,
-                c_call_closure::<R, F>,
-                &mut data as *mut _ as *mut c_void,
-                &mut ret as *mut _ as *mut c_void
-            );
-            ret.assume_init()
-        }
-    }
-
-    unsafe extern "C" fn c_call_closure<R, F: FnOnce(Result<NonNull<u8>, Error>, *mut R)>(
-        ptr: *mut u8,
-        data: *mut c_void,
-        out: *mut c_void
-    ) {
-        let f = ManuallyDrop::take(&mut *data.cast::<ManuallyDrop<F>>());
-        f(Ok(NonNull::new_unchecked(ptr)), out.cast());
-    }
-
-    extern "C" {
-        pub fn c_alloca(
-            size: usize,
-            align: usize,
-            cb: unsafe extern "C" fn(*mut u8, *mut c_void, *mut c_void),
-            closure: *mut c_void,
-            out: *mut c_void
-        );
-    }
 }

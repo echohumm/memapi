@@ -77,6 +77,8 @@ pub trait Dealloc: Alloc {
     ///
     /// This function may panic if the [`try_dealloc`](Dealloc::try_dealloc) implementation returns
     /// an error, or the implementation chooses to panic for any other reason.
+    #[track_caller]
+    #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if let Err(e) = self.try_dealloc(ptr, layout) {
             default_dealloc_panic(ptr, layout, e)
@@ -187,6 +189,7 @@ pub trait Grow: Alloc + Dealloc {
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn zgrow(
         &self,
         ptr: NonNull<u8>,
@@ -286,6 +289,7 @@ pub trait Realloc: Grow + Shrink {
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn realloc(
         &self,
         ptr: NonNull<u8>,
@@ -300,7 +304,7 @@ pub trait Realloc: Grow + Shrink {
     /// On grow, preserves existing contents up to [`old_layout.size()`](Layout::size), and on
     /// shrink, truncates to [`new_layout.size()`](Layout::size).
     ///
-    /// On failure, the original memory will not be deallocated.\
+    /// On failure, the original memory will not be deallocated.
     ///
     /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
     ///
@@ -322,6 +326,7 @@ pub trait Realloc: Grow + Shrink {
     ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
     ///   code>.
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn rezalloc(
         &self,
         ptr: NonNull<u8>,

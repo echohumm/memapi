@@ -295,16 +295,32 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
 
 // Allocation/Result helpers
 
-// TODO: condense these. a lot are just not used in favor of higher-level versions
+/// Converts a possibly null pointer into a [`NonNull`] result.
+///
+/// # Errors
+///
+/// <code>Err([Error::AllocFailed]\(layout, [Cause::Unknown]\)</code> if `ptr.is_null()`.
+pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
+    if ptr.is_null() {
+        Err(Error::AllocFailed(layout, Cause::Unknown))
+    } else {
+        // SAFETY: we just checked that the pointer is non-null
+        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
+    }
+}
 
 #[cfg(feature = "os_err_reporting")]
-/// Converts a possibly null pointer into a [`NonNull`] result, including OS error info.
+/// Converts a possibly null pointer into a [`NonNull`] result, including OS error info if
+/// available.
+///
+/// OS error info is currently available as the `os_err_reporting` feature is enabled.
 ///
 /// # Errors
 ///
 /// <code>Err([Error::AllocFailed]\(layout, [Cause::OSErr]\(oserr\)\)</code>, where `oserr` is the
 /// error from [`io::Error::last_os_error`](std::io::Error::last_os_error), if `ptr.is_null()`.
-pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
+#[allow(clippy::missing_errors_doc)]
+pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     if ptr.is_null() {
         Err(Error::AllocFailed(
             layout,
@@ -325,33 +341,15 @@ pub fn null_q_oserr<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error
     }
 }
 
-/// Converts a possibly null pointer into a [`NonNull`] result.
+#[cfg(not(feature = "os_err_reporting"))]
+/// Converts a possibly null pointer into a [`NonNull`] result, including OS error info if
+/// available.
+///
+/// OS error info is currently unavailable as the `os_err_reporting` feature is disabled.
 ///
 /// # Errors
 ///
 /// <code>Err([Error::AllocFailed]\(layout, [Cause::Unknown]\)</code> if `ptr.is_null()`.
-pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
-    if ptr.is_null() {
-        Err(Error::AllocFailed(layout, Cause::Unknown))
-    } else {
-        // SAFETY: we just checked that the pointer is non-null
-        Ok(unsafe { NonNull::new_unchecked(ptr.cast()) })
-    }
-}
-
-#[cfg(feature = "os_err_reporting")]
-/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
-///
-/// Currently set to call [`null_q_oserr`].
-#[allow(clippy::missing_errors_doc)]
-pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
-    null_q_oserr(ptr, layout)
-}
-
-#[cfg(not(feature = "os_err_reporting"))]
-/// Calls either [`null_q`] or [`null_q_oserr`] depending on whether `os_err_reporting` is enabled.
-///
-/// Currently set to call [`null_q`].
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     null_q(ptr, layout)
