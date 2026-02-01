@@ -41,7 +41,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     f: F
 ) -> Result<R, Error> {
     let mut ret = MaybeUninit::uninit();
-    let mut data = ManuallyDrop::new(f);
+    let mut closure = ManuallyDrop::new(f);
 
     // SAFETY: TODO
     unsafe {
@@ -50,7 +50,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
             layout.align(),
             zero,
             c_call_callback::<R, F>,
-            (&mut data as *mut ManuallyDrop<F>).cast::<c_void>(),
+            (&mut closure as *mut ManuallyDrop<F>).cast::<c_void>(),
             (&mut ret as *mut MaybeUninit<R>).cast::<c_void>()
         );
     }
@@ -63,110 +63,76 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     Ok(unsafe { ret.assume_init() })
 }
 
-// TODO: dedup below
-
-#[rustversion::before(1.71)]
-/// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` as arguments to
-/// `callback` from C.
-pub unsafe extern "C" fn c_call_callback<R, F: FnOnce(NonNull<u8>, *mut R)>(
-    callback: *mut c_void,
-    ptr: *mut u8,
-    out: *mut c_void
-) {
-    #[cfg(not(feature = "catch_unwind"))]
-    {
-        ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>())(
-            NonNull::new_unchecked(ptr),
-            out.cast()
-        );
-    }
-    #[cfg(feature = "catch_unwind")]
-    {
-        let f = ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>());
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            f(NonNull::new_unchecked(ptr), out.cast());
-        }));
-        if result.is_err() {
-            UNWIND.with(|v| *v.borrow_mut() = true);
+macro_rules! c_cb {
+    ($verdef:ident, $ffi:literal) => {
+        #[rustversion::$verdef(1.71)]
+        /// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` as arguments to
+        /// `callback` from C.
+        ///
+        /// # Safety
+        ///
+        /// - `callback` must be a valid function pointer to an `F`.
+        /// - `callback`  must initialize `out`.
+        /// - `ptr` must be a valid pointer to allocated memory.
+        /// - `out` must be a valid pointer to an `R`.
+        pub unsafe extern $ffi fn c_call_callback<R, F: FnOnce(NonNull<u8>, *mut R)>(
+            callback: *mut c_void,
+            ptr: *mut u8,
+            out: *mut c_void
+        ) {
+            #[cfg(not(feature = "catch_unwind"))]
+            {
+                ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>())(
+                    NonNull::new_unchecked(ptr),
+                    out.cast()
+                );
+            }
+            #[cfg(feature = "catch_unwind")]
+            {
+                let f = ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>());
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    f(NonNull::new_unchecked(ptr), out.cast());
+                }));
+                if result.is_err() {
+                    UNWIND.with(|v| *v.borrow_mut() = true);
+                }
+            }
         }
-    }
+    };
 }
-#[rustversion::since(1.71)]
-/// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` as arguments to
-/// `callback` from C.
-pub unsafe extern "C-unwind" fn c_call_callback<R, F: FnOnce(NonNull<u8>, *mut R)>(
-    callback: *mut c_void,
-    ptr: *mut u8,
-    out: *mut c_void
-) {
-    #[cfg(not(feature = "catch_unwind"))]
-    {
-        ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>())(
-            NonNull::new_unchecked(ptr),
-            out.cast()
-        );
-    }
-    #[cfg(feature = "catch_unwind")]
-    {
-        let f = ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>());
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            f(NonNull::new_unchecked(ptr), out.cast());
-        }));
-        if result.is_err() {
-            UNWIND.with(|v| *v.borrow_mut() = true);
+macro_rules! c_ext {
+    ($verdef:ident, $ffi:literal) => {
+        #[rustversion::$verdef(1.71)]
+        extern $ffi {
+            /// Allocates `size` bytes on the stack with at least `align` alignment and call `cb(closure,
+            /// allocation, out)`.
+            ///
+            /// The allocation is only valid for the duration of this call. If `zero` is true, the
+            /// allocation is zeroed.
+            ///
+            /// If `size == 0`, `cb` receives a dangling, aligned pointer.
+            ///
+            /// # Safety
+            ///
+            /// The caller must ensure:
+            /// - `align` is a nonzero power of two.
+            /// - `size + (align - 1)` will not overflow or exceed the stack allocation limit.
+            /// - `cb` does not store the pointer or use it after the call returns.
+            /// - `cb` initializes `out` if the caller expects a value to be written there.
+            pub fn c_alloca(
+                size: usize,
+                align: usize,
+                zero: bool,
+                cb: unsafe extern $ffi fn(*mut c_void, *mut u8, *mut c_void),
+                closure: *mut c_void,
+                out: *mut c_void
+            );
         }
-    }
+    };
 }
 
-#[rustversion::before(1.71)]
-extern "C" {
-    /// Allocates `size` bytes on the stack with at least `align` alignment and call `cb(closure,
-    /// allocation, out)`.
-    ///
-    /// The allocation is only valid for the duration of this call. If `zero` is true, the
-    /// allocation is zeroed.
-    ///
-    /// If `size == 0`, `cb` receives a dangling, aligned pointer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure:
-    /// - `align` is a nonzero power of two.
-    /// - `size + (align - 1)` will not overflow or exceed the stack allocation limit.
-    /// - `cb` does not store the pointer or use it after the call returns.
-    /// - `cb` initializes `out` if the caller expects a value to be written there.
-    pub fn c_alloca(
-        size: usize,
-        align: usize,
-        zero: bool,
-        cb: unsafe extern "C" fn(*mut c_void, *mut u8, *mut c_void),
-        closure: *mut c_void,
-        out: *mut c_void
-    );
-}
-#[rustversion::since(1.71)]
-extern "C-unwind" {
-    /// Allocates `size` bytes on the stack with at least `align` alignment and call `cb(closure,
-    /// allocation, out)`.
-    ///
-    /// The allocation is only valid for the duration of this call. If `zero` is true, the
-    /// allocation is zeroed.
-    ///
-    /// If `size == 0`, `cb` receives a dangling, aligned pointer.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure:
-    /// - `align` is a nonzero power of two.
-    /// - `size + (align - 1)` will not overflow or exceed the stack allocation limit.
-    /// - `cb` does not store the pointer or use it after the call returns.
-    /// - `cb` initializes `out` if the caller expects a value to be written there.
-    pub fn c_alloca(
-        size: usize,
-        align: usize,
-        zero: bool,
-        cb: unsafe extern "C-unwind" fn(*mut c_void, *mut u8, *mut c_void),
-        closure: *mut c_void,
-        out: *mut c_void
-    );
-}
+c_cb! { before, "C" }
+c_cb! { since, "C-unwind" }
+
+c_ext! { before, "C" }
+c_ext! { since, "C-unwind" }
