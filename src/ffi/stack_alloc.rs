@@ -32,6 +32,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     Ok(unsafe { ret.assume_init() })
 }
 
+#[rustversion::before(1.71)]
 /// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` as arguments to
 /// `callback` from C.
 pub unsafe extern "C" fn c_call_callback<R, F: FnOnce(NonNull<u8>, *mut R)>(
@@ -44,7 +45,23 @@ pub unsafe extern "C" fn c_call_callback<R, F: FnOnce(NonNull<u8>, *mut R)>(
         out.cast()
     );
 }
+#[rustversion::since(1.71)]
+/// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` as arguments to
+/// `callback` from C.
+pub unsafe extern "C-unwind" fn c_call_callback<R, F: FnOnce(NonNull<u8>, *mut R)>(
+    callback: *mut c_void,
+    ptr: *mut u8,
+    out: *mut c_void
+) {
+    // TODO: catch unwinds and return result somehow, this will avoid c-unwind entirely and allow
+    //  for better error reporting
+    ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>())(
+        NonNull::new_unchecked(ptr),
+        out.cast()
+    );
+}
 
+#[rustversion::before(1.71)]
 extern "C" {
     /// <placeholder>
     pub fn c_alloca(
@@ -52,6 +69,18 @@ extern "C" {
         align: usize,
         zero: bool,
         cb: unsafe extern "C" fn(*mut c_void, *mut u8, *mut c_void),
+        closure: *mut c_void,
+        out: *mut c_void
+    );
+}
+#[rustversion::since(1.71)]
+extern "C-unwind" {
+    /// <placeholder>
+    pub fn c_alloca(
+        size: usize,
+        align: usize,
+        zero: bool,
+        cb: unsafe extern "C-unwind" fn(*mut c_void, *mut u8, *mut c_void),
         closure: *mut c_void,
         out: *mut c_void
     );

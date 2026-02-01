@@ -24,11 +24,7 @@ pub trait AllocTemp {
     ///
     /// # Safety
     ///
-    /// The caller must ensure:
-    /// - attempting to allocate <code>[layout.size()](Layout::size) +
-    ///   ([layout.align()](Layout::align) - 1)</code> bytes on the stack will not cause a stack
-    ///   overflow.
-    /// - `with_mem` will _never_ unwind, only abort or return.
+    /// Safety preconditions are implementation defined.
     unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
@@ -54,11 +50,7 @@ pub trait AllocTemp {
     ///
     /// # Safety
     ///
-    /// The caller must ensure:
-    /// - attempting to allocate <code>[layout.size()](Layout::size) +
-    ///   ([layout.align()](Layout::align) - 1)</code> bytes on the stack will not cause a stack
-    ///   overflow.
-    /// - `with_mem` will _never_ unwind, only abort or return.
+    /// Safety preconditions are implementation defined.
     #[cfg_attr(miri, track_caller)]
     unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,

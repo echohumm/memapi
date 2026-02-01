@@ -20,8 +20,11 @@ use {
 ///
 /// # Safety
 ///
-/// The closure passed to this allocator's methods must NOT panic/unwind:
-/// <https://doc.rust-lang.org/nomicon/ffi.html#ffi-and-unwinding>.
+/// The caller must ensure:
+/// - attempting to allocate <code>[layout.size()](Layout::size) + ([layout.align()](Layout::align)
+///   \- 1)</code> bytes on the stack will not cause a stack overflow.
+/// - the `with_mem` parameter passed to implemented methods will _never_ unwind, only abort or
+///   return.
 pub struct StackAlloc;
 
 // TODO: clean up the whole alloca implementation

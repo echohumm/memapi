@@ -25,3 +25,14 @@ fn stack_alloc() {
         )
     }
 }
+
+#[rustversion::since(1.71)]
+#[test]
+#[should_panic = "no UB? yippee!"]
+fn stack_alloc_unwind() {
+    unsafe {
+        assert!(StackAlloc.alloc_temp::<(), _>(Layout::from_size_align(8, 8).unwrap(), |ptr| {
+            panic!("no UB? yippee!");
+        }).is_ok());
+    }
+}
