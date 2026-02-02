@@ -41,6 +41,14 @@
   #define GUARANTEED_ALIGN 16
 #endif
 
+
+
+#if defined(_MSC_VER)
+  #define ALLOCA(sz) _alloca(sz)
+#else
+  #define ALLOCA(sz) alloca(sz)
+#endif
+
 /* TODO: try to find some way to avoid stack overflow if too large */
 void c_alloca(
     const size_t size,
@@ -50,31 +58,33 @@ void c_alloca(
     void* closure,
     void* out
 ) {
-    uint8_t *ptr;
-
     if (size == 0) {
-        ptr = (uint8_t*)align;
-    } else if (align <= GUARANTEED_ALIGN) {
-        #ifdef _MSC_VER
-            ptr = _alloca(size);
-        #else
-            ptr = alloca(size);
-        #endif
-        if (zero) {
-            memset(ptr, 0, size);
-        }
-    } else {
-        size_t m1 = align - 1;
-        size_t alloc_size = size + m1;
-        #ifdef _MSC_VER
-            uint8_t *base = _alloca(alloc_size);
-        #else
-            uint8_t *base = alloca(alloc_size);
-        #endif
-        ptr = (uint8_t*)(((size_t)base + m1) & ~m1);
-        if (zero) {
-            memset(ptr, 0, size);
-        }
+        /* return dangling for zsl */
+        callback(closure, (uint8_t*)(uintptr_t)align, out);
+        return;
+    }
+
+    /* determine whether we need extra space for padding */
+    size_t alloc_size = size;
+    size_t align_m_1;
+    bool need_padding = (align > GUARANTEED_ALIGN);
+    if (need_padding) {
+        align_m_1 = align - 1;
+        alloc_size += align_m_1;
+    }
+
+    /* allocate */
+    uint8_t *ptr = (uint8_t*)ALLOCA(alloc_size);
+
+    /* pad the pointer to be aligned */
+    if (need_padding) {
+        uintptr_t mask = (uintptr_t)(align_m_1);
+        ptr = (uint8_t*)(((uintptr_t)ptr + mask) & ~mask);
+    }
+
+    /* zero if zeroed allocation was requested */
+    if (zero) {
+        memset(ptr, 0, size);
     }
 
     callback(closure, ptr, out);
