@@ -41,7 +41,9 @@
 // TODO: consider behavior of all allocation methods in all possible cases for all allocators and
 //  make sure they match and make sense
 
-extern crate alloc;
+// TODO: ideally `no_alloc` is ignored/switches to `std` if it's enabled
+
+#[cfg(not(feature = "no_alloc"))] extern crate alloc;
 extern crate core;
 
 /// This macro is theoretically faster than `<fallible>?`.
@@ -108,6 +110,7 @@ mod ffi;
 mod allocs;
 #[allow(unused_imports)] pub use allocs::*;
 
+#[cfg(not(feature = "no_alloc"))]
 /// A type alias for [`alloc::alloc::Layout`].
 pub type StdLayout = alloc::alloc::Layout;
 
@@ -123,6 +126,7 @@ pub struct DefaultAlloc;
 
 macro_rules! default_alloc_impl {
     ($ty:ty) => {
+        #[cfg(not(feature = "no_alloc"))]
         impl crate::Alloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
@@ -147,6 +151,7 @@ macro_rules! default_alloc_impl {
                 )
             }
         }
+        #[cfg(not(feature = "no_alloc"))]
         impl crate::Dealloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
@@ -167,12 +172,16 @@ macro_rules! default_alloc_impl {
                 Ok(())
             }
         }
+        #[cfg(not(feature = "no_alloc"))]
         impl crate::Grow for $ty {}
+        #[cfg(not(feature = "no_alloc"))]
         impl crate::Shrink for $ty {}
+        #[cfg(not(feature = "no_alloc"))]
         impl crate::Realloc for $ty {}
     };
 }
 
+#[cfg(not(feature = "no_alloc"))]
 // SAFETY: DefaultAlloc doesn't unwind, and all layout operations are correct
 unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
     #[cfg_attr(miri, track_caller)]
@@ -202,7 +211,7 @@ unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
 
 default_alloc_impl!(DefaultAlloc);
 
-#[cfg(nightly)]
+#[cfg(all(nightly, not(feature = "no_alloc")))]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
     use crate::{Layout, StdLayout};
@@ -280,4 +289,6 @@ pub(crate) mod nightly {
     }
 
     default_alloc_impl!(alloc::alloc::Global);
+
+    // TODO: either Allocator for A: Alloc or vice versa, not sure which. i think i removed that at some point but i can't remember why.
 }

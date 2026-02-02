@@ -3,6 +3,7 @@
     <words>
       <w>aacfsa</w>
       <w>allocs</w>
+      <w>calloc</w>
       <w>echohumm</w>
       <w>mimalloc</w>
       <w>msrv</w>

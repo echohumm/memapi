@@ -8,7 +8,7 @@ authors = ["echohumm"]
 description = "A no_std/no-alloc-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "GPL-3.0 OR MIT"
 repository = "https://github.com/echohumm/memapi"
-keywords = ["allocator", "no_std", "memory", "allocation"]
+keywords = ["allocator", "no_std", "no_alloc", "memory", "allocation"]
 categories = ["no-std::no-alloc", "memory-management"]
 include = [
     "src/**",
@@ -41,6 +41,8 @@ c_str = []
 # nightly support
 ## allows disabling allocator_api on nightly
 no_nightly = []
+## allows disabling the usage of the alloc crate
+no_alloc = []
 metadata = []
 sized_hierarchy = []
 

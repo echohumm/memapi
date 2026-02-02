@@ -179,11 +179,13 @@ macro_rules! impl_ptr_props_as_ref {
 
 impl_ptr_props_raw! { *const T, *mut T }
 impl_ptr_props_identity! { &T, &mut T }
+#[cfg(not(feature = "no_alloc"))]
 impl_ptr_props_as_ref! {
     alloc::boxed::Box<T>,
     alloc::rc::Rc<T>,
     alloc::sync::Arc<T>,
 }
+#[cfg(not(feature = "no_alloc"))]
 impl<T: Clone> PtrProps<T> for alloc::borrow::Cow<'_, T> {
     #[inline]
     unsafe fn sz(&self) -> usize {

@@ -1,5 +1,4 @@
 use crate::{
-    StdLayout,
     data::type_props::{PtrProps, SizedProps},
     error::{ArithOp, Error, LayoutErr},
     helpers::{
@@ -41,23 +40,27 @@ pub struct Layout {
     align: usize
 }
 
-impl PartialEq<StdLayout> for Layout {
-    fn eq(&self, other: &StdLayout) -> bool {
+#[cfg(not(feature = "no_alloc"))]
+impl PartialEq<alloc::alloc::Layout> for Layout {
+    fn eq(&self, other: &alloc::alloc::Layout) -> bool {
         self.align == other.align() && self.size == other.size()
     }
 }
-impl PartialEq<Layout> for StdLayout {
+#[cfg(not(feature = "no_alloc"))]
+impl PartialEq<Layout> for alloc::alloc::Layout {
     fn eq(&self, other: &Layout) -> bool {
         self.align() == other.align && self.size() == other.size
     }
 }
-impl From<StdLayout> for Layout {
-    fn from(layout: StdLayout) -> Layout {
+#[cfg(not(feature = "no_alloc"))]
+impl From<alloc::alloc::Layout> for Layout {
+    fn from(layout: alloc::alloc::Layout) -> Layout {
         Layout::from_stdlib(layout)
     }
 }
-impl From<Layout> for StdLayout {
-    fn from(layout: Layout) -> StdLayout {
+#[cfg(not(feature = "no_alloc"))]
+impl From<Layout> for alloc::alloc::Layout {
+    fn from(layout: Layout) -> alloc::alloc::Layout {
         layout.to_stdlib()
     }
 }
@@ -479,22 +482,24 @@ impl Layout {
         }
     }
 
+    #[cfg(not(feature = "no_alloc"))]
     /// Converts this layout to an [`alloc::alloc::Layout`].
     #[must_use]
     #[inline]
-    pub const fn to_stdlib(self) -> StdLayout {
+    pub const fn to_stdlib(self) -> alloc::alloc::Layout {
         // SAFETY: we validate all layout's requirements ourselves
-        unsafe { StdLayout::from_size_align_unchecked(self.size(), self.align()) }
+        unsafe { alloc::alloc::Layout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
+    #[cfg(not(feature = "no_alloc"))]
     /// Converts an [`alloc::alloc::Layout`] to a [`Layout`].
     ///
     /// Note that this is only `const` on Rust versions 1.50 and above.
     #[rustversion::attr(since(1.50), const)]
     #[must_use]
     #[inline]
-    pub fn from_stdlib(layout: StdLayout) -> Layout {
-        // SAFETY: we share layout's requirements and, as checked by the build.rs, internal layout.
+    pub fn from_stdlib(layout: alloc::alloc::Layout) -> Layout {
+        // SAFETY: we share layout's requirements.
         unsafe { Layout::from_size_align_unchecked(layout.size(), layout.align()) }
     }
 }

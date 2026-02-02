@@ -439,9 +439,11 @@ macro_rules! impl_alloc_ref {
     };
 }
 
-impl_alloc_ref! { &A, alloc::boxed::Box<A>, alloc::rc::Rc<A>, alloc::sync::Arc<A> }
+impl_alloc_ref! { &A, &mut A }
+#[cfg(all(feature = "std", not(feature = "no_alloc")))]
+impl_alloc_ref! { alloc::boxed::Box<A>, alloc::rc::Rc<A>, alloc::sync::Arc<A> }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no_alloc")))]
 macro_rules! sysalloc {
     ($self:ident, $alloc:ident, $layout:ident) => {
         crate::helpers::null_q_dyn_zsl_check(
@@ -452,7 +454,7 @@ macro_rules! sysalloc {
     };
 }
 
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Alloc for std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -466,7 +468,7 @@ impl Alloc for std::alloc::System {
         sysalloc!(self, alloc_zeroed, layout)
     }
 }
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Dealloc for std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
@@ -481,9 +483,9 @@ impl Dealloc for std::alloc::System {
         Ok(())
     }
 }
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Grow for std::alloc::System {}
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Shrink for std::alloc::System {}
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Realloc for std::alloc::System {}
