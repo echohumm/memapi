@@ -38,7 +38,6 @@ thread_local! {
 /// - On Rust versions below `1.71` with `catch_unwind` disabled, `f` must never unwind.
 pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     layout: Layout,
-    zero: bool,
     f: F
 ) -> Result<R, Error> {
     let mut ret = MaybeUninit::uninit();
@@ -49,7 +48,6 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
         c_alloca(
             layout.size(),
             layout.align(),
-            zero,
             c_call_callback::<R, F>,
             (&mut closure as *mut ManuallyDrop<F>).cast::<c_void>(),
             (&mut ret as *mut MaybeUninit<R>).cast::<c_void>()
@@ -123,7 +121,6 @@ macro_rules! c_ext {
             pub fn c_alloca(
                 size: usize,
                 align: usize,
-                zero: bool,
                 cb: unsafe extern $ffi fn(*mut c_void, *mut u8, *mut c_void),
                 closure: *mut c_void,
                 out: *mut c_void

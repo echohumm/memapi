@@ -53,7 +53,6 @@
 void c_alloca(
     const size_t size,
     const size_t align,
-    const bool zero,
     void (*callback)(void*, uint8_t*, void*),
     void* closure,
     void* out
@@ -80,11 +79,6 @@ void c_alloca(
     if (need_padding) {
         uintptr_t mask = (uintptr_t)(align_m_1);
         ptr = (uint8_t*)(((uintptr_t)ptr + mask) & ~mask);
-    }
-
-    /* zero if zeroed allocation was requested */
-    if (zero) {
-        memset(ptr, 0, size);
     }
 
     callback(closure, ptr, out);

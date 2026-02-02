@@ -1,4 +1,5 @@
 use core::{ffi::c_void, ptr::null_mut};
+use std::ptr;
 
 const NULL: *mut c_void = null_mut();
 
@@ -96,7 +97,7 @@ pub unsafe fn c_zalloc(align: usize, size: usize) -> *mut c_void {
     if ptr != NULL {
         // SAFETY: `ptr` is nonnull, and at least size bytes in length. `0i32` fits in a `u8`.
         unsafe {
-            memset(ptr, 0, size);
+            ptr::write_bytes(ptr, 0, size);
         }
     }
 

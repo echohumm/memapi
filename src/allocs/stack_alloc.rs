@@ -38,8 +38,7 @@ impl crate::AllocTemp for StackAlloc {
         layout: Layout,
         with_mem: F
     ) -> Result<R, Error> {
-        // TODO: remove function arg
-        with_alloca(layout, false, |ptr, uninit: *mut R| {
+        with_alloca(layout, |ptr, uninit: *mut R| {
             ptr::write(uninit, with_mem(ptr));
         })
     }
@@ -51,7 +50,8 @@ impl crate::AllocTemp for StackAlloc {
         layout: Layout,
         with_mem: F
     ) -> Result<R, Error> {
-        with_alloca(layout, true, |ptr, uninit: *mut R| {
+        with_alloca(layout, |ptr, uninit: *mut R| {
+            ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
             ptr::write(uninit, with_mem(ptr));
         })
     }
