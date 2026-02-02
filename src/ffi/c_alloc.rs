@@ -1,7 +1,4 @@
-use core::{
-    ffi::c_void,
-    ptr::{self, null_mut}
-};
+use core::{ffi::c_void, ptr::null_mut};
 
 const NULL: *mut c_void = null_mut();
 
@@ -154,7 +151,7 @@ pub unsafe fn grow_aligned(
 /// # Returns
 ///
 /// - On success returns a nonnull pointer to the new allocation.
-/// - If `size == 0`, the old allocation is freed and a [`dangling`](ptr::dangling) pointer is
+/// - If `size == 0`, the old allocation is freed and a [`dangling`](core::ptr::dangling) pointer is
 ///   returned.
 /// - On allocation failure returns `NULL` and does __not__ free the original allocation.
 ///
@@ -243,7 +240,7 @@ extern "C" {
 
     /// Sets `count` bytes at `ptr` to `val`. The returned pointer is a copy of `ptr`.
     ///
-    /// The closest Rust equivalent is [`write_bytes`](ptr::write_bytes).
+    /// The closest Rust equivalent is [`write_bytes`](core::ptr::write_bytes).
     ///
     /// # Safety
     ///
@@ -256,7 +253,7 @@ extern "C" {
     ///
     /// `src` and `dest` must not overlap, or the result stored in `dest` may be unexpected.
     ///
-    /// The closest Rust equivalent is [`copy_nonoverlapping`](ptr::copy_nonoverlapping)
+    /// The closest Rust equivalent is [`copy_nonoverlapping`](core::ptr::copy_nonoverlapping)
     ///
     /// # Safety
     ///
@@ -270,7 +267,7 @@ extern "C" {
     ///
     /// Unlike [`memcpy`], `src` and `dest` may overlap.
     ///
-    /// The closest Rust equivalent is [`copy`](ptr::copy)
+    /// The closest Rust equivalent is [`copy`](core::ptr::copy)
     ///
     /// # Safety
     ///

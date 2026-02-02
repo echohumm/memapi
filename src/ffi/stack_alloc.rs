@@ -3,7 +3,7 @@ use {
     core::{
         ffi::c_void,
         mem::{ManuallyDrop, MaybeUninit},
-        ptr::{self, NonNull}
+        ptr::NonNull
     }
 };
 
@@ -20,7 +20,7 @@ thread_local! {
 /// The allocation is only valid for the duration of the call. If `zero` is true, the allocation
 /// is zeroed.
 ///
-/// If [`layout.size()`](Layout::size) is zero, `f` will receive a [`dangling`](ptr::dangling)
+/// If [`layout.size()`](Layout::size) is zero, `f` will receive a [`dangling`](core::ptr::dangling)
 /// pointer.
 ///
 /// # Errors
@@ -32,7 +32,8 @@ thread_local! {
 /// The caller must ensure:
 /// - `layout` is valid and <code>[layout.size()](Layout::size) + ([layout.align()](Layout::align) -
 ///   1)</code> will not exceed the stack allocation limit.
-/// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](ptr::dangling) pointer.
+/// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](core::ptr::dangling)
+///   pointer.
 /// - `f` must initialize `out` before returning.
 /// - On Rust versions below `1.71` with `catch_unwind` disabled, `f` must never unwind.
 pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
@@ -110,7 +111,7 @@ macro_rules! c_ext {
             /// The allocation is only valid for the duration of this call. If `zero` is true, the
             /// allocation is zeroed.
             ///
-            /// If `size == 0`, `cb` receives a [`dangling`](ptr::dangling) pointer.
+            /// If `size == 0`, `cb` receives a [`dangling`](core::ptr::dangling) pointer.
             ///
             /// # Safety
             ///

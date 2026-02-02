@@ -25,21 +25,23 @@ fn main() {
 
         #[cfg(feature = "stack_alloc")]
         {
-            cc::Build::new().file("src/ffi/c/calloca.c").compile("calloca");
+            if let Err(e) = cc::Build::new().file("src/ffi/c/calloca.c").try_compile("calloca") {
+                panic!("failed to compile calloca.c: {}", e);
+            }
         }
 
         return;
     }
 
     for Failure { source, code, msg } in &failures {
-        eprintln!("sp_frp UB test {}:{} failed: {}", source, code, msg);
+        eprintln!("UB test {}:{} failed: {}", source, code, msg);
     }
 
     let example_toolchain = "nightly-x86_64-unknown-linux-gnu 1.91.0 (840b83a10 2025-07-30)";
     let req_info = "please open an issue with your rust toolchain info";
     let get_tc_info = "(`rustup default`, `cargo --version`).";
     panic!(
-        "sp_frp UB checks failed (codes: {:?}).\n{} {}\nexample: {}",
+        "UB checks failed (codes: {:?}).\n{} {}\nexample: {}",
         failures.iter().map(|f| f.code).collect::<Vec<_>>(),
         req_info,
         get_tc_info,

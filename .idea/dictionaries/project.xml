@@ -2,8 +2,10 @@
   <dictionary name="project">
     <words>
       <w>aacfsa</w>
+      <w>alloca</w>
       <w>allocs</w>
       <w>calloc</w>
+      <w>calloca</w>
       <w>echohumm</w>
       <w>mimalloc</w>
       <w>msrv</w>
