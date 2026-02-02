@@ -1,0 +1,46 @@
+name: Run tests
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, nightly, 1.46.0, 1.56.0, 1.64]
+        include:
+          - rust: 1.46.0
+            features: full_msrv
+          - rust: 1.56.0
+            features: full_msrv
+          - rust: 1.64
+            features: full
+          - rust: stable
+            features: full
+          - rust: nightly
+            features: full_nightly
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: ${{ matrix.rust == 'nightly' && 'miri' || '' }}
+
+      - name: Run all tests
+        run: cargo +${{ matrix.rust }} test --verbose --features ${{ matrix.features }}
+
+      - name: Run Miri
+        if: matrix.rust == 'nightly'
+        run: cargo +${{ matrix.rust }} miri test --verbose --features ${{ matrix.features }}
