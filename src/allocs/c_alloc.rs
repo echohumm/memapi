@@ -26,6 +26,8 @@ fn pad_then_alloc(
     )
 }
 
+// TODO: we should use the builtin realloc if align <= guaranteed align
+
 #[cfg_attr(miri, track_caller)]
 unsafe fn pad_then_grow(
     ptr: NonNull<u8>,
@@ -87,6 +89,7 @@ unsafe fn pad_then_realloc(
 /// Note that layouts passed to this allocator's allocation methods will have their size and
 /// alignment rounded up to meet C's [`c_alloc`] requirements. See
 /// [`Layout::to_aligned_alloc_compatible`] for details.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CAlloc;
 
 impl Alloc for CAlloc {

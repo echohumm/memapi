@@ -2,9 +2,36 @@ use core::{ffi::c_void, ptr::null_mut};
 
 const NULL: *mut c_void = null_mut();
 
+/// Copies `size` bytes from `old_ptr` to `ptr` when `ptr` is non-null, then deallocates `old_ptr`.
+///
+/// If `ptr` is `NULL`, this is a no-op and `old_ptr` is not freed.
+///
+/// # Safety
+///
+/// - `old_ptr` must point to a C allocation of at least `size` bytes.
+/// - `ptr` must point to an allocation of at least `size` bytes.
+pub unsafe fn try_move(ptr: *mut c_void, old_ptr: *mut c_void, size: usize) {
+    if ptr != NULL {
+        // SAFETY: `ptr` validated nonnull, caller guarantees `old_ptr` is valid. caller guarantees
+        // `size` is <= size of allocation at `ptr` and <= size of allocation at `old_ptr`,
+        // so copying that many bytes is safe.
+        unsafe {
+            memcpy(ptr, old_ptr, size);
+        }
+        // SAFETY: caller guarantees that `old_ptr` is valid
+        unsafe {
+            c_dealloc(old_ptr);
+        }
+    }
+}
+
 /// Allocates `size` bytes with at least `align` alignment.
 ///
 /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
+///
+/// On non-Windows platforms this forwards to `aligned_alloc`, which requires `align` to be a
+/// power of two and a multiple of `size_of::<*mut c_void>()`, and `size` to be a multiple of
+/// `align`.
 ///
 /// # Returns
 ///
@@ -32,7 +59,7 @@ pub fn c_alloc(align: usize, size: usize) -> *mut c_void {
 /// # Safety
 ///
 /// The caller must ensure:
-/// - `ptr` points to the start of a valid allocation returned by this allocator.
+/// - `ptr` points to the start of a valid allocation returned by this allocator, or is `NULL`.
 /// - `ptr` has not yet been deallocated.
 pub unsafe fn c_dealloc(ptr: *mut c_void) {
     #[cfg(windows)]
@@ -45,7 +72,7 @@ pub unsafe fn c_dealloc(ptr: *mut c_void) {
     }
 }
 
-/// Allocate `size` bytes with at least `align` alignment and zero the allocation.
+/// Allocates `size` bytes with at least `align` alignment and zeroes the allocation.
 ///
 /// # Returns
 ///
@@ -76,7 +103,7 @@ pub unsafe fn c_zalloc(align: usize, size: usize) -> *mut c_void {
     ptr
 }
 
-/// Grow an existing allocation.
+/// Grows an existing allocation.
 ///
 /// Allocates a new block of `size` bytes with at least `align` alignment, copies `old_size`
 /// bytes from `old_ptr` into the new block, frees the old block, and returns the new pointer.
@@ -90,7 +117,7 @@ pub unsafe fn c_zalloc(align: usize, size: usize) -> *mut c_void {
 ///
 /// # Safety
 ///
-/// The caller must ensure
+/// The caller must ensure:
 /// - `old_ptr` was allocated by this allocator and is valid for reads of `old_size` bytes.
 /// - `old_size` equals the size of the allocation requested at `old_ptr`.
 /// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
@@ -107,24 +134,16 @@ pub unsafe fn grow_aligned(
     // SAFETY: requirements are passed on to the caller
     let ptr = unsafe { alloc(align, size) };
 
-    // if successful, copy data to new pointer, then free old pointer
-    if ptr != NULL && old_ptr != NULL {
-        // SAFETY: `ptr` and `old_ptr` are nonnull. caller guarantees `old_size < size`, so
-        // copying that  many bytes is safe as `ptr` points to an allocation of at
-        // least `size` bytes.
-        unsafe {
-            memcpy(ptr, old_ptr, old_size);
-        }
-        // SAFETY: caller guarantees that `old_ptr` is valid
-        unsafe {
-            c_dealloc(old_ptr);
-        }
+    // if successful, move data to new pointer
+    // SAFETY: requirements are passed on to the caller
+    unsafe {
+        try_move(ptr, old_ptr, old_size);
     }
 
     ptr
 }
 
-/// Shrink an existing allocation.
+/// Shrinks an existing allocation.
 ///
 /// Allocates a new block of `size` bytes with at least `align` alignment, copies `size` bytes
 /// from `old_ptr` into the new block, frees the old block, and returns the new pointer.
@@ -132,9 +151,9 @@ pub unsafe fn grow_aligned(
 /// # Returns
 ///
 /// - On success returns a nonnull pointer to the new allocation.
-/// - If `size == 0`, the old allocation is freed and `NULL` is returned.
-/// - On allocation failure returns `NULL` and does **not** free the original allocation (unless
-///   `size == 0`, which already frees).
+/// - If `size == 0`, the old allocation is freed and a [`dangling`](core::ptr::dangling) pointer is
+///   returned.
+/// - On allocation failure returns `NULL` and does __not__ free the original allocation.
 ///
 /// # Safety
 ///
@@ -149,31 +168,23 @@ pub unsafe fn shrink_aligned(
     align: usize,
     size: usize // a memset-ing alloc here is useless, as it will just be overwritten anyway.
 ) -> *mut c_void {
-    // fast path if size is 0, just free and return null
+    // fast path if size is 0, just free and return dangling
     if size == 0 {
         // SAFETY: caller guarantees that `old_ptr` is valid
         unsafe {
             c_dealloc(old_ptr);
         }
-        return NULL;
+        return align as *mut c_void;
     }
 
     // allocate new aligned memory
     // SAFETY: requirements are passed on to the caller
     let ptr = unsafe { c_alloc(align, size) };
 
-    // if successful, copy data to new pointer, then free old pointer
-    if ptr != NULL && old_ptr != NULL {
-        // SAFETY: `ptr` and `old_ptr` are nonnull. caller guarantees `size <= old_size`, so
-        // copying that many bytes is safe as `ptr` points to an allocation of at
-        // least `size` bytes.
-        unsafe {
-            memcpy(ptr, old_ptr, size);
-        }
-        // SAFETY: caller guarantees that `old_ptr` is valid
-        unsafe {
-            c_dealloc(old_ptr);
-        }
+    // if successful, move data to new pointer
+    // SAFETY: requirements are passed on to the caller
+    unsafe {
+        try_move(ptr, old_ptr, size);
     }
 
     ptr
@@ -183,8 +194,12 @@ pub unsafe fn shrink_aligned(
 extern "C" {
     /// Allocates `size` bytes.
     ///
-    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the layout
+    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the `layout`
     /// parameter's alignment being <code>[align_of]::\<usize\>()</code>
+    ///
+    /// # Safety
+    ///
+    /// This function is safe to call but may return `NULL` if allocation fails, or `size` is 0.
     pub fn malloc(size: usize) -> *mut c_void;
 
     #[cfg(not(windows))]
@@ -212,13 +227,12 @@ extern "C" {
     /// # Safety
     ///
     /// The caller must ensure:
-    /// - `ptr` points to the start of a valid allocation returned by this allocator
-    /// - `ptr` has not yet been deallocated
+    /// - `ptr` points to the start of a valid allocation returned by this allocator _or_ is `NULL`.
+    /// - `ptr` has not yet been deallocated.
     pub fn free(ptr: *mut c_void);
 
     #[cfg(windows)]
-    /// Windows version of [`aligned_alloc`]. I don't know the difference and am too lazy to
-    /// read Windows docs.
+    /// Windows version of [`aligned_alloc`].
     pub fn _aligned_malloc(size: usize, alignment: usize) -> *mut c_void;
     #[cfg(windows)]
     /// Windows version of [`free`] specifically for memory returned by [`_aligned_malloc`].
@@ -227,19 +241,38 @@ extern "C" {
     /// Sets `count` bytes at `ptr` to `val`. The returned pointer is a copy of `ptr`.
     ///
     /// The closest Rust equivalent is [`write_bytes`](core::ptr::write_bytes).
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - `ptr` points to `count` valid bytes.
+    /// - `val` contains a value less than [`u8::MAX`].
     pub fn memset(ptr: *mut c_void, val: i32, count: usize) -> *mut c_void;
 
     /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
     ///
-    /// `src` and `dest` may not overlap, or the result stored in `dest` may be unexpected.
+    /// `src` and `dest` must not overlap, or the result stored in `dest` may be unexpected.
     ///
     /// The closest Rust equivalent is [`copy_nonoverlapping`](core::ptr::copy_nonoverlapping)
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - `src` points to a valid block of memory of at least `count` bytes.
+    /// - `dest` points to a valid block of memory of at least `count` bytes.
+    /// - `src` and `dest` do not overlap.
     pub fn memcpy(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 
     /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
     ///
-    /// `src` and `dest` may overlap.
+    /// Unlike [`memcpy`], `src` and `dest` may overlap.
     ///
     /// The closest Rust equivalent is [`copy`](core::ptr::copy)
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure:
+    /// - `src` points to a valid block of memory of at least `count` bytes.
+    /// - `dest` points to a valid block of memory of at least `count` bytes.
     pub fn memmove(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 }

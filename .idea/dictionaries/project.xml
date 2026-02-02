@@ -2,15 +2,19 @@
   <dictionary name="project">
     <words>
       <w>aacfsa</w>
+      <w>allocs</w>
       <w>echohumm</w>
       <w>mimalloc</w>
       <w>msrv</w>
+      <w>mutalloc</w>
       <w>nonpow</w>
       <w>oserr</w>
       <w>ralloc</w>
       <w>rezalloc</w>
+      <w>sysalloc</w>
       <w>taac</w>
       <w>varsized</w>
+      <w>verdef</w>
       <w>zalloc</w>
       <w>zgrow</w>
     </words>

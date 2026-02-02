@@ -12,4 +12,4 @@ pub use self::alloc::*;
 /// This includes marker traits, type properties, and miscellaneous data-handling traits.
 pub mod data;
 
-pub(super) mod helpers;
+#[doc(hidden)] pub mod helpers;

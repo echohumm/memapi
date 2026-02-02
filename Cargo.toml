@@ -95,6 +95,11 @@ name = "alc"
 path = "tests/alloc.rs"
 
 [[test]]
+name = "malc"
+path = "tests/alloc_mut.rs"
+required-features = ["alloc_mut_traits"]
+
+[[test]]
 name = "stk"
 path = "tests/stack_alloc.rs"
 required-features = ["stack_alloc"]

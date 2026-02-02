@@ -47,14 +47,7 @@ pub trait Alloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        let res = self.alloc(layout);
-        if let Ok(p) = res {
-            // SAFETY: alloc returns at least layout.size() allocated bytes
-            unsafe {
-                ptr::write_bytes(p.as_ptr(), 0, layout.size());
-            }
-        }
-        res
+        zalloc!(self, alloc, layout)
     }
 }
 
@@ -449,26 +442,28 @@ macro_rules! impl_alloc_ref {
 impl_alloc_ref! { &A, alloc::boxed::Box<A>, alloc::rc::Rc<A>, alloc::sync::Arc<A> }
 
 #[cfg(feature = "std")]
+macro_rules! sysalloc {
+    ($self:ident, $alloc:ident, $layout:ident) => {
+        crate::helpers::null_q_dyn_zsl_check(
+            $layout,
+            // SAFETY: System::$alloc is only called after the layout is verified non-zero-sized.
+            |layout| unsafe { alloc::alloc::GlobalAlloc::$alloc($self, layout.to_stdlib()) }
+        )
+    };
+}
+
+#[cfg(feature = "std")]
 impl Alloc for std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        crate::helpers::null_q_dyn_zsl_check(
-            layout,
-            // SAFETY: System::alloc is only called after the layout is verified non-zero-sized.
-            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc(self, layout.to_stdlib()) }
-        )
+        sysalloc!(self, alloc, layout)
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        crate::helpers::null_q_dyn_zsl_check(
-            layout,
-            // SAFETY: System::alloc_zeroed is only called after the layout is verified
-            //  non-zero-sized.
-            |layout| unsafe { alloc::alloc::GlobalAlloc::alloc_zeroed(self, layout.to_stdlib()) }
-        )
+        sysalloc!(self, alloc_zeroed, layout)
     }
 }
 #[cfg(feature = "std")]

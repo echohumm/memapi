@@ -41,10 +41,6 @@
 // TODO: consider behavior of all allocation methods in all possible cases for all allocators and
 //  make sure they match and make sense
 
-// TODO: split crate into smaller crates (memapi-jemalloc, memapi-mimalloc, memapi-std (Vec and
-//  stuff), etc.)  (removed stuff is stuff which would go in new crates)
-//  a lot of helpers would be good to have in another crate too, like .*AllocGuard, checked_op, etc.
-
 extern crate alloc;
 extern crate core;
 
@@ -79,6 +75,19 @@ macro_rules! tri {
             Err(_) => return Err($err)
         }
     }
+}
+
+macro_rules! zalloc {
+    ($self:ident, $alloc:ident, $layout:ident) => {{
+        let res = $self.$alloc($layout);
+        if let Ok(p) = res {
+            // SAFETY: alloc returns at least layout.size() allocated bytes
+            unsafe {
+                ptr::write_bytes(p.as_ptr(), 0, $layout.size());
+            }
+        }
+        res
+    }};
 }
 
 /// The library's main traits.

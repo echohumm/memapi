@@ -7,9 +7,9 @@ use {
 ///
 /// # WARNING
 ///
-/// This is experimental. The C code and ffi backing this is custom, and I don't know C so this may
-/// or may not work. As far as I can tell, it works, but use at your own risk until I have properly
-/// validated this is fine.
+/// This is experimental. The C code and ffi backing this are custom, and I don't know C, so this
+/// may or may not work. As far as I can tell, it works, but use at your own risk until I have
+/// properly validated this is fine.
 ///
 /// # Note
 ///
@@ -25,6 +25,7 @@ use {
 ///   \- 1)</code> bytes on the stack will not cause a stack overflow.
 /// - if compiling with a Rust version below `1.71` and the `catch_unwind` feature is disabled, the
 ///   `with_mem` function passed to allocation methods must never unwind.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StackAlloc;
 
 // TODO: clean up the whole alloca implementation

@@ -206,8 +206,6 @@ fn from_size_align(c: &mut Criterion) {
 
     group.bench_function("valid_unchecked", |c| {
         c.iter(|| {
-            // SAFETY: the input is known to be valid; even if it wasn't, this only causes UB if the
-            // layout is used, and it isn't.
             let _ = black_box(unsafe {
                 Layout::from_size_align_unchecked(black_box(valid.0), black_box(valid.1))
             });

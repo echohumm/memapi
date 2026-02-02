@@ -7,7 +7,11 @@ use {
         Realloc,
         Shrink,
         error::Error,
-        traits::helpers::{Bytes, default_dealloc_panic}
+        traits::helpers::{
+            Bytes,
+            alloc_mut::{grow_mut, ralloc_mut, shrink_unchecked_mut},
+            default_dealloc_panic
+        }
     },
     core::{
         cmp::Ordering,
@@ -54,14 +58,7 @@ pub trait AllocMut {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        let res = self.alloc_mut(layout);
-        if let Ok(p) = res {
-            // SAFETY: alloc_mut returns at least layout.size() allocated bytes
-            unsafe {
-                ptr::write_bytes(p.as_ptr(), 0, layout.size());
-            }
-        }
-        res
+        zalloc!(self, alloc_mut, layout)
     }
 }
 
@@ -372,90 +369,6 @@ pub trait FullAllocMut: ReallocMut + GrowMut + ShrinkMut + AllocMut + DeallocMut
 
 impl<A: AllocMut + DeallocMut> BasicAllocMut for A {}
 impl<A: ReallocMut + GrowMut + ShrinkMut + AllocMut + DeallocMut> FullAllocMut for A {}
-
-// TODO: dedup with normal helpers
-
-#[cfg_attr(miri, track_caller)]
-unsafe fn grow_mut<A: GrowMut + ?Sized>(
-    a: &mut A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout,
-    b: Bytes
-) -> Result<NonNull<u8>, Error> {
-    match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => grow_unchecked_mut(a, ptr, old_layout, new_layout, b),
-        Ordering::Equal => {
-            if new_layout.align() > old_layout.align() {
-                grow_unchecked_mut(a, ptr, old_layout, new_layout, b)
-            } else {
-                Ok(ptr)
-            }
-        }
-        Ordering::Greater => Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()))
-    }
-}
-
-#[allow(clippy::needless_pass_by_value)]
-#[cfg_attr(miri, track_caller)]
-unsafe fn grow_unchecked_mut<A: GrowMut + ?Sized>(
-    a: &mut A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout,
-    b: Bytes
-) -> Result<NonNull<u8>, Error> {
-    let old_size = old_layout.size();
-    let new_ptr = match b {
-        Bytes::Uninitialized => tri!(do a.alloc_mut(new_layout)),
-        Bytes::Zeroed => tri!(do a.zalloc_mut(new_layout))
-    };
-
-    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_size);
-    if old_size != 0 {
-        a.dealloc_mut(ptr, old_layout);
-    }
-
-    Ok(new_ptr)
-}
-
-#[cfg_attr(miri, track_caller)]
-unsafe fn shrink_unchecked_mut<A: ShrinkMut + ?Sized>(
-    a: &mut A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout
-) -> Result<NonNull<u8>, Error> {
-    let new_ptr = tri!(do a.alloc_mut(new_layout));
-
-    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
-    if old_layout.is_nonzero_sized() {
-        a.dealloc_mut(ptr, old_layout);
-    }
-
-    Ok(new_ptr)
-}
-
-#[cfg_attr(miri, track_caller)]
-unsafe fn ralloc_mut<A: ReallocMut + ?Sized>(
-    a: &mut A,
-    ptr: NonNull<u8>,
-    old_layout: Layout,
-    new_layout: Layout,
-    b: Bytes
-) -> Result<NonNull<u8>, Error> {
-    match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => grow_unchecked_mut(a, ptr, old_layout, new_layout, b),
-        Ordering::Equal => {
-            if new_layout.align() > old_layout.align() {
-                grow_unchecked_mut(a, ptr, old_layout, new_layout, b)
-            } else {
-                Ok(ptr)
-            }
-        }
-        Ordering::Greater => shrink_unchecked_mut(a, ptr, old_layout, new_layout)
-    }
-}
 
 impl<A: Alloc + ?Sized> AllocMut for A {
     #[cfg_attr(miri, track_caller)]

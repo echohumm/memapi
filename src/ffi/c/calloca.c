@@ -26,17 +26,16 @@ void c_alloca(
         // TODO: ideally we ignore user's alignment request if the platform's guaranteed align is >=
         size_t m1 = align - 1;
         size_t alloc_size = size + m1;
-#ifdef _MSC_VER
-        uint8_t *base = _alloca(alloc_size);
-#else
-        uint8_t *base = alloca(alloc_size);
-#endif
+        #ifdef _MSC_VER
+            uint8_t *base = _alloca(alloc_size);
+        #else
+            uint8_t *base = alloca(alloc_size);
+        #endif
         ptr = (uint8_t*)(((size_t)base + m1) & ~m1);
         if (zero) {
             memset(ptr, 0, size);
         }
     }
 
-    // well, that was an annoying bug..
     callback(closure, ptr, out);
 }
