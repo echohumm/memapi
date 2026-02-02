@@ -39,8 +39,8 @@
 //! - `c_alloc`: C `aligned_alloc`-style allocator ([`c_alloc`])
 //! - `stack_alloc`: `alloca`-based allocator ([`stack_alloc`])
 //! - `c_str`: enables `CStr`-specific data traits in `no_std` (MSRV: 1.64)
-//! - `metadata`: enables `core::ptr::Pointee` metadata support on nightly
-//! - `sized_hierarchy`: enables `core::marker::MetaSized` support on nightly
+//! - `metadata`: enables [`core::ptr::Pointee`] metadata support on nightly
+//! - `sized_hierarchy`: enables [`core::marker::MetaSized`] support on nightly
 //! - `full`, `full_nightly`: convenience bundles for docs/tests
 
 #![allow(unknown_lints)]
@@ -239,81 +239,70 @@ default_alloc_impl!(DefaultAlloc);
 #[cfg(all(nightly, not(feature = "no_alloc")))]
 /// The primary module for when `nightly` is enabled.
 pub(crate) mod nightly {
-    use crate::{Layout, StdLayout};
+    use {
+        crate::{Layout, StdLayout},
+        alloc::alloc::{AllocError, Allocator, Global},
+        core::ptr::NonNull
+    };
 
     // SAFETY: DefaultAlloc's allocated memory isn't deallocated until a deallocation method is
     //  called. as a ZST allocator, copying/cloning it doesn't change behaviour or invalidate
     //  allocations.
-    unsafe impl alloc::alloc::Allocator for crate::DefaultAlloc {
+    unsafe impl Allocator for crate::DefaultAlloc {
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        fn allocate(
-            &self,
-            layout: StdLayout
-        ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
-            alloc::alloc::Allocator::allocate(&alloc::alloc::Global, layout)
+        fn allocate(&self, layout: StdLayout) -> Result<NonNull<[u8]>, AllocError> {
+            Allocator::allocate(&Global, layout)
         }
 
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        fn allocate_zeroed(
-            &self,
-            layout: StdLayout
-        ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
-            alloc::alloc::Allocator::allocate_zeroed(&alloc::alloc::Global, layout)
+        fn allocate_zeroed(&self, layout: StdLayout) -> Result<NonNull<[u8]>, AllocError> {
+            Allocator::allocate_zeroed(&Global, layout)
         }
 
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        unsafe fn deallocate(&self, ptr: core::ptr::NonNull<u8>, layout: StdLayout) {
-            alloc::alloc::Allocator::deallocate(&alloc::alloc::Global, ptr.cast(), layout);
+        unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: StdLayout) {
+            Allocator::deallocate(&Global, ptr.cast(), layout);
         }
 
         #[cfg_attr(miri, track_caller)]
         #[inline]
         unsafe fn grow(
             &self,
-            ptr: core::ptr::NonNull<u8>,
+            ptr: NonNull<u8>,
             old_layout: StdLayout,
             new_layout: StdLayout
-        ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
-            alloc::alloc::Allocator::grow(&alloc::alloc::Global, ptr.cast(), old_layout, new_layout)
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            Allocator::grow(&Global, ptr.cast(), old_layout, new_layout)
         }
 
         #[cfg_attr(miri, track_caller)]
         #[inline]
         unsafe fn grow_zeroed(
             &self,
-            ptr: core::ptr::NonNull<u8>,
+            ptr: NonNull<u8>,
             old_layout: StdLayout,
             new_layout: StdLayout
-        ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
-            alloc::alloc::Allocator::grow_zeroed(
-                &alloc::alloc::Global,
-                ptr.cast(),
-                old_layout,
-                new_layout
-            )
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            Allocator::grow_zeroed(&Global, ptr.cast(), old_layout, new_layout)
         }
 
         #[cfg_attr(miri, track_caller)]
         #[inline]
         unsafe fn shrink(
             &self,
-            ptr: core::ptr::NonNull<u8>,
+            ptr: NonNull<u8>,
             old_layout: StdLayout,
             new_layout: StdLayout
-        ) -> Result<core::ptr::NonNull<[u8]>, alloc::alloc::AllocError> {
-            alloc::alloc::Allocator::shrink(
-                &alloc::alloc::Global,
-                ptr.cast(),
-                old_layout,
-                new_layout
-            )
+        ) -> Result<NonNull<[u8]>, AllocError> {
+            Allocator::shrink(&Global, ptr.cast(), old_layout, new_layout)
         }
     }
 
-    default_alloc_impl!(alloc::alloc::Global);
+    default_alloc_impl!(Global);
 
-    // TODO: either Allocator for A: Alloc or vice versa, not sure which. i think i removed that at some point but i can't remember why.
+    // TODO: either Allocator for A: Alloc or vice versa, not sure which. i think i removed that at
+    // some point but i can't remember why.
 }

@@ -44,7 +44,7 @@ fn main() -> Result<(), memapi2::error::Error> {
     let ptr = alloc.alloc(layout)?;
     unsafe {
         core::ptr::write_bytes(ptr.as_ptr(), 0xCD, layout.size());
-        alloc.dealloc(ptr, layout);
+        alloc.try_dealloc(ptr, layout)?;
     }
 
     Ok(())

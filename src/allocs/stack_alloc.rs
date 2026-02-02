@@ -1,6 +1,6 @@
 use {
     crate::{Layout, error::Error, ffi::stack_alloc::with_alloca},
-    core::ptr::NonNull
+    core::ptr::{self, NonNull}
 };
 
 // TODO: make this faster, make sure it works in all situations
@@ -40,7 +40,7 @@ impl crate::AllocTemp for StackAlloc {
     ) -> Result<R, Error> {
         // TODO: remove function arg
         with_alloca(layout, false, |ptr, uninit: *mut R| {
-            uninit.write(with_mem(ptr));
+            ptr::write(uninit, with_mem(ptr));
         })
     }
 
@@ -52,7 +52,7 @@ impl crate::AllocTemp for StackAlloc {
         with_mem: F
     ) -> Result<R, Error> {
         with_alloca(layout, true, |ptr, uninit: *mut R| {
-            uninit.write(with_mem(ptr));
+            ptr::write(uninit, with_mem(ptr));
         })
     }
 }

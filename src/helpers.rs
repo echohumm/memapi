@@ -203,7 +203,8 @@ pub unsafe fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
     (&*(ptr.as_ptr() as *const [T])).len()
 }
 
-/// Creates a dangling, zero-length, [`NonNull`] pointer with the proper alignment.
+/// Creates a [`dangling`](ptr::dangling), zero-length, [`NonNull`] pointer with the proper
+/// alignment.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[rustversion::attr(since(1.61), const)]
@@ -213,7 +214,8 @@ pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
     varsized_nonnull_from_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
 }
 
-/// Creates a dangling, zero-length [`NonNull`] pointer with the proper alignment.
+/// Creates a [`dangling`](ptr::dangling), zero-length [`NonNull`] pointer with the proper
+/// alignment.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[rustversion::attr(since(1.61), const)]
@@ -355,8 +357,8 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
     null_q(ptr, layout)
 }
 
-/// Checks layout for being zero-sized, returning a dangling pointer if it is, otherwise attempting
-/// allocation using `f(layout)`.
+/// Checks layout for being zero-sized, returning a [`dangling`](ptr::dangling) pointer if it is,
+/// otherwise attempting allocation using `f(layout)`.
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,

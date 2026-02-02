@@ -25,7 +25,8 @@ use {
 pub trait AllocMut {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
-    /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
+    /// Returns a [`dangling`](ptr::dangling) pointer  if <code>[layout.size()](Layout::size) ==
+    /// 0</code>.
     ///
     /// # Errors
     ///
@@ -42,7 +43,8 @@ pub trait AllocMut {
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
     ///
-    /// Returns a dangling pointer if <code>[layout.size()](Layout::size) == 0</code>.
+    /// Returns a [`dangling`](ptr::dangling) pointer  if <code>[layout.size()](Layout::size) ==
+    /// 0</code>.
     ///
     /// # Errors
     ///
@@ -220,7 +222,8 @@ pub trait ShrinkMut: AllocMut + DeallocMut {
     ///
     /// On failure, the original memory will not be deallocated.
     ///
-    /// Returns a dangling pointer if <code>[new_layout.size()](Layout::size) == 0</code>.
+    /// Returns a [`dangling`](ptr::dangling) pointer  if <code>[new_layout.size()](Layout::size) ==
+    /// 0</code>.
     ///
     /// Note that the default implementation simply:
     /// 1. Checks that the new layout is smaller or the same size. If both layouts are the same,
@@ -287,7 +290,8 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
     ///
     /// On failure, the original memory will not be deallocated.
     ///
-    /// Returns a dangling pointer if <code>[new_layout.size()](Layout::size) == 0</code>.
+    /// Returns a [`dangling`](ptr::dangling) pointer  if <code>[new_layout.size()](Layout::size) ==
+    /// 0</code>.
     ///
     /// # Safety
     ///
@@ -324,7 +328,8 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
     ///
     /// On failure, the original memory will not be deallocated.
     ///
-    /// Returns a dangling pointer if <code>[new_layout.size()](Layout::size) == 0</code>.
+    /// Returns a [`dangling`](ptr::dangling) pointer  if <code>[new_layout.size()](Layout::size) ==
+    /// 0</code>.
     ///
     /// # Safety
     ///

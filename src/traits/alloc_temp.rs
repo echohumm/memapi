@@ -8,7 +8,8 @@ pub trait AllocTemp {
     /// Attempts to allocate a block of memory fitting the given [`Layout`], and calls `with_mem` on
     /// the returned pointer on success.
     ///
-    /// The pointer will be dangling if <code>[layout.size()](Layout::size) == 0</code>.
+    /// The pointer will be [`dangling`](ptr::dangling) if <code>[layout.size()](Layout::size) ==
+    /// 0</code>.
     ///
     /// # Errors
     ///
@@ -34,7 +35,8 @@ pub trait AllocTemp {
     /// Attempts to allocate a block of zeroed memory fitting the given [`Layout`], and calls
     /// `with_mem` on the returned pointer on success.
     ///
-    /// The pointer will be dangling if <code>[layout.size()](Layout::size) == 0</code>.
+    /// The pointer will be [`dangling`](ptr::dangling) if <code>[layout.size()](Layout::size) ==
+    /// 0</code>.
     ///
     /// # Errors
     ///

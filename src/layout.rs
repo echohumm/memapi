@@ -1,14 +1,17 @@
-use crate::{
-    data::type_props::{PtrProps, SizedProps},
-    error::{ArithOp, Error, LayoutErr},
-    helpers::{
-        USIZE_HIGH_BIT,
-        USIZE_MAX_NO_HIGH_BIT,
-        align_up,
-        checked_op,
-        dangling_nonnull,
-        is_multiple_of
-    }
+use {
+    crate::{
+        data::type_props::{PtrProps, SizedProps},
+        error::{ArithOp, Error, LayoutErr},
+        helpers::{
+            USIZE_HIGH_BIT,
+            USIZE_MAX_NO_HIGH_BIT,
+            align_up,
+            checked_op,
+            dangling_nonnull,
+            is_multiple_of
+        }
+    },
+    core::{ptr, ptr::NonNull}
 };
 
 // TODO: check all of these docs, idk how many are correct anymore my head hurts
@@ -134,13 +137,13 @@ impl Layout {
         }
     }
 
-    /// Returns a valid, dangling pointer for this layout's alignment.
+    /// Returns a valid, [`dangling`](ptr::dangling) pointer for this layout's alignment.
     ///
     /// The returned pointer is non-null and correctly aligned for types that use this layout's
     /// alignment but should not be dereferenced.
     #[must_use]
     #[inline]
-    pub const fn dangling(&self) -> core::ptr::NonNull<u8> {
+    pub const fn dangling(&self) -> NonNull<u8> {
         // SAFETY: we validate dangling_nonnull's requirements at construction.
         unsafe { dangling_nonnull(self.align()) }
     }
