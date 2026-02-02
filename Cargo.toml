@@ -80,12 +80,19 @@ rustversion = "1.0.22"
 rustversion = "1.0.22"
 cc = { version = "=1.0.79", optional = true }
 
+
+
 #[dev-dependencies]
 #criterion = "0.8.1"
 #
 #[[bench]]
 #name = "lyt"
 #path = "benches/layout.rs"
+#harness = false
+#
+#[[bench]]
+#name = "alc"
+#path = "benches/alloc.rs"
 #harness = false
 
 

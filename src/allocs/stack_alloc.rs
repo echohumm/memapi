@@ -3,6 +3,8 @@ use {
     core::ptr::NonNull
 };
 
+// TODO: make this faster, make sure it works in all situations
+
 /// An allocator which uses C's `alloca` allocation method.
 ///
 /// # WARNING
@@ -27,8 +29,6 @@ use {
 ///   `with_mem` function passed to allocation methods must never unwind.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StackAlloc;
-
-// TODO: clean up the whole alloca implementation
 
 impl crate::AllocTemp for StackAlloc {
     #[cfg_attr(miri, track_caller)]
