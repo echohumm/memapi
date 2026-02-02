@@ -1,22 +1,47 @@
-//! A small, `no_std`-friendly memory allocation interface for managing raw
-//! buffers, suitable for use in collections.
+//! A small, `no_std`/`no_alloc`-friendly memory allocation interface for managing raw buffers.
 //!
-//! This crate focuses on a minimal API:
-//! - [`Alloc`]: a trait defining basic allocation, zero-allocation, deallocation, and simple
-//!   grow/shrink helpers.
-//! - [`DefaultAlloc`]: a tiny wrapper delegating to the global allocator.
-//! - [`AllocError`]: an error type describing allocation failures.
+//! This crate provides explicit layouts, a split allocator trait stack, and structured errors.
+//! It is `no_std` by default but relies on the `alloc` crate unless `no_alloc` is enabled. Enable
+//! `std` for system allocator integrations and `os_err_reporting` for richer diagnostics.
 //!
-//! Some utilities and marker traits are provided under [`data`]:
-//! - [`PtrProps`](data::type_props::PtrProps)
-//! - [`SizedProps`](data::type_props::SizedProps)
-//! - [`VarSized`](data::type_props::VarSized)
-//! - [`UnsizedCopy`](data::marker::UnsizedCopy)
-//! - [`Thin`](data::marker::Thin)
-
-// TODO: add more tests. ALWAYS MORE TESTS.
-//  for error cases specifically
-//  and benches too
+//! # Core traits
+//! - [`Alloc`], [`Dealloc`], [`Grow`], [`Shrink`], [`Realloc`]
+//! - Convenience aliases: [`BasicAlloc`] and [`FullAlloc`]
+//! - Optional mutable variants (`alloc_mut_traits`): [`AllocMut`], [`DeallocMut`], [`GrowMut`],
+//!   [`ShrinkMut`], [`ReallocMut`], [`BasicAllocMut`], [`FullAllocMut`]
+//! - Optional scoped allocations (`alloc_temp_trait`): [`AllocTemp`]
+//!
+//! # Types and errors
+//! - [`Layout`]: crate layout type (with conversion to/from [`StdLayout`] unles `no_alloc` is
+//!   enabled)
+//! - [`DefaultAlloc`]: default allocator wrapper that delegates to the global allocator
+//! - Errors: [`Error`], [`Cause`], [`LayoutErr`], [`ArithErr`], [`ArithOp`]
+//!
+//! # Data and type utilities
+//! - [`data::type_props`][]: [`SizedProps`](data::type_props::SizedProps),
+//!   [`PtrProps`](data::type_props::PtrProps), [`VarSized`](data::type_props::VarSized),
+//!   [`VarSizedStruct`](data::type_props::VarSizedStruct)
+//! - [`data::marker`]: [`UnsizedCopy`](data::marker::UnsizedCopy), [`Thin`](data::marker::Thin),
+//!   [`SizeMeta`](data::marker::SizeMeta)
+//! - [`helpers`]: alignment, checked arithmetic, and pointer helpers
+//!
+//! # Allocator implementations
+//! - [`DefaultAlloc`] (available unless `no_alloc` is enabled)
+//! - [`std::alloc::System`] when the `std` feature is enabled
+//! - [`c_alloc::CAlloc`] behind the `c_alloc` feature
+//! - [`stack_alloc::StackAlloc`] behind the `stack_alloc` feature
+//!
+//! # Feature flags
+//! - `std`: enables `std` integration (including [`std::alloc::System`])
+//! - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
+//! - `alloc_mut_traits`: mutable allocator trait variants
+//! - `alloc_temp_trait`: scoped/temporary allocation trait
+//! - `c_alloc`: C `aligned_alloc`-style allocator ([`c_alloc`])
+//! - `stack_alloc`: `alloca`-based allocator ([`stack_alloc`])
+//! - `c_str`: enables `CStr`-specific data traits in `no_std` (MSRV: 1.64)
+//! - `metadata`: enables `core::ptr::Pointee` metadata support on nightly
+//! - `sized_hierarchy`: enables `core::marker::MetaSized` support on nightly
+//! - `full`, `full_nightly`: convenience bundles for docs/tests
 
 #![allow(unknown_lints)]
 #![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]

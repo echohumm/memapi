@@ -8,12 +8,14 @@ authors = ["echohumm"]
 description = "A no_std/no-alloc-friendly memory allocation interface for raw buffers, with improved error reporting."
 license = "GPL-3.0 OR MIT"
 repository = "https://github.com/echohumm/memapi"
+readme = "README.md"
 keywords = ["allocator", "no_std", "no_alloc", "memory", "allocation"]
 categories = ["no-std::no-alloc", "memory-management"]
 include = [
     "src/**",
     "build.rs",
     "Cargo.toml",
+    "README.md"
 ]
 build = "build.rs"
 
