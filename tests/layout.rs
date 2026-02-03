@@ -1,7 +1,9 @@
 use {
+    core::mem::{align_of, size_of},
     memapi2::{
         Layout,
-        error::{Error, LayoutErr}
+        error::{Error, LayoutErr},
+        helpers::USIZE_HIGH_BIT
     },
     std::alloc::Layout as StdLayout
 };
@@ -96,4 +98,63 @@ fn repeat_and_repeat_packed() {
     let packed = base.repeat_packed(3).unwrap();
     assert_eq!(packed.size(), 9);
     assert_eq!(packed.align(), 2);
+}
+
+#[test]
+fn array_layout_basic_and_zst() {
+    let l = Layout::array::<u16>(3).unwrap();
+    assert_eq!(l.size(), 6);
+    assert_eq!(l.align(), 2);
+
+    let zst = Layout::array::<()>(10).unwrap();
+    assert_eq!(zst.size(), 0);
+    assert_eq!(zst.align(), 1);
+}
+
+#[test]
+fn array_layout_exceeds_max() {
+    let max = (USIZE_HIGH_BIT - align_of::<u8>()) / size_of::<u8>();
+    let err = Layout::array::<u8>(max + 1).unwrap_err();
+    assert_eq!(err, Error::InvalidLayout(1, 1, LayoutErr::ExceedsMax));
+}
+
+#[test]
+fn layout_for_value_slice() {
+    let data = [10u16, 20, 30];
+    let layout = Layout::for_value(&data[..]);
+    assert_eq!(layout.size(), size_of::<u16>() * data.len());
+    assert_eq!(layout.align(), align_of::<u16>());
+}
+
+#[test]
+fn layout_for_value_raw() {
+    let value = 42u32;
+    let ptr = &value as *const u32;
+    let layout = unsafe { Layout::for_value_raw(ptr) };
+    assert_eq!(layout, Layout::new::<u32>());
+}
+
+#[test]
+fn align_to_multiple_of_rounds_up() {
+    let l = unsafe { Layout::from_size_align_unchecked(30, 8) };
+    let rounded = l.align_to_multiple_of(16).unwrap();
+    assert_eq!(rounded.align(), 16);
+    assert_eq!(rounded.size(), 30);
+
+    let same = rounded.align_to_multiple_of(8).unwrap();
+    assert_eq!(same, rounded);
+}
+
+#[test]
+fn aligned_alloc_compatible_roundtrip() {
+    let original = Layout::from_size_align(10, 1).unwrap();
+    let compatible = original.to_aligned_alloc_compatible().unwrap();
+    let from_fn = Layout::aligned_alloc_compatible_from_size_align(10, 1).unwrap();
+    let ptr_sz = size_of::<usize>();
+
+    assert_eq!(compatible, from_fn);
+    assert!(compatible.align() >= ptr_sz);
+    assert_eq!(compatible.align() % ptr_sz, 0);
+    assert_eq!(compatible.size() % compatible.align(), 0);
+    assert!(compatible.size() >= original.size());
 }

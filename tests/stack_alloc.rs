@@ -12,6 +12,16 @@ fn stack_alloc() {
             unsafe {
                 StackAlloc.alloc_temp(Layout::from_size_align(8, align).unwrap(), |ptr| {
                     if ptr.as_ptr() as usize % align != 0 {
+                        // TODO: investigate this behavior:
+                        // pointer: 0x7fcf2b2fd260 has good align of 32 (need 16)
+                        // pointer: 0x7fcf2b2fd240 has good align of 64 (need 32)
+                        // pointer: 0x7fcf2b2fd240 has good align of 64 (need 64)
+                        // pointer: 0x7fcf2b2fd200 has good align of 512 (need 128)
+                        // pointer: 0x7fcf2b2fd200 has good align of 512 (need 256)
+                        // pointer: 0x7fcf2b2fd200 has good align of 512 (need 512)
+                        // pointer: 0x7fcf2b2fd000 has good align of 4096 (need 1024)
+                        // pointer: 0x7fcf2b2fd000 has good align of 4096 (need 2048)
+                        // pointer: 0x7fcf2b2fd000 has good align of 4096 (need 4096)
                         eprintln!(
                             "pointer: {:p} only has align of {} (need {})",
                             ptr,

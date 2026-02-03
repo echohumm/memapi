@@ -1,17 +1,22 @@
 #![allow(clippy::cast_ptr_alignment)]
 
 use {
-    core::ptr,
+    core::ptr::{self, NonNull},
     memapi2::{
         Alloc,
         Dealloc,
         DefaultAlloc,
         Layout,
-        error::{ArithErr, ArithOp},
+        error::{ArithErr, ArithOp, Error, LayoutErr},
         helpers::{
             align_up,
+            align_up_checked,
             byte_sub,
             checked_op,
+            is_multiple_of,
+            nonnull_slice_from_parts,
+            nonnull_slice_len,
+            null_q_dyn_zsl_check,
             slice_ptr_from_parts_mut,
             varsized_ptr_from_parts_mut
         }
@@ -107,4 +112,46 @@ fn dangling_nonnull_for_alignment() {
     let p = l.dangling();
     let addr = p.as_ptr() as usize;
     assert_eq!(addr % 16, 0);
+}
+
+#[test]
+fn align_up_checked_errors() {
+    assert_eq!(
+        align_up_checked(7, 0).unwrap_err(),
+        Error::InvalidLayout(7, 0, LayoutErr::ZeroAlign)
+    );
+    assert_eq!(
+        align_up_checked(7, 3).unwrap_err(),
+        Error::InvalidLayout(7, 3, LayoutErr::NonPowerOfTwoAlign)
+    );
+}
+
+#[test]
+fn align_up_checked_overflow() {
+    let err = align_up_checked(usize::MAX, 8).unwrap_err();
+    assert_eq!(err, Error::ArithmeticError(ArithErr(usize::MAX, ArithOp::Add, 7)));
+}
+
+#[test]
+fn is_multiple_of_zero_rhs() {
+    assert!(is_multiple_of(0, 0));
+    assert!(!is_multiple_of(1, 0));
+}
+
+#[test]
+fn null_q_dyn_zsl_check_zero_layout() {
+    let layout = Layout::new::<()>();
+    let ptr = null_q_dyn_zsl_check(layout, |_| -> *mut u8 { panic!("unexpected alloc") }).unwrap();
+    assert_eq!(ptr, layout.dangling());
+}
+
+#[test]
+fn nonnull_slice_from_parts_roundtrip() {
+    let mut arr = [1u8, 2, 3];
+    let ptr = unsafe { NonNull::new_unchecked(arr.as_mut_ptr()) };
+    let slice_ptr = nonnull_slice_from_parts(ptr, arr.len());
+    let len = unsafe { nonnull_slice_len(slice_ptr) };
+
+    assert_eq!(len, arr.len());
+    assert_eq!(unsafe { slice_ptr.as_ref() }, &arr);
 }
