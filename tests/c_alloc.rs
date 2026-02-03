@@ -1,4 +1,5 @@
-#![cfg(feature = "c_alloc")]
+// miri is incompatible with windows' _aligned_alloc
+#![cfg(all(feature = "c_alloc", not(all(windows, miri))))]
 
 use {
     memapi2::{

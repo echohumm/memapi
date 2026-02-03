@@ -239,6 +239,9 @@ impl Layout {
         }
     }
 
+    // TODO: try_aligned_alloc_compatible_from_size_align to only return Ok(layout) if the sz and
+    //  aln are already valid
+
     /// Creates a layout with the given size and alignment.
     ///
     /// In debug mode, this will panic if passed an invalid size or alignment.

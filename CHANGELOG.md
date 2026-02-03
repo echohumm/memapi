@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Generic `Error` type in all allocation traits
 
-## [0.9.0] - 2026-02-02
+## [0.9.0] - 2026-02-01
 
 ### Added
 
@@ -24,14 +24,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for `no_std::no_alloc` environments behind `no_alloc` feature
 - README.md and this CHANGELOG.md
 
-### Removed
-
-- `alloc_then` helper
-- `usize_bit` helper
-- `check_ptr_overlap` helper
-- `zsl_check` helper
-- `ZeroSizedLayout(NonNull<u8>)` error in favor of just returning a dangling pointer
-
 ### Changed
 
 - Renamed `round_up_checked` helper to `align_up_checked` to better reflect its purpose
@@ -41,3 +33,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `CAlloc` deallocation behavior with zero-sized layouts
 - `CAlloc` rounding up layout size for compatibility before checking for a zero-sized request
+
+### Removed
+
+- `alloc_then` helper
+- `usize_bit` helper
+- `check_ptr_overlap` helper
+- `zsl_check` helper
+- `ZeroSizedLayout(NonNull<u8>)` error in favor of just returning a dangling pointer
+
+## [0.8.1] - 2026-01-21
+
+### Added
+
+- `CAlloc` for allocation with C's `aligned_alloc`
+- `Layout::to_aligned_alloc_compatible` for rounding a layout to be compatible with `aligned_alloc`
+- `Layout::aligned_alloc_compatible_from_size_align` for creating an `aligned_alloc` compatible
+  layout in one call
+- `Cause::CRoundUp` variant for failures when rounding a layout to be compatible with
+  `aligned_alloc`
+- `Error::Other` variant for generic string errors
+- `Layout::align_to_multiple_of` method
+- `is_multiple_of` const helper with lower MSRV than `<int>::is_multiple_of`
+- `VarSizedStruct` trait primarily to act as a guide for implementing `VarSized` for structs with an
+  unsized tail
+
+### Changed
+
+- Moved `type_props::USIZE_HIGH_BIT`, `type_props::USIZE_MAX_NO_HIGH_BIT`, `type_props::usize_bit`,
+  `type_props::varsized_dangling_nonnull`, `type_props::varsized_dangling_ptr`,
+  `type_props::varsized_nonnull_from_parts`, `type_props::varsized_ptr_from_parts`, and
+  `type_props::varsized_ptr_from_parts_mut` to `helpers` module
+- Renamed `AllocError` to `Error`
+- Renamed `align_up_unchecked` to `align_up` and make it safe, rename `align_up` to
+  `align_up_checked`
+- Made nightly support automatic if a nightly compiler is detected
+
+### Fixed
+
+- layout tests failing due to a too-large alignment
+- `Layout::padding_needed_for` returning `usize::MAX` instead of an error if `align` argument is not
+  a power of two
+- Some `Layout` functions performing size checks on unnecessary values
+
+### Removed
+
+- `RepeatLayoutError` error enum
+- `layout_extend` helper in favor of `Layout::extend` method
+- `ArithErr::TooLargeRhs` variant

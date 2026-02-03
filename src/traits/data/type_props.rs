@@ -261,6 +261,8 @@ pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
     const ALN: usize = Self::SubType::ALN;
 }
 
+// TODO: derive macro/other macros to help implement this would be very useful
+
 #[cfg(not(feature = "metadata"))]
 /// Trait for unsized _structs_ that have a [`VarSized`] tail.
 ///
