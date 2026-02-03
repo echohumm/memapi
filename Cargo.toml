@@ -1,6 +1,6 @@
 [package]
 name = "memapi2"
-version = "0.9.0"
+version = "0.9.1"
 edition = "2018"
 rust-version = "1.46.0"
 authors = ["echohumm"]
