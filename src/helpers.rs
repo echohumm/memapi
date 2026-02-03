@@ -140,7 +140,8 @@ pub fn align_up_checked(v: usize, align: usize) -> Result<usize, Error> {
 ///
 /// # Safety
 ///
-/// The caller must ensure `align` is non-zero.
+/// The caller must ensure `align` is non-zero. For proper use, `align` should also be a power of
+/// two.
 #[must_use]
 #[inline]
 pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {

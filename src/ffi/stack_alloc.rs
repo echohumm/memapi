@@ -88,12 +88,19 @@ macro_rules! c_cb {
             }
             #[cfg(feature = "catch_unwind")]
             {
-                let f = ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>());
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    f(NonNull::new_unchecked(ptr), out.cast());
-                }));
-                if result.is_err() {
-                    UNWIND.with(|v| *v.borrow_mut() = true);
+                if $ffi == "C-unwind" {
+                    ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>())(
+                        NonNull::new_unchecked(ptr),
+                        out.cast()
+                    );
+                } else {
+                    let f = ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>());
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        f(NonNull::new_unchecked(ptr), out.cast());
+                    }));
+                    if result.is_err() {
+                        UNWIND.with(|v| *v.borrow_mut() = true);
+                    }
                 }
             }
         }
