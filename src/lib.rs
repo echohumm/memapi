@@ -101,7 +101,13 @@ macro_rules! tri {
             Ok(s) => s,
             Err(_) => return Err($err)
         }
-    }
+    };
+    (cmap($err:expr) from $e:ty, $($fallible:expr)+) => {
+        match $($fallible)+ {
+            Ok(s) => s,
+            Err(_) => return Err(<$e>::from($err))
+        }
+    };
 }
 
 macro_rules! zalloc {
@@ -153,6 +159,8 @@ macro_rules! default_alloc_impl {
     ($ty:ty) => {
         #[cfg(not(feature = "no_alloc"))]
         impl crate::Alloc for $ty {
+            type Error = crate::error::Error;
+
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             fn alloc(&self, layout: Layout) -> Result<core::ptr::NonNull<u8>, crate::error::Error> {

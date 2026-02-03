@@ -12,6 +12,7 @@ MSRV: 1.46.0 (some features require newer compilers or nightly; see Feature flag
 - Split allocator traits: `Alloc`, `Dealloc`, `Grow`, `Shrink`, `Realloc`, plus `BasicAlloc` and
   `FullAlloc` aliases
 - Custom `Layout` type with conversion to/from `alloc::alloc::Layout` (unless `no_alloc` is on)
+- Generic `Error` types for allocation traits
 - Structured error reporting via `Error` and `Cause`, with optional OS error capture
 - Optional allocator implementations: `DefaultAlloc`, `std::alloc::System`, `c_alloc::CAlloc`,
   `stack_alloc::StackAlloc` (experimental)

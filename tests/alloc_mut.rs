@@ -11,6 +11,8 @@ use {
 struct MutOnlyAlloc;
 
 impl AllocMut for MutOnlyAlloc {
+    type Error = Error;
+
     #[inline]
     fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
         null_q_dyn_zsl_check(

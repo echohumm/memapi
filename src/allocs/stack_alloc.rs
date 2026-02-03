@@ -31,6 +31,8 @@ use {
 pub struct StackAlloc;
 
 impl crate::AllocTemp for StackAlloc {
+    type Error = Error;
+
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(

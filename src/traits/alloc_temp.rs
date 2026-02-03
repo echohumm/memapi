@@ -1,10 +1,16 @@
 use {
     crate::{BasicAlloc, Layout, error::Error},
-    core::{ptr, ptr::NonNull}
+    core::{
+        fmt::{Debug, Display},
+        ptr::{self, NonNull}
+    }
 };
 
 /// A memory allocation interface which may only be able to provide temporary, scoped allocations.
 pub trait AllocTemp {
+    /// The error type returned by this allocator.
+    type Error: From<Error> + Debug + Display;
+
     /// Attempts to allocate a block of memory fitting the given [`Layout`], and calls `with_mem` on
     /// the returned pointer on success.
     ///
@@ -13,7 +19,7 @@ pub trait AllocTemp {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Error`].
+    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
@@ -30,7 +36,7 @@ pub trait AllocTemp {
         &self,
         layout: Layout,
         with_mem: F
-    ) -> Result<R, Error>;
+    ) -> Result<R, Self::Error>;
 
     /// Attempts to allocate a block of zeroed memory fitting the given [`Layout`], and calls
     /// `with_mem` on the returned pointer on success.
@@ -40,7 +46,7 @@ pub trait AllocTemp {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Error`].
+    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
@@ -58,7 +64,7 @@ pub trait AllocTemp {
         &self,
         layout: Layout,
         with_mem: F
-    ) -> Result<R, Error> {
+    ) -> Result<R, Self::Error> {
         self.alloc_temp(layout, |ptr: NonNull<u8>| {
             ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
             with_mem(ptr)
@@ -67,13 +73,15 @@ pub trait AllocTemp {
 }
 
 impl<A: BasicAlloc> AllocTemp for A {
+    type Error = A::Error;
+
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
-    ) -> Result<R, Error> {
+    ) -> Result<R, A::Error> {
         alloc_temp_with(self, layout, with_mem, A::alloc)
     }
 
@@ -83,17 +91,22 @@ impl<A: BasicAlloc> AllocTemp for A {
         &self,
         layout: Layout,
         with_mem: F
-    ) -> Result<R, Error> {
+    ) -> Result<R, A::Error> {
         alloc_temp_with(self, layout, with_mem, A::zalloc)
     }
 }
 
-unsafe fn alloc_temp_with<A: BasicAlloc, R, F: FnOnce(NonNull<u8>) -> R>(
+unsafe fn alloc_temp_with<
+    A: BasicAlloc<Error = E>,
+    R,
+    E: From<Error> + Debug + Display,
+    F: FnOnce(NonNull<u8>) -> R
+>(
     a: &A,
     layout: Layout,
     f: F,
-    alloc: fn(&A, Layout) -> Result<NonNull<u8>, Error>
-) -> Result<R, Error> {
+    alloc: fn(&A, Layout) -> Result<NonNull<u8>, E>
+) -> Result<R, E> {
     match alloc(a, layout) {
         Ok(ptr) => {
             let ret = f(ptr);

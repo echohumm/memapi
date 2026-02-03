@@ -2,11 +2,12 @@ use {
     crate::{Grow, Layout, Realloc, Shrink, error::Error},
     core::{
         cmp::Ordering,
+        fmt::{Debug, Display},
         ptr::{self, NonNull}
     }
 };
 
-pub fn default_dealloc_panic(ptr: NonNull<u8>, layout: Layout, e: Error) -> ! {
+pub fn default_dealloc_panic<E: Display>(ptr: NonNull<u8>, layout: Layout, e: E) -> ! {
     panic!("deallocation of block at {:p} with layout {:?} failed: {}", ptr.as_ptr(), layout, e)
 }
 
@@ -14,35 +15,37 @@ pub fn default_dealloc_panic(ptr: NonNull<u8>, layout: Layout, e: Error) -> ! {
 
 //noinspection DuplicatedCode
 #[cfg_attr(miri, track_caller)]
-pub unsafe fn grow<A: Grow + ?Sized>(
+pub unsafe fn grow<A: Grow<Error = E> + ?Sized, E: From<Error> + Debug + Display>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
     b: Bytes
-) -> Result<NonNull<u8>, Error> {
+) -> Result<NonNull<u8>, E> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => grow_unchecked(a, ptr, old_layout, new_layout, b),
         Ordering::Equal => {
             if new_layout.align() > old_layout.align() {
-                grow_unchecked(&a, ptr, old_layout, new_layout, b)
+                grow_unchecked(a, ptr, old_layout, new_layout, b)
             } else {
                 Ok(ptr)
             }
         }
-        Ordering::Greater => Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()))
+        Ordering::Greater => {
+            Err(E::from(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size())))
+        }
     }
 }
 
 #[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(miri, track_caller)]
-pub unsafe fn grow_unchecked<A: Grow + ?Sized>(
+pub unsafe fn grow_unchecked<A: Grow<Error = E> + ?Sized, E: From<Error> + Debug + Display>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
     b: Bytes
-) -> Result<NonNull<u8>, Error> {
+) -> Result<NonNull<u8>, E> {
     let old_size = old_layout.size();
     let new_ptr = match b {
         Bytes::Uninitialized => tri!(do a.alloc(new_layout)),
@@ -58,12 +61,12 @@ pub unsafe fn grow_unchecked<A: Grow + ?Sized>(
 }
 
 #[cfg_attr(miri, track_caller)]
-pub unsafe fn shrink_unchecked<A: Shrink + ?Sized>(
+pub unsafe fn shrink_unchecked<A: Shrink<Error = E> + ?Sized, E: From<Error> + Debug + Display>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout
-) -> Result<NonNull<u8>, Error> {
+) -> Result<NonNull<u8>, E> {
     let new_ptr = tri!(do a.alloc(new_layout));
 
     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
@@ -76,13 +79,13 @@ pub unsafe fn shrink_unchecked<A: Shrink + ?Sized>(
 
 //noinspection DuplicatedCode
 #[cfg_attr(miri, track_caller)]
-pub unsafe fn ralloc<A: Realloc + ?Sized>(
+pub unsafe fn ralloc<A: Realloc<Error = E> + ?Sized, E: From<Error> + Debug + Display>(
     a: &A,
     ptr: NonNull<u8>,
     old_layout: Layout,
     new_layout: Layout,
     b: Bytes
-) -> Result<NonNull<u8>, Error> {
+) -> Result<NonNull<u8>, E> {
     match old_layout.size().cmp(&new_layout.size()) {
         Ordering::Less => grow_unchecked(&a, ptr, old_layout, new_layout, b),
         Ordering::Equal => {
@@ -109,18 +112,19 @@ pub mod alloc_mut {
         crate::{GrowMut, Layout, ReallocMut, ShrinkMut, error::Error, traits::helpers::Bytes},
         core::{
             cmp::Ordering,
+            fmt::{Debug, Display},
             ptr::{self, NonNull}
         }
     };
 
     #[cfg_attr(miri, track_caller)]
-    pub unsafe fn grow_mut<A: GrowMut + ?Sized>(
+    pub unsafe fn grow_mut<A: GrowMut<Error = E> + ?Sized, E: From<Error> + Debug + Display>(
         a: &mut A,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
         b: Bytes
-    ) -> Result<NonNull<u8>, Error> {
+    ) -> Result<NonNull<u8>, E> {
         match old_layout.size().cmp(&new_layout.size()) {
             Ordering::Less => grow_unchecked_mut(a, ptr, old_layout, new_layout, b),
             Ordering::Equal => {
@@ -131,20 +135,23 @@ pub mod alloc_mut {
                 }
             }
             Ordering::Greater => {
-                Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()))
+                Err(E::from(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size())))
             }
         }
     }
 
     #[allow(clippy::needless_pass_by_value)]
     #[cfg_attr(miri, track_caller)]
-    pub unsafe fn grow_unchecked_mut<A: GrowMut + ?Sized>(
+    pub unsafe fn grow_unchecked_mut<
+        A: GrowMut<Error = E> + ?Sized,
+        E: From<Error> + Debug + Display
+    >(
         a: &mut A,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
         b: Bytes
-    ) -> Result<NonNull<u8>, Error> {
+    ) -> Result<NonNull<u8>, E> {
         let old_size = old_layout.size();
         let new_ptr = match b {
             Bytes::Uninitialized => tri!(do a.alloc_mut(new_layout)),
@@ -160,12 +167,15 @@ pub mod alloc_mut {
     }
 
     #[cfg_attr(miri, track_caller)]
-    pub unsafe fn shrink_unchecked_mut<A: ShrinkMut + ?Sized>(
+    pub unsafe fn shrink_unchecked_mut<
+        A: ShrinkMut<Error = E> + ?Sized,
+        E: From<Error> + Debug + Display
+    >(
         a: &mut A,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout
-    ) -> Result<NonNull<u8>, Error> {
+    ) -> Result<NonNull<u8>, E> {
         let new_ptr = tri!(do a.alloc_mut(new_layout));
 
         ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
@@ -177,13 +187,16 @@ pub mod alloc_mut {
     }
 
     #[cfg_attr(miri, track_caller)]
-    pub unsafe fn ralloc_mut<A: ReallocMut + ?Sized>(
+    pub unsafe fn ralloc_mut<
+        A: ReallocMut<Error = E> + ?Sized,
+        E: From<Error> + Debug + Display
+    >(
         a: &mut A,
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout,
         b: Bytes
-    ) -> Result<NonNull<u8>, Error> {
+    ) -> Result<NonNull<u8>, E> {
         match old_layout.size().cmp(&new_layout.size()) {
             Ordering::Less => grow_unchecked_mut(a, ptr, old_layout, new_layout, b),
             Ordering::Equal => {

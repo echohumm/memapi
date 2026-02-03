@@ -93,6 +93,8 @@ unsafe fn pad_then_realloc(
 pub struct CAlloc;
 
 impl Alloc for CAlloc {
+    type Error = Error;
+
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
