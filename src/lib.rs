@@ -12,7 +12,7 @@
 //! - Optional scoped allocations (`alloc_temp_trait`): [`AllocTemp`]
 //!
 //! # Types and errors
-//! - [`Layout`]: crate layout type (with conversion to/from [`StdLayout`] unles `no_alloc` is
+//! - [`Layout`]: crate layout type (with conversion to/from [`StdLayout`] unless `no_alloc` is
 //!   enabled)
 //! - [`DefaultAlloc`]: default allocator wrapper that delegates to the global allocator
 //! - Errors: [`Error`], [`Cause`], [`LayoutErr`], [`ArithErr`], [`ArithOp`]

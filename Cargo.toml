@@ -47,7 +47,6 @@ no_nightly = []
 no_alloc = []
 metadata = []
 sized_hierarchy = []
-
 all_nightly = ["metadata", "sized_hierarchy"]
 
 # std support
@@ -56,24 +55,22 @@ std = []
 # allocator support
 ## the standard c allocator
 c_alloc = []
+## adds a trait for temporary, scoped allocations
+alloc_temp_trait = []
+## add a set of traits for allocating with an allocator behind a mutable reference
+alloc_mut_traits = []
 stack_alloc = ["alloc_temp_trait", "c_alloc", "cc"]
 
 # actual features
 ## support best-effort os error reporting from errno
 os_err_reporting = ["std"]
 ## adds support for catching unwinds to stack_alloc
-catch_unwind = ["std", "stack_alloc"]
-## add a set of traits for allocating with an allocator behind a mutable reference
-alloc_mut_traits = []
-## adds a trait for temporary, scoped allocations
-alloc_temp_trait = []
+catch_unwind = ["stack_alloc", "std"]
 
-full_msrv = ["os_err_reporting", "c_alloc", "stack_alloc", "alloc_mut_traits"]
-full = [
-    "full_msrv",
-    "c_str",
-]
-full_nightly = ["full", "all_nightly"]
+# feature bundles
+full_msrv = ["alloc_mut_traits", "c_alloc", "catch_unwind", "os_err_reporting"]
+full = ["c_str", "full_msrv"]
+full_nightly = ["all_nightly", "full"]
 
 
 
@@ -86,18 +83,18 @@ cc = { version = "=1.0.79", optional = true }
 
 
 
-[dev-dependencies]
-criterion = "0.8.1"
-
-[[bench]]
-name = "lyt"
-path = "benches/layout.rs"
-harness = false
-
-[[bench]]
-name = "alc"
-path = "benches/alloc.rs"
-harness = false
+#[dev-dependencies]
+#criterion = "0.8.1"
+#
+#[[bench]]
+#name = "lyt"
+#path = "benches/layout.rs"
+#harness = false
+#
+#[[bench]]
+#name = "alc"
+#path = "benches/alloc.rs"
+#harness = false
 
 
 

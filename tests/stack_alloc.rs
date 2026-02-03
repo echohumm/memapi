@@ -1,3 +1,4 @@
+// miri doesn't like non-standard c functions like stack_alloc relies on
 #![cfg(not(miri))]
 use {
     memapi2::{AllocTemp, Layout, helpers::ptr_max_align, stack_alloc::StackAlloc},
@@ -17,6 +18,7 @@ fn stack_alloc() {
                             ptr_max_align(ptr),
                             align
                         );
+                        // abort instead of unwind so we don't cause UB
                         abort();
                     } else {
                         println!(
