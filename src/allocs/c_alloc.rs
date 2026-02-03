@@ -13,6 +13,8 @@ use {
     core::{cmp::Ordering, ffi::c_void, ptr::NonNull}
 };
 
+// TODO: we should use the builtin malloc and realloc if align <= guaranteed align
+
 #[cfg_attr(miri, track_caller)]
 fn pad_then_alloc(
     layout: Layout,
@@ -25,8 +27,6 @@ fn pad_then_alloc(
         |_| unsafe { alloc(l.align(), l.size()) }
     )
 }
-
-// TODO: we should use the builtin realloc if align <= guaranteed align
 
 #[cfg_attr(miri, track_caller)]
 unsafe fn pad_then_grow(
