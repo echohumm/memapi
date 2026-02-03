@@ -5,12 +5,15 @@
 A small, `no_std`/`no_alloc`-friendly allocation interface for raw buffers, with explicit layouts,
 split allocator traits, and structured errors.
 
-MSRV: 1.46.0 (some features require newer compilers or nightly; see Feature flags)
+MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature flags](#feature-flags))
 
 ## Highlights
 
 - Split allocator traits: `Alloc`, `Dealloc`, `Grow`, `Shrink`, `Realloc`, plus `BasicAlloc` and
   `FullAlloc` aliases
+- Mutable versions of allocator traits for allocation operations which require mutable access to the
+  allocator
+- Temporary/scoped allocation trait for function-scoped allocations
 - Custom `Layout` type with conversion to/from `alloc::alloc::Layout` (unless `no_alloc` is on)
 - Generic `Error` types for allocation traits
 - Structured error reporting via `Error` and `Cause`, with optional OS error capture

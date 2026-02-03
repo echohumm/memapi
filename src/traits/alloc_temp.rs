@@ -6,6 +6,8 @@ use {
     }
 };
 
+#[allow(unused_imports)] use crate::error::Cause;
+
 /// A memory allocation interface which may only be able to provide temporary, scoped allocations.
 pub trait AllocTemp {
     /// The error type returned by this allocator.
@@ -22,12 +24,12 @@ pub trait AllocTemp {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
+    ///   unwind occurs in a function which is not allowed to unwind.
     ///
     /// # Safety
     ///
@@ -49,12 +51,12 @@ pub trait AllocTemp {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
+    ///   unwind occurs in a function which is not allowed to unwind.
     ///
     /// # Safety
     ///

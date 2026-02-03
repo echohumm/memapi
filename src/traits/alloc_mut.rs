@@ -37,12 +37,10 @@ pub trait AllocMut {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
+    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
     fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Self::Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
@@ -55,12 +53,10 @@ pub trait AllocMut {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
+    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Self::Error> {
@@ -157,12 +153,10 @@ pub trait GrowMut: AllocMut + DeallocMut {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
+    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
@@ -200,12 +194,10 @@ pub trait GrowMut: AllocMut + DeallocMut {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
+    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
@@ -253,12 +245,10 @@ pub trait ShrinkMut: AllocMut + DeallocMut {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
+    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
     /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
     ///   [new_layout.size()](Layout::size)</code>.
@@ -313,12 +303,10 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
+    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc_mut(
@@ -351,12 +339,10 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
     /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - [`Err(Error::AllocFailed(layout, cause))`](Error::AllocFailed) if allocation fails.
-    ///   `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If an OS error is
-    ///   available, it may be [`Cause::OSErr(oserr)`](crate::error::Cause::OSErr). In this case,
-    ///   `oserr` will be the error from
-    ///   <code>[std::io::Error::last_os_error].[raw_os_error()](std::io::Error::raw_os_error)</
-    ///   code>.
+    /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
+    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
+    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
+    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn rezalloc_mut(

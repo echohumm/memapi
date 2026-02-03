@@ -7,12 +7,6 @@ use {
 
 /// An allocator which uses C's `alloca` allocation method.
 ///
-/// # WARNING
-///
-/// This is experimental. The C code and ffi backing this are custom, and I don't know C, so this
-/// may or may not work. As far as I can tell, it works, but use at your own risk until I have
-/// properly validated this is fine.
-///
 /// # Note
 ///
 /// Allocations made by this allocator are aligned by allocating extra space and manually aligning
