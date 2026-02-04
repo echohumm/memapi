@@ -61,7 +61,7 @@ impl Display for Error {
             ),
             InvalidLayout(sz, aln, e) => write!(
                 f,
-                "computed invalid layout:\n\tsize: {},\n\talign: {}\n\treason: {}",
+                "computed invalid layout:\n\tsize: {}\n\talign: {}\n\treason: {}",
                 sz, aln, e
             ),
             GrowSmallerNewLayout(old, new) => {

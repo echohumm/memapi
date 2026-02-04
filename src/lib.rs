@@ -91,21 +91,10 @@ macro_rules! tri {
             Err(e) => return Err(e),
         }
     };
-    (err $($fallible:expr)+) => {
-        if let Err(e) = $($fallible)+ {
-            return Err(e);
-        }
-    };
-    (cmap($err:expr) $($fallible:expr)+) => {
-        match $($fallible)+ {
-            Ok(s) => s,
-            Err(_) => return Err($err)
-        }
-    };
     (cmap($err:expr) from $e:ty, $($fallible:expr)+) => {
         match $($fallible)+ {
             Ok(s) => s,
-            Err(_) => return Err(<$e>::from($err))
+            Err(_) => return Err(<$e>::from($err)),
         }
     };
 }

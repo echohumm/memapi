@@ -112,7 +112,7 @@ unsafe fn alloc_temp_with<
     match alloc(a, layout) {
         Ok(ptr) => {
             let ret = f(ptr);
-            tri!(err a.try_dealloc(ptr, layout));
+            tri!(do a.try_dealloc(ptr, layout));
             Ok(ret)
         }
         Err(e) => Err(e)
