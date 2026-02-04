@@ -34,7 +34,7 @@ thread_local! {
 ///   1)</code> will not exceed the stack allocation limit.
 /// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](core::ptr::dangling)
 ///   pointer.
-/// - `f` must initialize `out` before returning.
+/// - `f` must initialize the value behind its second parameter before returning.
 /// - On Rust versions below `1.71` with `catch_unwind` disabled, `f` must never unwind.
 pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     layout: Layout,
@@ -43,7 +43,35 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     let mut ret = MaybeUninit::uninit();
     let mut closure = ManuallyDrop::new(f);
 
-    // SAFETY: TODO
+    // SAFETY: we declare this function in C as:
+    // ```
+    // void c_alloca(
+    //     const size_t size,
+    //     const size_t align,
+    //     void (*callback)(void*, uint8_t*, void*),
+    //     void* closure,
+    //     void* out
+    // )
+    // ```
+    // in rust we declare it as
+    // ```
+    // pub fn c_alloca(
+    //     size: usize,
+    //     align: usize,
+    //     cb: unsafe extern $ffi fn(*mut c_void, *mut u8, *mut c_void),
+    //     closure: *mut c_void,
+    //     out: *mut c_void
+    // )
+    // ```
+    // so:
+    // - the return types match as `()` == `void`
+    // - the size and align parameters match as `usize` == `size_t`
+    // - the callback types match as the rust callback is defined as `extern "C"`
+    // - the `closure` pointer points to a valid closure which `cb` can call
+    // - the `ret` pointer points to a valid `R` which `closure` initializes
+    // additionally:
+    // - the caller guarantees that `closure` cannot unwind in an unsafe environment
+    // - the c function is safe
     unsafe {
         c_alloca(
             layout.size(),
