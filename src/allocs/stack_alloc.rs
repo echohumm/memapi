@@ -1,18 +1,13 @@
 use {
-    crate::{Layout, error::Error, ffi::stack_alloc::with_alloca},
+    crate::{AllocTemp, Layout, error::Error, ffi::stack_alloc::with_alloca},
     core::ptr::{self, NonNull}
 };
 
-// TODO: make this faster, make sure it works in all situations
-
-/// An allocator which uses C's `alloca` allocation method.
+/// An allocator that uses C's `alloca` for stack allocation.
 ///
-/// # Note
-///
-/// Allocations made by this allocator are aligned by allocating extra space and manually aligning
-/// within that space.
-///
-/// If `size + (align - 1)` exceeds the stack allocation limit, a stack overflow will occur.
+/// This satisfies the requested alignment by allocating extra space and aligning within it. Ensure
+/// <code>[layout.size()](Layout::size) + ([layout.align()](Layout::align) - 1)</code> does not
+/// exceed the stack limit to avoid overflow.
 ///
 /// # Safety
 ///
@@ -20,11 +15,11 @@ use {
 /// - attempting to allocate <code>[layout.size()](Layout::size) + ([layout.align()](Layout::align)
 ///   \- 1)</code> bytes on the stack will not cause a stack overflow.
 /// - if compiling with a Rust version below `1.71` and the `catch_unwind` feature is disabled, the
-///   `with_mem` function passed to allocation methods must never unwind.
+///   `with_mem` function passed to allocation methods will never unwind.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StackAlloc;
 
-impl crate::AllocTemp for StackAlloc {
+impl AllocTemp for StackAlloc {
     type Error = Error;
 
     #[cfg_attr(miri, track_caller)]

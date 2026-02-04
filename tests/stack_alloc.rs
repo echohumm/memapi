@@ -22,6 +22,20 @@ fn stack_alloc() {
                         // pointer: 0x7fcf2b2fd000 has good align of 4096 (need 1024)
                         // pointer: 0x7fcf2b2fd000 has good align of 4096 (need 2048)
                         // pointer: 0x7fcf2b2fd000 has good align of 4096 (need 4096)
+                        // ---
+                        // pointer: 0x7f50e3ae42d0 has good align of 16 (need 1)
+                        // pointer: 0x7f50e3ae42d0 has good align of 16 (need 2)
+                        // pointer: 0x7f50e3ae42d0 has good align of 16 (need 4)
+                        // pointer: 0x7f50e3ae42d0 has good align of 16 (need 8)
+                        // pointer: 0x7f50e3ae42d0 has good align of 16 (need 16)
+                        // pointer: 0x7f50e3ae42c0 has good align of 64 (need 32)
+                        // pointer: 0x7f50e3ae42c0 has good align of 64 (need 64)
+                        // pointer: 0x7f50e3ae4280 has good align of 128 (need 128)
+                        // pointer: 0x7f50e3ae4200 has good align of 512 (need 256)
+                        // pointer: 0x7f50e3ae4200 has good align of 512 (need 512)
+                        // pointer: 0x7f50e3ae4000 has good align of 16384 (need 1024)
+                        // pointer: 0x7f50e3ae4000 has good align of 16384 (need 2048)
+                        // pointer: 0x7f50e3ae4000 has good align of 16384 (need 4096)
                         eprintln!(
                             "pointer: {:p} only has align of {} (need {})",
                             ptr,

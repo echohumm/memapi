@@ -17,8 +17,7 @@ thread_local! {
 /// `alloca`. On success, calls `f` with the allocation and a pointer to the output value which is
 /// returned.
 ///
-/// The allocation is only valid for the duration of the call. If `zero` is true, the allocation
-/// is zeroed.
+/// The allocation is only valid for the duration of the call.
 ///
 /// If [`layout.size()`](Layout::size) is zero, `f` will receive a [`dangling`](core::ptr::dangling)
 /// pointer.
@@ -35,6 +34,8 @@ thread_local! {
 /// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](core::ptr::dangling)
 ///   pointer.
 /// - `f` must initialize the value behind its second parameter before returning.
+/// - `f` must properly handle the case where <code>[layout.size()](Layout::size) == 0</code> and it receives a
+///   [`dangling`](core::ptr::dangling) pointer.
 /// - On Rust versions below `1.71` with `catch_unwind` disabled, `f` must never unwind.
 pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     layout: Layout,
@@ -93,43 +94,34 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
 macro_rules! c_cb {
     ($verdef:ident, $ffi:literal) => {
         #[rustversion::$verdef(1.71)]
-        /// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` as arguments to
-        /// `callback` from C.
+        /// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` from C.
         ///
         /// # Safety
         ///
-        /// - `callback` must be a valid function pointer to an `F`.
-        /// - `callback`  must initialize `out`.
-        /// - `ptr` must be a valid pointer to allocated memory.
+        /// - `callback` must be a valid pointer to an `F`.
+        /// - `callback` must initialize the value behind its second parameter.
+        /// - `ptr` must be a valid pointer which `callback` expects.
         /// - `out` must be a valid pointer to an `R`.
         pub unsafe extern $ffi fn c_call_callback<R, F: FnOnce(NonNull<u8>, *mut R)>(
             callback: *mut c_void,
             ptr: *mut u8,
             out: *mut c_void
         ) {
-            #[cfg(not(feature = "catch_unwind"))]
-            {
+            let run = || {
                 ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>())(
                     NonNull::new_unchecked(ptr),
                     out.cast()
                 );
-            }
+            };
+            #[cfg(not(feature = "catch_unwind"))]
+            run();
             #[cfg(feature = "catch_unwind")]
-            {
-                if $ffi == "C-unwind" {
-                    ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>())(
-                        NonNull::new_unchecked(ptr),
-                        out.cast()
-                    );
-                } else {
-                    let f = ManuallyDrop::take(&mut *callback.cast::<ManuallyDrop<F>>());
-                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        f(NonNull::new_unchecked(ptr), out.cast());
-                    }));
-                    if result.is_err() {
-                        UNWIND.with(|v| *v.borrow_mut() = true);
-                    }
+            if $ffi == "C-unwind" {
+                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).is_err() {
+                    UNWIND.with(|v| *v.borrow_mut() = true);
                 }
+            } else {
+                run();
             }
         }
     };
@@ -138,11 +130,10 @@ macro_rules! c_ext {
     ($verdef:ident, $ffi:literal) => {
         #[rustversion::$verdef(1.71)]
         extern $ffi {
-            /// Allocates `size` bytes on the stack with at least `align` alignment and call `cb(closure,
-            /// allocation, out)`.
+            /// Allocates `size` bytes on the stack with at least `align` alignment and calls
+            /// `cb(closure, allocation, out)`.
             ///
-            /// The allocation is only valid for the duration of this call. If `zero` is true, the
-            /// allocation is zeroed.
+            /// The allocation is only valid for the duration of this call.
             ///
             /// If `size == 0`, `cb` receives a [`dangling`](core::ptr::dangling) pointer.
             ///

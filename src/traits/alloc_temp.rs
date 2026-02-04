@@ -33,7 +33,11 @@ pub trait AllocTemp {
     ///
     /// # Safety
     ///
-    /// Safety preconditions are implementation defined.
+    /// The caller must ensure `with_mem`  properly handles the case where
+    /// <code>[layout.size()](Layout::size) == 0</code> and it receives a
+    /// [`dangling`](ptr::dangling) pointer.
+    ///
+    /// Other safety preconditions are implementation defined.
     unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
@@ -60,7 +64,11 @@ pub trait AllocTemp {
     ///
     /// # Safety
     ///
-    /// Safety preconditions are implementation defined.
+    /// The caller must ensure `with_mem`  properly handles the case where
+    /// <code>[layout.size()](Layout::size) == 0</code> and it receives a
+    /// [`dangling`](ptr::dangling) pointer.
+    ///
+    /// Other safety preconditions are implementation defined.
     #[cfg_attr(miri, track_caller)]
     unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
