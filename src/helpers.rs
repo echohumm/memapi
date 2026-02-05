@@ -226,7 +226,7 @@ pub fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *mut T {
     varsized_ptr_from_parts_mut(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
 }
 
-/// Creates a <code>[NonNull]<T></code> from a pointer and a `usize` size metadata.
+/// Creates a <code>[NonNull]\<T\></code> from a pointer and a `usize` size metadata.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[rustversion::attr(since(1.61), const)]
@@ -446,7 +446,8 @@ pub unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
 ///
 /// # Safety
 ///
-/// The caller must ensure that <code>[Src::SZ] >= [Dst::SZ]</code> and that `src` is a valid `Dst`.
+/// The caller must ensure that <code>[Src::SZ](SizedProps::SZ) >= [Dst::SZ](SizedProps::SZ)</code>
+/// and that `src` is a valid `Dst`.
 #[rustversion::attr(since(1.56), const)]
 pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
     use core::mem::ManuallyDrop;
@@ -492,8 +493,8 @@ pub const fn is_multiple_of(lhs: usize, rhs: usize) -> bool {
 /// A RAII guard that owns a single allocation and ensures it is deallocated unless explicitly
 /// released.
 ///
-/// `AllocGuard` wraps a <code>[NonNull]<T></code> pointer and an allocator reference `&A`. When the
-/// guard goes out of scope, the underlying memory will be deallocated via the allocator.
+/// `AllocGuard` wraps a <code>[NonNull]\<T\></code> pointer and an allocator reference `&A`. When
+/// the guard goes out of scope, the underlying memory will be deallocated via the allocator.
 ///
 /// To take ownership of the allocation without deallocating, call
 /// [`release`](SliceAllocGuard::release), which returns the raw pointer and prevents the guard
@@ -679,7 +680,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Release ownership of the slice without deallocating memory, returning a
-    /// <code>[NonNull]<T></code> pointer to the slice.
+    /// <code>[NonNull]\<T\></code> pointer to the slice.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]
@@ -692,7 +693,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     }
 
     /// Release ownership of the slice without deallocating memory, returning a
-    /// <code>[NonNull]<T></code> pointer to the slice's first element.
+    /// <code>[NonNull]\<T\></code> pointer to the slice's first element.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
     #[rustversion::attr(since(1.61), const)]

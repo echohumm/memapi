@@ -71,7 +71,7 @@ impl From<Layout> for alloc::alloc::Layout {
 impl Layout {
     /// Creates a layout for the given type.
     ///
-    /// This just delegates to <code><T as [SizedProps>::LAYOUT]</code>.
+    /// This just delegates to <code><T as [SizedProps]>::[LAYOUT](SizedProps::LAYOUT)</code>.
     #[inline(always)]
     #[must_use]
     pub const fn new<T>() -> Layout {
@@ -84,8 +84,9 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// <code>Err([Error::InvalidLayout]\([T::SZ], [T::ALN], [LayoutErr::ExceedsMax]\))</code> if
-    /// the length of the computed array, in bytes, would exceed [`USIZE_MAX_NO_HIGH_BIT`].
+    /// <code>Err([Error::InvalidLayout]\([T::SZ](SizedProps::SZ), [T::ALN](SizedProps::ALN),
+    /// [LayoutErr::ExceedsMax]\))</code> if the length of the computed array, in bytes, would
+    /// exceed [`USIZE_MAX_NO_HIGH_BIT`].
     pub const fn array<T>(n: usize) -> Result<Layout, Error> {
         if T::SZ != 0 && n > (USIZE_HIGH_BIT - T::ALN) / T::SZ {
             return Err(Error::InvalidLayout(T::SZ, T::ALN, LayoutErr::ExceedsMax));
@@ -196,12 +197,12 @@ impl Layout {
     ///
     /// C's `aligned_alloc(alignment, size)` requires:
     /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
-    ///   [c_void]>()</code>.
+    ///   [c_void](core::ffi::c_void)>()</code>.
     /// - `size` is a multiple of `alignment`.
     ///
     /// Therefore:
     /// - `align` will be rounded up to the nearest multiple of <code>[size_of]::<*mut
-    ///   [c_void]>()</code> if it isn't already.
+    ///   [c_void](core::ffi::c_void)>()</code> if it isn't already.
     /// - `size` will be rounded up to the nearest multiple of the resulting alignment.
     ///
     /// This is semantically equivalent to <code>[Layout::from_size_align]\(size,
@@ -447,12 +448,12 @@ impl Layout {
     ///
     /// C's `aligned_alloc(alignment, size)` requires:
     /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
-    ///   [c_void]>()</code>.
+    ///   [c_void](core::ffi::c_void)>()</code>.
     /// - `size` is a multiple of `alignment`.
     ///
     /// Therefore:
     /// - The alignment will be rounded up to the nearest multiple of <code>[size_of]::<*mut
-    ///   [c_void]>()</code> if it isn't already.
+    ///   [c_void](core::ffi::c_void)>()</code> if it isn't already.
     /// - The size will be rounded up to the nearest multiple of the resulting alignment.
     ///
     /// # Errors
@@ -461,8 +462,8 @@ impl Layout {
     /// [self.align()](Layout::align), [LayoutErr::CRoundUp]\))</code> if:
     /// - `align == 0`.
     /// - `align` is not a power of two.
-    /// - `align` rounded up to <code>[size_of]::<*mut [c_void]>()</code> would exceed the maximum
-    ///   allowed alignment.
+    /// - `align` rounded up to <code>[size_of]::<*mut [c_void](core::ffi::c_void)>()</code> would
+    ///   exceed the maximum allowed alignment.
     /// - `size` rounded up to the new alignment would exceed [`USIZE_MAX_NO_HIGH_BIT`].
     ///
     /// # Examples

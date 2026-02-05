@@ -15,7 +15,8 @@
 //! - [`Layout`]: crate layout type (with conversion to/from [`StdLayout`] unless `no_alloc` is
 //!   enabled)
 //! - [`DefaultAlloc`]: default allocator wrapper that delegates to the global allocator
-//! - Errors: [`Error`], [`Cause`], [`LayoutErr`], [`ArithErr`], [`ArithOp`]
+//! - Errors: [`Error`](error::Error), [`Cause`](error::Cause), [`LayoutErr`](error::LayoutErr),
+//!   [`ArithErr`](error::ArithErr), [`ArithOp`](error::ArithOp)
 //!
 //! # Data and type utilities
 //! - [`data::type_props`][]: [`SizedProps`](data::type_props::SizedProps),

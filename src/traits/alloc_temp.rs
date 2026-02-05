@@ -21,15 +21,18 @@ pub trait AllocTemp {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`AllocTemp::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     ///
     /// # Safety
     ///
@@ -52,15 +55,18 @@ pub trait AllocTemp {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`AllocTemp::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     ///
     /// # Safety
     ///

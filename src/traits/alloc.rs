@@ -1,7 +1,3 @@
-#[cfg(feature = "std")]
-#[allow(unused_imports)]
-use std::io::Error as IOErr;
-
 use {
     crate::{
         Layout,
@@ -29,13 +25,16 @@ pub trait Alloc {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Self::Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
@@ -45,13 +44,16 @@ pub trait Alloc {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
-    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, Self::Error> {
@@ -100,7 +102,7 @@ pub trait Dealloc: Alloc {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations do not return any errors, as the library functions backing them
     /// are infallible.
@@ -134,16 +136,19 @@ pub trait Grow: Alloc + Dealloc {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
-    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow(
@@ -175,16 +180,19 @@ pub trait Grow: Alloc + Dealloc {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
-    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zgrow(
@@ -223,16 +231,19 @@ pub trait Shrink: Alloc + Dealloc {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
-    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
     ///   [new_layout.size()](Layout::size)</code>.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink(
         &self,
@@ -277,13 +288,16 @@ pub trait Realloc: Grow + Shrink {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
-    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(
@@ -313,13 +327,16 @@ pub trait Realloc: Grow + Shrink {
     ///
     /// # Errors
     ///
-    /// Errors are implementation-defined, refer to [`Self::Error`] and [`Error`].
+    /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
     /// - <code>Err([Error::AllocFailed](Error::AllocFailed)(layout, cause))</code> if allocation
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr](oserr)</code>. In this case, `oserr` will be the
-    ///   error from <code>[IOErr::last_os_error].[raw_os_error()](IOErr::raw_os_error)</code>.
+    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
+    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///
+    /// [last_os_error]: std::io::Error::last_os_error
+    /// [raw_os_error]: std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn rezalloc(
