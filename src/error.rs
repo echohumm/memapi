@@ -26,6 +26,14 @@ pub enum Error {
     AllocFailed(Layout, Cause),
     /// The layout computed with the given size and alignment is invalid; see the contained reason.
     InvalidLayout(usize, usize, LayoutErr),
+    /// A zero-sized allocation was requested. This is treated as an error as several allocators do
+    /// not support such requests or respond to them strangely.
+    ///
+    /// In most reasonable cases, [`layout.dangling()`](Layout::dangling) can and should be used
+    /// instead.
+    ZeroSizedLayout,
+    /// An attempt was made to deallocate a dangling pointer.
+    DanglingDeallocation,
     /// Attempted to grow to a smaller size.
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
@@ -45,10 +53,12 @@ impl Display for Error {
             AllocFailed,
             ArithmeticError,
             CaughtUnwind,
+            DanglingDeallocation,
             GrowSmallerNewLayout,
             InvalidLayout,
             Other,
-            ShrinkLargerNewLayout
+            ShrinkLargerNewLayout,
+            ZeroSizedLayout
         };
 
         match self {
@@ -64,6 +74,10 @@ impl Display for Error {
                 "computed invalid layout:\n\tsize: {}\n\talign: {}\n\treason: {}",
                 sz, aln, e
             ),
+            ZeroSizedLayout => {
+                write!(f, "received a zero-sized layout")
+            }
+            DanglingDeallocation => write!(f, "attempted to deallocate a dangling pointer"),
             GrowSmallerNewLayout(old, new) => {
                 write!(f, "attempted to grow from a size of {} to a smaller size of {}", old, new)
             }

@@ -141,8 +141,9 @@ fn is_multiple_of_zero_rhs() {
 #[test]
 fn null_q_dyn_zsl_check_zero_layout() {
     let layout = Layout::new::<()>();
-    let ptr = null_q_dyn_zsl_check(layout, |_| -> *mut u8 { panic!("unexpected alloc") }).unwrap();
-    assert_eq!(ptr, layout.dangling());
+    let ptr =
+        null_q_dyn_zsl_check(layout, |_| -> *mut u8 { panic!("unexpected alloc") }).unwrap_err();
+    assert_eq!(ptr, Error::ZeroSizedLayout);
 }
 
 #[test]

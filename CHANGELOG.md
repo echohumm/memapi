@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `Dealloc` traits' fallible functions now treat zero-sized layouts and dangling pointers as a hard
+  error
+- `Dealloc` traits' fallible functions are now a noop for ZSLs and dangling pointers
+- All other allocation functions now treat ZSLs as an error.
+
 ## [0.9.2] - 2026-02-03
 
 ### Fixed

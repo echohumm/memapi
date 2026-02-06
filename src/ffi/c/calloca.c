@@ -57,12 +57,6 @@ void c_alloca(
     void* closure,
     void* out
 ) {
-    if (size == 0) {
-        /* return dangling for zsl */
-        callback(closure, (uint8_t*)(uintptr_t)align, out);
-        return;
-    }
-
     /* determine whether we need extra space for padding */
     size_t alloc_size = size;
     size_t align_m_1;

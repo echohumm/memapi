@@ -20,9 +20,6 @@ pub trait Alloc {
 
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
-    /// Returns a [`dangling`](ptr::dangling) pointer if <code>[layout.size()](Layout::size) ==
-    /// 0</code>.
-    ///
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
@@ -32,6 +29,8 @@ pub trait Alloc {
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
     ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     ///
     /// [last_os_error]: std::io::Error::last_os_error
     /// [raw_os_error]: std::io::Error::raw_os_error
@@ -39,9 +38,6 @@ pub trait Alloc {
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
     ///
-    /// Returns a [`dangling`](ptr::dangling) pointer if <code>[layout.size()](Layout::size) ==
-    /// 0</code>.
-    ///
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
@@ -51,6 +47,8 @@ pub trait Alloc {
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
     ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     ///
     /// [last_os_error]: std::io::Error::last_os_error
     /// [raw_os_error]: std::io::Error::raw_os_error
@@ -65,7 +63,8 @@ pub trait Alloc {
 pub trait Dealloc: Alloc {
     /// Deallocates a previously allocated block.
     ///
-    /// This is a noop if <code>[layout.size()](Layout::size) == 0</code>.
+    /// This is a noop if <code>[layout.size()](Layout::size) == 0</code> or `ptr` is
+    /// [`dangling`](ptr::dangling).
     ///
     /// The default implementation simply calls [`try_dealloc`](Dealloc::try_dealloc) and panics if
     /// it returns an error.
@@ -79,20 +78,21 @@ pub trait Dealloc: Alloc {
     /// # Panics
     ///
     /// This function may panic if the [`try_dealloc`](Dealloc::try_dealloc) implementation returns
-    /// an error, or the implementation chooses to panic for any other reason.
+    /// an error, or the implementation chooses to panic for any other reason. It will not panic if
+    /// `ptr` is [`dangling`](ptr::dangling) or <code>[layout.size()](Layout::size) == 0</code>.
     #[track_caller]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        if let Err(e) = self.try_dealloc(ptr, layout) {
-            default_dealloc_panic(ptr, layout, e)
+        if layout.is_nonzero_sized() && ptr != layout.dangling() {
+            if let Err(e) = self.try_dealloc(ptr, layout) {
+                default_dealloc_panic(ptr, layout, e)
+            }
         }
     }
 
     /// Attempts to deallocate a previously allocated block. If this allocator is backed by an
     /// allocation library which does not provide fallible deallocation operations, this may panic,
     /// abort, or incorrectly return `Ok(())`.
-    ///
-    /// This is a noop if <code>[layout.size()](Layout::size) == 0</code>.
     ///
     /// # Safety
     ///
@@ -104,8 +104,11 @@ pub trait Dealloc: Alloc {
     ///
     /// Errors are implementation-defined, refer to [`Alloc::Error`] and [`Error`].
     ///
-    /// The standard implementations do not return any errors, as the library functions backing them
-    /// are infallible.
+    /// The standard implementations may return:
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
+    /// - <code>Err([Error::DanglingDeallocation])</code> if <code>ptr ==
+    ///   [layout.dangling](Layout::dangling)</code>.
     ///
     /// However, if the `alloc_mut` feature is enabled, and using this method on a synchronization
     /// primitive wrapping a type which implements [`AllocMut`](crate::AllocMut), an
@@ -146,6 +149,8 @@ pub trait Grow: Alloc + Dealloc {
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     ///
     /// [last_os_error]: std::io::Error::last_os_error
     /// [raw_os_error]: std::io::Error::raw_os_error
@@ -190,6 +195,8 @@ pub trait Grow: Alloc + Dealloc {
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     ///
     /// [last_os_error]: std::io::Error::last_os_error
     /// [raw_os_error]: std::io::Error::raw_os_error
@@ -210,9 +217,6 @@ pub trait Shrink: Alloc + Dealloc {
     /// Shrink the given block to a new, smaller layout.
     ///
     /// On failure, the original memory will not be deallocated.
-    ///
-    /// Returns a [`dangling`](ptr::dangling) pointer if <code>[layout.size()](Layout::size) ==
-    /// 0</code>.
     ///
     /// Note that the default implementation simply:
     /// 1. Checks that the new layout is smaller or the same size. If both layouts are the same,
@@ -241,6 +245,8 @@ pub trait Shrink: Alloc + Dealloc {
     /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
     ///   [new_layout.size()](Layout::size)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     ///
     /// [last_os_error]: std::io::Error::last_os_error
     /// [raw_os_error]: std::io::Error::raw_os_error
@@ -277,9 +283,6 @@ pub trait Realloc: Grow + Shrink {
     ///
     /// On failure, the original memory will not be deallocated.
     ///
-    /// Returns a [`dangling`](ptr::dangling) pointer if <code>[layout.size()](Layout::size) ==
-    /// 0</code>.
-    ///
     /// # Safety
     ///
     /// The caller must ensure:
@@ -295,6 +298,8 @@ pub trait Realloc: Grow + Shrink {
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
     ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     ///
     /// [last_os_error]: std::io::Error::last_os_error
     /// [raw_os_error]: std::io::Error::raw_os_error
@@ -316,9 +321,6 @@ pub trait Realloc: Grow + Shrink {
     ///
     /// On failure, the original memory will not be deallocated.
     ///
-    /// Returns a [`dangling`](ptr::dangling) pointer if <code>[layout.size()](Layout::size) ==
-    /// 0</code>.
-    ///
     /// # Safety
     ///
     /// The caller must ensure:
@@ -334,6 +336,8 @@ pub trait Realloc: Grow + Shrink {
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
     ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     ///
     /// [last_os_error]: std::io::Error::last_os_error
     /// [raw_os_error]: std::io::Error::raw_os_error
@@ -497,17 +501,15 @@ impl Alloc for std::alloc::System {
 }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Dealloc for std::alloc::System {
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        if layout.is_nonzero_sized() {
-            alloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
-        }
-    }
-
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        self.dealloc(ptr, layout);
-        Ok(())
+        if layout.is_zero_sized() {
+            Err(Error::ZeroSizedLayout)
+        } else if ptr == layout.dangling() {
+            Err(Error::DanglingDeallocation)
+        } else {
+            alloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
+            Ok(())
+        }
     }
 }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
