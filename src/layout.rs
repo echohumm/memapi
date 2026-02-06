@@ -80,7 +80,7 @@ impl Layout {
 
     // could be deduped with repeat*, but stdlib doesn't, and it's logically meaningfully faster, so
     // i won't
-    /// Creates a layout representing an array of `n` `T`.
+    /// Attempts to create a layout representing an array of `n` count `T`.
     ///
     /// # Errors
     ///
@@ -94,7 +94,21 @@ impl Layout {
 
         // SAFETY: we just validated that a layout with a size of `T::SZ * n` and alignment of
         // `align` will not overflow.
-        unsafe { Ok(Layout::from_size_align_unchecked(T::SZ * n, T::ALN)) }
+        unsafe { Ok(Layout::array_unchecked::<T>(n)) }
+    }
+
+    /// Creates a layout representing an array of `n` count `T`.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that <code>[T::SZ] * n</code> rounded up to [`T::ALN`] will not
+    /// exceed [`USIZE_MAX_NO_HIGH_BIT`].
+    ///
+    /// Additionally, the return value may be unexpected if <code>[T::SZ] * n</code> overflows.
+    #[must_use]
+    #[inline]
+    pub const unsafe fn array_unchecked<T>(n: usize) -> Layout {
+        Layout::from_size_align_unchecked(T::SZ * n, T::ALN)
     }
 
     /// Combines two layouts sequentially, returning the combined layout and the

@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Dealloc` traits' fallible functions are now a noop for ZSLs and dangling pointers
 - All other allocation functions now treat ZSLs as an error.
 
+### Added
+
+- Added `Layout::array_unchecked` constructor
+
 ## [0.9.2] - 2026-02-03
 
 ### Fixed
