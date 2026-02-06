@@ -179,7 +179,7 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
-                if layout.is_nonzero_sized() {
+                if layout.is_nonzero_sized() && ptr != layout.dangling() {
                     alloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
             }
@@ -191,8 +191,14 @@ macro_rules! default_alloc_impl {
                 ptr: core::ptr::NonNull<u8>,
                 layout: Layout
             ) -> Result<(), crate::error::Error> {
-                self.dealloc(ptr, layout);
-                Ok(())
+                if layout.is_zero_sized() {
+                    Err(crate::error::Error::ZeroSizedLayout)
+                } else if ptr == layout.dangling() {
+                    Err(crate::error::Error::DanglingDeallocation)
+                } else {
+                    alloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
+                    Ok(())
+                }
             }
         }
         #[cfg(not(feature = "no_alloc"))]

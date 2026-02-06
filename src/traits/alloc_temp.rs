@@ -16,9 +16,6 @@ pub trait AllocTemp {
     /// Attempts to allocate a block of memory fitting the given [`Layout`], and calls `with_mem` on
     /// the returned pointer on success.
     ///
-    /// The pointer will be [`dangling`](ptr::dangling) if <code>[layout.size()](Layout::size) ==
-    /// 0</code>.
-    ///
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`AllocTemp::Error`] and [`Error`].
@@ -28,6 +25,8 @@ pub trait AllocTemp {
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
     ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
     ///
@@ -36,11 +35,7 @@ pub trait AllocTemp {
     ///
     /// # Safety
     ///
-    /// The caller must ensure `with_mem`  properly handles the case where
-    /// <code>[layout.size()](Layout::size) == 0</code> and it receives a
-    /// [`dangling`](ptr::dangling) pointer.
-    ///
-    /// Other safety preconditions are implementation defined.
+    /// Safety preconditions are implementation defined.
     unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
@@ -50,9 +45,6 @@ pub trait AllocTemp {
     /// Attempts to allocate a block of zeroed memory fitting the given [`Layout`], and calls
     /// `with_mem` on the returned pointer on success.
     ///
-    /// The pointer will be [`dangling`](ptr::dangling) if <code>[layout.size()](Layout::size) ==
-    /// 0</code>.
-    ///
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`AllocTemp::Error`] and [`Error`].
@@ -62,6 +54,8 @@ pub trait AllocTemp {
     ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
     ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
     ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    ///   0</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
     ///
@@ -70,11 +64,7 @@ pub trait AllocTemp {
     ///
     /// # Safety
     ///
-    /// The caller must ensure `with_mem`  properly handles the case where
-    /// <code>[layout.size()](Layout::size) == 0</code> and it receives a
-    /// [`dangling`](ptr::dangling) pointer.
-    ///
-    /// Other safety preconditions are implementation defined.
+    /// Safety preconditions are implementation defined.
     #[cfg_attr(miri, track_caller)]
     unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,

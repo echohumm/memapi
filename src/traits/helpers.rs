@@ -52,8 +52,8 @@ pub unsafe fn grow_unchecked<A: Grow<Error = E> + ?Sized, E: From<Error> + Debug
         Bytes::Zeroed => tri!(do a.zalloc(new_layout))
     };
 
-    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_size);
     if old_size != 0 {
+        ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), old_size);
         tri!(do a.try_dealloc(ptr, old_layout));
     }
 
@@ -69,8 +69,8 @@ pub unsafe fn shrink_unchecked<A: Shrink<Error = E> + ?Sized, E: From<Error> + D
 ) -> Result<NonNull<u8>, E> {
     let new_ptr = tri!(do a.alloc(new_layout));
 
-    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
     if old_layout.is_nonzero_sized() {
+        ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), new_layout.size());
         tri!(do a.try_dealloc(ptr, old_layout));
     }
 

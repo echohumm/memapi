@@ -365,9 +365,8 @@ pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F
 ) -> Result<NonNull<u8>, Error> {
-    if layout.is_zero_sized() { Ok(layout.dangling()) } else { null_q_dyn(f(layout), layout) }
+    if layout.is_zero_sized() { Err(Error::ZeroSizedLayout) } else { null_q_dyn(f(layout), layout) }
 }
-
 // TODO: lower const msrv and generally improve these. will require some testing regarding effects
 //  of current and alternative implementations on provenance
 #[rustversion::since(1.75)]

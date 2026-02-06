@@ -1,18 +1,17 @@
 use {
     crate::{
+        error::Error,
+        ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned},
+        helpers::null_q_dyn_zsl_check,
         Alloc,
         Dealloc,
         Grow,
         Layout,
         Realloc,
-        Shrink,
-        error::Error,
-        ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned},
-        helpers::{null_q_dyn, null_q_dyn_zsl_check}
+        Shrink
     },
     core::{cmp::Ordering, ffi::c_void, ptr::NonNull}
 };
-
 // TODO: we should use the builtin malloc and realloc if align <= guaranteed align
 
 #[cfg_attr(miri, track_caller)]
@@ -20,11 +19,11 @@ fn pad_then_alloc(
     layout: Layout,
     alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
-    let l = tri!(do layout.to_aligned_alloc_compatible());
+    let padded = tri!(do layout.to_aligned_alloc_compatible());
     null_q_dyn_zsl_check(
         layout,
         // SAFETY: we rounded up the layout's values to satisfy the requirements.
-        |_| unsafe { alloc(l.align(), l.size()) }
+        |_| unsafe { alloc(padded.align(), padded.size()) }
     )
 }
 
@@ -42,8 +41,14 @@ unsafe fn pad_then_grow(
         return Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()));
     }
 
-    null_q_dyn_zsl_check(new_padded, |l| {
-        grow_aligned(ptr.as_ptr().cast(), old_padded.size(), l.align(), l.size(), alloc)
+    null_q_dyn_zsl_check(new_layout, |_| {
+        grow_aligned(
+            ptr.as_ptr().cast(),
+            old_padded.size(),
+            new_padded.align(),
+            new_padded.size(),
+            alloc
+        )
     })
 }
 
@@ -57,13 +62,13 @@ unsafe fn pad_then_realloc(
     let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
     let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
 
-    null_q_dyn_zsl_check(new_padded, |l| {
+    null_q_dyn_zsl_check(new_layout, |_| {
         let old_ptr = ptr.as_ptr().cast();
         let old_size = old_padded.size();
         let old_align = old_padded.align();
 
-        let size = l.size();
-        let align = l.align();
+        let size = new_padded.size();
+        let align = new_padded.align();
 
         match old_size.cmp(&new_padded.size()) {
             // SAFETY: caller guarantees that `old_ptr` and `old_size` are valid, we just
@@ -110,17 +115,15 @@ impl Alloc for CAlloc {
 impl Dealloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        if layout.is_nonzero_sized() {
-            c_dealloc(ptr.as_ptr().cast());
-        }
-    }
-
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        self.dealloc(ptr, layout);
-        Ok(())
+        if layout.is_zero_sized() {
+            Err(Error::ZeroSizedLayout)
+        } else if ptr == layout.dangling() {
+            Err(Error::DanglingDeallocation)
+        } else {
+            c_dealloc(ptr.as_ptr().cast());
+            Ok(())
+        }
     }
 }
 impl Grow for CAlloc {
@@ -158,10 +161,9 @@ impl Shrink for CAlloc {
             return Err(Error::ShrinkLargerNewLayout(old_layout.size(), new_layout.size()));
         }
 
-        null_q_dyn(
-            shrink_aligned(ptr.as_ptr().cast(), new_padded.align(), new_padded.size()),
-            new_padded
-        )
+        null_q_dyn_zsl_check(new_layout, |_| {
+            shrink_aligned(ptr.as_ptr().cast(), new_padded.align(), new_padded.size())
+        })
     }
 }
 impl Realloc for CAlloc {

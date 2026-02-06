@@ -34,13 +34,16 @@ thread_local! {
 /// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](core::ptr::dangling)
 ///   pointer.
 /// - `f` must initialize the value behind its second parameter before returning.
-/// - `f` must properly handle the case where <code>[layout.size()](Layout::size) == 0</code> and it
-///   receives a [`dangling`](core::ptr::dangling) pointer.
 /// - On Rust versions below `1.71` with `catch_unwind` disabled, `f` must never unwind.
 pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     layout: Layout,
     f: F
 ) -> Result<R, Error> {
+    // TODO: maybe i should just make F take a Result instead and not skip running it on error
+    if layout.size() == 0 {
+        return Err(Error::ZeroSizedLayout);
+    }
+
     let mut ret = MaybeUninit::uninit();
     let mut closure = ManuallyDrop::new(f);
 

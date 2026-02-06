@@ -171,15 +171,6 @@ pub unsafe fn shrink_aligned(
     align: usize,
     size: usize // a memset-ing alloc here is useless, as it will just be overwritten anyway.
 ) -> *mut c_void {
-    // fast path if size is 0, just free and return dangling
-    if size == 0 {
-        // SAFETY: caller guarantees that `old_ptr` is valid
-        unsafe {
-            c_dealloc(old_ptr);
-        }
-        return align as *mut c_void;
-    }
-
     // allocate new aligned memory
     // SAFETY: requirements are passed on to the caller
     let ptr = unsafe { c_alloc(align, size) };

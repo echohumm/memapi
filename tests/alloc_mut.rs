@@ -26,9 +26,7 @@ impl AllocMut for MutOnlyAlloc {
 impl DeallocMut for MutOnlyAlloc {
     #[inline]
     unsafe fn try_dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        if layout.is_nonzero_sized() {
-            dealloc(ptr.as_ptr(), layout.to_stdlib());
-        }
+        dealloc(ptr.as_ptr(), layout.to_stdlib());
         Ok(())
     }
 }
