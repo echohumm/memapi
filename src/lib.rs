@@ -7,7 +7,7 @@
 //! # Core traits
 //! - [`Alloc`], [`Dealloc`], [`Grow`], [`Shrink`], [`Realloc`]
 //! - Convenience aliases: [`BasicAlloc`] and [`FullAlloc`]
-//! - Optional mutable variants (`alloc_mut_traits` feature): [`AllocMut`](alloc_mut::AllocMut),
+//! - Mutable variants in [`alloc_mut`]: [`AllocMut`](alloc_mut::AllocMut),
 //!   [`DeallocMut`](alloc_mut::DeallocMut), [`GrowMut`](alloc_mut::GrowMut),
 //!   [`ShrinkMut`](alloc_mut::ShrinkMut), [`ReallocMut`](alloc_mut::ReallocMut),
 //!   [`BasicAllocMut`](alloc_mut::BasicAllocMut), [`FullAllocMut`](alloc_mut::FullAllocMut)
@@ -37,7 +37,6 @@
 //! # Feature flags
 //! - `std`: enables `std` integration (including [`std::alloc::System`])
 //! - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
-//! - `alloc_mut_traits`: mutable allocator trait variants
 //! - `alloc_temp_trait`: scoped/temporary allocation trait
 //! - `c_alloc`: C `aligned_alloc`-style allocator ([`c_alloc`])
 //! - `stack_alloc`: `alloca`-based allocator ([`stack_alloc`])

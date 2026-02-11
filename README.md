@@ -35,7 +35,7 @@ If you want common optional features:
 
 ```toml
 [dependencies]
-memapi2 = { version = "0.9.2", features = ["os_err_reporting", "alloc_mut_traits"] }
+memapi2 = { version = "0.9.2", features = ["os_err_reporting"] }
 ```
 
 ## Example
@@ -61,7 +61,6 @@ fn main() -> Result<(), memapi2::error::Error> {
 
 - `std`: enable `std` integration (including `std::alloc::System`)
 - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
-- `alloc_mut_traits`: mutable allocator trait variants (`AllocMut`, `DeallocMut`, ...)
 - `alloc_temp_trait`: scoped/temporary allocation trait (`AllocTemp`)
 - `c_alloc`: C `aligned_alloc`-style allocator (`c_alloc::CAlloc`)
 - `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, experimental, requires a C
@@ -72,7 +71,7 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `no_alloc`: disable the `alloc` crate (removes `DefaultAlloc`, `StdLayout`, and implementations
   for the `System` allocator)
 - `no_nightly`: disable automatic nightly detection in `build.rs`
-- `full_msrv`: convenience bundle (`os_err_reporting`, `c_alloc`, `stack_alloc`, `alloc_mut_traits`)
+- `full_msrv`: convenience bundle (`os_err_reporting`, `c_alloc`, `stack_alloc`)
 - `full`: `full_msrv` + `c_str`
 - `all_nightly`: `metadata` + `sized_hierarchy`
 - `full_nightly`: `full` + `all_nightly`
