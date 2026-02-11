@@ -1,6 +1,7 @@
 # memapi2
 
-![crates.io](https://img.shields.io/crates/v/memapi2.svg) ![docs.rs](https://docs.rs/memapi2/badge.svg)
+![crates.io](https://img.shields.io/crates/v/memapi2.svg)
+![docs.rs](https://docs.rs/memapi2/badge.svg)
 
 A small, `no_std`/`no_alloc`-friendly allocation interface for raw buffers, with explicit layouts,
 split allocator traits, and structured errors.

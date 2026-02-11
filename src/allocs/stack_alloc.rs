@@ -1,5 +1,5 @@
 use {
-    crate::{AllocTemp, Layout, error::Error, ffi::stack_alloc::with_alloca},
+    crate::{Layout, alloc_temp::AllocTemp, error::Error, ffi::stack_alloc::with_alloca},
     core::ptr::{self, NonNull}
 };
 

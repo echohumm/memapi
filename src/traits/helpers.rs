@@ -106,10 +106,14 @@ pub enum Bytes {
     Zeroed
 }
 
-#[cfg(feature = "alloc_mut_traits")]
 pub mod alloc_mut {
     use {
-        crate::{GrowMut, Layout, ReallocMut, ShrinkMut, error::Error, traits::helpers::Bytes},
+        crate::{
+            Layout,
+            alloc_mut::{GrowMut, ReallocMut, ShrinkMut},
+            error::Error,
+            traits::helpers::Bytes
+        },
         core::{
             cmp::Ordering,
             fmt::{Debug, Display},

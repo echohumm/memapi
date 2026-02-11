@@ -1,14 +1,15 @@
 use {
     crate::{
-        error::Error,
-        ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned},
-        helpers::null_q_dyn_zsl_check,
         Alloc,
+        AllocErrorType,
         Dealloc,
         Grow,
         Layout,
         Realloc,
-        Shrink
+        Shrink,
+        error::Error,
+        ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned},
+        helpers::null_q_dyn_zsl_check
     },
     core::{cmp::Ordering, ffi::c_void, ptr::NonNull}
 };
@@ -97,9 +98,11 @@ unsafe fn pad_then_realloc(
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CAlloc;
 
-impl Alloc for CAlloc {
+impl AllocErrorType for CAlloc {
     type Error = Error;
+}
 
+impl Alloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {

@@ -4,7 +4,6 @@ use {
     core::ptr,
     memapi2::{DefaultAlloc, Layout, error::Error, traits::*}
 };
-
 #[test]
 fn test_alloc_and_dealloc() {
     let allocator = DefaultAlloc;

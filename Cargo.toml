@@ -57,8 +57,6 @@ std = []
 c_alloc = []
 ## adds a trait for temporary, scoped allocations
 alloc_temp_trait = []
-## add a set of traits for allocating with an allocator behind a mutable reference
-alloc_mut_traits = []
 stack_alloc = ["alloc_temp_trait", "c_alloc", "cc"]
 
 # actual features
@@ -68,7 +66,7 @@ os_err_reporting = ["std"]
 catch_unwind = ["stack_alloc", "std"]
 
 # feature bundles
-full_msrv = ["alloc_mut_traits", "c_alloc", "catch_unwind", "os_err_reporting"]
+full_msrv = ["c_alloc", "catch_unwind", "os_err_reporting"]
 full = ["c_str", "full_msrv"]
 full_nightly = ["all_nightly", "full"]
 
@@ -105,7 +103,7 @@ path = "tests/alloc.rs"
 [[test]]
 name = "malc"
 path = "tests/alloc_mut.rs"
-required-features = ["alloc_mut_traits"]
+required-features = []
 
 [[test]]
 name = "stk"

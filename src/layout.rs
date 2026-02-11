@@ -35,8 +35,9 @@ const fn check_lay(size: usize, align: usize, full: bool) -> Result<(), Error> {
 
 /// The layout of a block of memory in the form of its size and alignment in bytes.
 ///
-/// Note that this is `memapi`'s custom type, not stdlib's [`alloc::alloc::Layout`]. If a function
-/// you want does not exist, request it in an issue.
+/// Note that this is `memapi`'s custom type, not stdlib's
+/// [`alloc::alloc::Layout`](stdalloc::alloc::Layout). If a function you want does not exist,
+/// request it in an issue.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Layout {
     size: usize,
@@ -44,26 +45,26 @@ pub struct Layout {
 }
 
 #[cfg(not(feature = "no_alloc"))]
-impl PartialEq<alloc::alloc::Layout> for Layout {
-    fn eq(&self, other: &alloc::alloc::Layout) -> bool {
+impl PartialEq<stdalloc::alloc::Layout> for Layout {
+    fn eq(&self, other: &stdalloc::alloc::Layout) -> bool {
         self.align == other.align() && self.size == other.size()
     }
 }
 #[cfg(not(feature = "no_alloc"))]
-impl PartialEq<Layout> for alloc::alloc::Layout {
+impl PartialEq<Layout> for stdalloc::alloc::Layout {
     fn eq(&self, other: &Layout) -> bool {
         self.align() == other.align && self.size() == other.size
     }
 }
 #[cfg(not(feature = "no_alloc"))]
-impl From<alloc::alloc::Layout> for Layout {
-    fn from(layout: alloc::alloc::Layout) -> Layout {
+impl From<stdalloc::alloc::Layout> for Layout {
+    fn from(layout: stdalloc::alloc::Layout) -> Layout {
         Layout::from_stdlib(layout)
     }
 }
 #[cfg(not(feature = "no_alloc"))]
-impl From<Layout> for alloc::alloc::Layout {
-    fn from(layout: Layout) -> alloc::alloc::Layout {
+impl From<Layout> for stdalloc::alloc::Layout {
+    fn from(layout: Layout) -> stdalloc::alloc::Layout {
         layout.to_stdlib()
     }
 }
@@ -101,10 +102,11 @@ impl Layout {
     ///
     /// # Safety
     ///
-    /// The caller must ensure that <code>[T::SZ] * n</code> rounded up to [`T::ALN`] will not
-    /// exceed [`USIZE_MAX_NO_HIGH_BIT`].
+    /// The caller must ensure that <code>[T::SZ](SizedProps::SZ) * n</code> rounded up to
+    /// [`T::ALN`](SizedProps::ALN) will not exceed [`USIZE_MAX_NO_HIGH_BIT`].
     ///
-    /// Additionally, the return value may be unexpected if <code>[T::SZ] * n</code> overflows.
+    /// Additionally, the return value may be unexpected if <code>[T::SZ](SizedProps::SZ) * n</code>
+    /// overflows.
     #[must_use]
     #[inline]
     pub const unsafe fn array_unchecked<T>(n: usize) -> Layout {
@@ -504,22 +506,22 @@ impl Layout {
     }
 
     #[cfg(not(feature = "no_alloc"))]
-    /// Converts this layout to an [`alloc::alloc::Layout`].
+    /// Converts this layout to an [`alloc::alloc::Layout`](stdalloc::alloc::Layout).
     #[must_use]
     #[inline]
-    pub const fn to_stdlib(self) -> alloc::alloc::Layout {
+    pub const fn to_stdlib(self) -> stdalloc::alloc::Layout {
         // SAFETY: we validate all layout's requirements ourselves
-        unsafe { alloc::alloc::Layout::from_size_align_unchecked(self.size(), self.align()) }
+        unsafe { stdalloc::alloc::Layout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
     #[cfg(not(feature = "no_alloc"))]
-    /// Converts an [`alloc::alloc::Layout`] to a [`Layout`].
+    /// Converts an [`alloc::alloc::Layout`](stdalloc::alloc::Layout) to a [`Layout`].
     ///
     /// Note that this is only `const` on Rust versions 1.50 and above.
     #[rustversion::attr(since(1.50), const)]
     #[must_use]
     #[inline]
-    pub fn from_stdlib(layout: alloc::alloc::Layout) -> Layout {
+    pub fn from_stdlib(layout: stdalloc::alloc::Layout) -> Layout {
         // SAFETY: we share layout's requirements.
         unsafe { Layout::from_size_align_unchecked(layout.size(), layout.align()) }
     }

@@ -7,13 +7,15 @@
 //! # Core traits
 //! - [`Alloc`], [`Dealloc`], [`Grow`], [`Shrink`], [`Realloc`]
 //! - Convenience aliases: [`BasicAlloc`] and [`FullAlloc`]
-//! - Optional mutable variants (`alloc_mut_traits`): [`AllocMut`], [`DeallocMut`], [`GrowMut`],
-//!   [`ShrinkMut`], [`ReallocMut`], [`BasicAllocMut`], [`FullAllocMut`]
-//! - Optional scoped allocations (`alloc_temp_trait`): [`AllocTemp`]
+//! - Optional mutable variants (`alloc_mut_traits` feature): [`AllocMut`](alloc_mut::AllocMut),
+//!   [`DeallocMut`](alloc_mut::DeallocMut), [`GrowMut`](alloc_mut::GrowMut),
+//!   [`ShrinkMut`](alloc_mut::ShrinkMut), [`ReallocMut`](alloc_mut::ReallocMut),
+//!   [`BasicAllocMut`](alloc_mut::BasicAllocMut), [`FullAllocMut`](alloc_mut::FullAllocMut)
+//! - Optional scoped allocations (`alloc_temp_trait` feature): [`AllocTemp`](alloc_temp::AllocTemp)
 //!
 //! # Types and errors
-//! - [`Layout`]: crate layout type (with conversion to/from [`StdLayout`] unless `no_alloc` is
-//!   enabled)
+//! - [`Layout`]: crate layout type (with conversion to/from [`StdLayout`] unless `no_alloc` feature
+//!   is enabled)
 //! - [`DefaultAlloc`]: default allocator wrapper that delegates to the global allocator
 //! - Errors: [`Error`](error::Error), [`Cause`](error::Cause), [`LayoutErr`](error::LayoutErr),
 //!   [`ArithErr`](error::ArithErr), [`ArithOp`](error::ArithOp)
@@ -69,7 +71,7 @@
 
 // TODO: ideally `no_alloc` is ignored/switches to `std` if it's enabled
 
-#[cfg(not(feature = "no_alloc"))] extern crate alloc;
+#[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 extern crate core;
 
 /// This macro is theoretically faster than `<fallible>?`.
@@ -113,7 +115,35 @@ macro_rules! zalloc {
     }};
 }
 
-/// The library's main traits.
+macro_rules! default_dealloc {
+    ($self:ident.$de:ident, $ptr:ident, $l:ident) => {
+        if $l.is_nonzero_sized() && $ptr != $l.dangling() {
+            if let Err(e) = $self.$de($ptr, $l) {
+                default_dealloc_panic($ptr, $l, e)
+            }
+        }
+    };
+}
+
+macro_rules! default_shrink {
+    ($self:ident::$unchecked:ident, $ptr:ident, $old:ident, $new:ident) => {
+        match $old.size().cmp(&$new.size()) {
+            Ordering::Less => Err(<Self as AllocErrorType>::Error::from(
+                Error::ShrinkLargerNewLayout($old.size(), $new.size())
+            )),
+            Ordering::Equal => {
+                if $new.align() > $old.align() {
+                    $unchecked($self, $ptr, $old, $new)
+                } else {
+                    Ok($ptr)
+                }
+            }
+            Ordering::Greater => $unchecked($self, $ptr, $old, $new)
+        }
+    };
+}
+
+/// All traits provided by this crate.
 pub mod traits;
 pub use traits::*;
 
@@ -132,32 +162,35 @@ mod allocs;
 #[allow(unused_imports)] pub use allocs::*;
 
 #[cfg(not(feature = "no_alloc"))]
-/// A type alias for [`alloc::alloc::Layout`].
-pub type StdLayout = alloc::alloc::Layout;
+/// A type alias for [`alloc::alloc::Layout`](stdalloc::alloc::Layout).
+pub type StdLayout = stdalloc::alloc::Layout;
 
 /// Default allocator, delegating to the global allocator.
 ///
 /// # Note
 ///
 /// This must _not_ be set as the global allocator (via `#[global_allocator]`). Doing so will lead
-/// to infinite recursion, as the allocation functions this calls (in [`alloc::alloc`]) delegate to
-/// the global allocator.
+/// to infinite recursion, as the allocation functions this calls (in
+/// [`alloc::alloc`](stdalloc::alloc)) delegate to the global allocator.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DefaultAlloc;
 
 macro_rules! default_alloc_impl {
     ($ty:ty) => {
         #[cfg(not(feature = "no_alloc"))]
-        impl crate::Alloc for $ty {
+        impl crate::AllocErrorType for $ty {
             type Error = crate::error::Error;
+        }
 
+        #[cfg(not(feature = "no_alloc"))]
+        impl crate::Alloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             fn alloc(&self, layout: Layout) -> Result<core::ptr::NonNull<u8>, crate::error::Error> {
                 crate::helpers::null_q_dyn_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { alloc::alloc::alloc(layout.to_stdlib()) }
+                    |layout| unsafe { stdalloc::alloc::alloc(layout.to_stdlib()) }
                 )
             }
 
@@ -170,7 +203,7 @@ macro_rules! default_alloc_impl {
                 crate::helpers::null_q_dyn_zsl_check(
                     layout,
                     // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { alloc::alloc::alloc_zeroed(layout.to_stdlib()) }
+                    |layout| unsafe { stdalloc::alloc::alloc_zeroed(layout.to_stdlib()) }
                 )
             }
         }
@@ -180,7 +213,7 @@ macro_rules! default_alloc_impl {
             #[inline(always)]
             unsafe fn dealloc(&self, ptr: core::ptr::NonNull<u8>, layout: Layout) {
                 if layout.is_nonzero_sized() && ptr != layout.dangling() {
-                    alloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
+                    stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
             }
 
@@ -196,7 +229,7 @@ macro_rules! default_alloc_impl {
                 } else if ptr == layout.dangling() {
                     Err(crate::error::Error::DanglingDeallocation)
                 } else {
-                    alloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
+                    stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                     Ok(())
                 }
             }
@@ -212,29 +245,29 @@ macro_rules! default_alloc_impl {
 
 #[cfg(not(feature = "no_alloc"))]
 // SAFETY: DefaultAlloc doesn't unwind, and all layout operations are correct
-unsafe impl alloc::alloc::GlobalAlloc for DefaultAlloc {
+unsafe impl stdalloc::alloc::GlobalAlloc for DefaultAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc(&self, layout: StdLayout) -> *mut u8 {
-        alloc::alloc::alloc(layout)
+        stdalloc::alloc::alloc(layout)
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: *mut u8, layout: StdLayout) {
-        alloc::alloc::dealloc(ptr, layout);
+        stdalloc::alloc::dealloc(ptr, layout);
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_zeroed(&self, layout: StdLayout) -> *mut u8 {
-        alloc::alloc::alloc_zeroed(layout)
+        stdalloc::alloc::alloc_zeroed(layout)
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(&self, ptr: *mut u8, layout: StdLayout, new_size: usize) -> *mut u8 {
-        alloc::alloc::realloc(ptr, layout, new_size)
+        stdalloc::alloc::realloc(ptr, layout, new_size)
     }
 }
 
@@ -245,8 +278,8 @@ default_alloc_impl!(DefaultAlloc);
 pub(crate) mod nightly {
     use {
         crate::{Layout, StdLayout},
-        alloc::alloc::{AllocError, Allocator, Global},
-        core::ptr::NonNull
+        core::ptr::NonNull,
+        stdalloc::alloc::{AllocError, Allocator, Global}
     };
 
     // SAFETY: DefaultAlloc's allocated memory isn't deallocated until a deallocation method is
@@ -277,9 +310,9 @@ pub(crate) mod nightly {
             &self,
             ptr: NonNull<u8>,
             old_layout: StdLayout,
-            new_layout: StdLayout
+            new: StdLayout
         ) -> Result<NonNull<[u8]>, AllocError> {
-            Allocator::grow(&Global, ptr.cast(), old_layout, new_layout)
+            Allocator::grow(&Global, ptr.cast(), old_layout, new)
         }
 
         #[cfg_attr(miri, track_caller)]
@@ -288,9 +321,9 @@ pub(crate) mod nightly {
             &self,
             ptr: NonNull<u8>,
             old_layout: StdLayout,
-            new_layout: StdLayout
+            new: StdLayout
         ) -> Result<NonNull<[u8]>, AllocError> {
-            Allocator::grow_zeroed(&Global, ptr.cast(), old_layout, new_layout)
+            Allocator::grow_zeroed(&Global, ptr.cast(), old_layout, new)
         }
 
         #[cfg_attr(miri, track_caller)]
@@ -299,9 +332,9 @@ pub(crate) mod nightly {
             &self,
             ptr: NonNull<u8>,
             old_layout: StdLayout,
-            new_layout: StdLayout
+            new: StdLayout
         ) -> Result<NonNull<[u8]>, AllocError> {
-            Allocator::shrink(&Global, ptr.cast(), old_layout, new_layout)
+            Allocator::shrink(&Global, ptr.cast(), old_layout, new)
         }
     }
 

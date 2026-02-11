@@ -3,16 +3,24 @@ extern crate alloc;
 use {
     alloc::alloc::{alloc, dealloc},
     core::{ptr, ptr::NonNull},
-    memapi2::{Layout, error::Error, helpers::null_q_dyn_zsl_check, traits::*}
+    memapi2::{
+        Layout,
+        alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
+        error::Error,
+        helpers::null_q_dyn_zsl_check,
+    }
 };
+use memapi2::AllocErrorType;
 
 /// Test allocator that only implements AllocMut and DeallocMut.
 #[derive(Debug, Clone, Copy, Default)]
 struct MutOnlyAlloc;
 
-impl AllocMut for MutOnlyAlloc {
+impl AllocErrorType for MutOnlyAlloc {
     type Error = Error;
+}
 
+impl AllocMut for MutOnlyAlloc {
     #[inline]
     fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
         null_q_dyn_zsl_check(

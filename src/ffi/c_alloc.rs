@@ -30,7 +30,7 @@ pub unsafe fn try_move(ptr: *mut c_void, old_ptr: *mut c_void, size: usize) {
 
 /// Allocates `size` bytes with at least `align` alignment.
 ///
-/// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
+/// The closest Rust equivalent is [`alloc`](stdalloc::alloc::alloc).
 ///
 /// On non-Windows platforms this forwards to `aligned_alloc`, which requires `align` to be a
 /// power of two and a multiple of `size_of::<*mut c_void>()`, and `size` to be a multiple of
@@ -57,7 +57,7 @@ pub fn c_alloc(align: usize, size: usize) -> *mut c_void {
 
 /// Frees memory previously returned by the primary C allocator.
 ///
-/// The closest Rust equivalent is [`dealloc`](alloc::alloc::dealloc).
+/// The closest Rust equivalent is [`dealloc`](stdalloc::alloc::dealloc).
 ///
 /// # Safety
 ///
@@ -188,7 +188,7 @@ pub unsafe fn shrink_aligned(
 extern "C" {
     /// Allocates `size` bytes.
     ///
-    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc) with the `layout`
+    /// The closest Rust equivalent is [`alloc`](stdalloc::alloc::alloc) with the `layout`
     /// parameter's alignment being <code>[align_of]::\<usize\>()</code>
     ///
     /// # Safety
@@ -199,7 +199,7 @@ extern "C" {
     #[cfg(not(windows))]
     /// Allocates `size` bytes with at least `align` alignment.
     ///
-    /// The closest Rust equivalent is [`alloc`](alloc::alloc::alloc).
+    /// The closest Rust equivalent is [`alloc`](stdalloc::alloc::alloc).
     ///
     /// # Returns
     ///
@@ -216,7 +216,7 @@ extern "C" {
     #[cfg(not(windows))]
     /// Frees memory previously returned by the primary C allocator.
     ///
-    /// The closest Rust equivalent is [`dealloc`](alloc::alloc::dealloc).
+    /// The closest Rust equivalent is [`dealloc`](stdalloc::alloc::dealloc).
     ///
     /// # Safety
     ///
