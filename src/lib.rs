@@ -53,9 +53,9 @@
     clippy::module_name_repetitions,
     clippy::use_self,
     clippy::question_mark,
-    unused_unsafe,
+    unused_unsafe
 )]
-#![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
+#![deny(missing_docs, unused_variables, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
 #![no_implicit_prelude]
 #![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
@@ -134,9 +134,10 @@ macro_rules! default_dealloc {
 macro_rules! default_shrink {
     ($self:ident::$unchecked:ident, $ptr:ident, $old:ident, $new:ident) => {
         match $old.size().cmp(&$new.size()) {
-            Ordering::Less => Err(<Self as AllocErrorType>::Error::from(
-                Error::ShrinkLargerNewLayout($old.size(), $new.size())
-            )),
+            Ordering::Less => Err(<Self as AllocError>::Error::from(Error::ShrinkLargerNewLayout(
+                $old.size(),
+                $new.size()
+            ))),
             Ordering::Equal => {
                 if $new.align() > $old.align() {
                     $unchecked($self, $ptr, $old, $new)
@@ -184,7 +185,7 @@ pub struct DefaultAlloc;
 macro_rules! default_alloc_impl {
     ($ty:ty) => {
         #[cfg(not(feature = "no_alloc"))]
-        impl crate::AllocErrorType for $ty {
+        impl crate::AllocError for $ty {
             type Error = crate::error::Error;
         }
 

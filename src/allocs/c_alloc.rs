@@ -1,7 +1,7 @@
 use {
     crate::{
         Alloc,
-        AllocErrorType,
+        AllocError,
         Dealloc,
         Grow,
         Layout,
@@ -19,6 +19,14 @@ use {
     }
 };
 // TODO: we should use the builtin malloc and realloc if align <= guaranteed align
+
+macro_rules! sz_check {
+    ($err:ident, $old:ident $cmp:tt $new:ident) => {
+        if $old.size() $cmp $new.size() {
+            return Err(Error::$err($old.size(), $new.size()));
+        }
+    };
+}
 
 #[cfg_attr(miri, track_caller)]
 fn pad_then_alloc(
@@ -40,12 +48,10 @@ unsafe fn pad_then_grow(
     new_layout: Layout,
     alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
+    sz_check!(GrowSmallerNewLayout, old_layout > new_layout);
+
     let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
     let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
-
-    if old_padded.size() > new_padded.size() {
-        return Err(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size()));
-    }
 
     null_q_dyn_zsl_check(new_layout, |_| {
         grow_aligned(
@@ -103,7 +109,7 @@ unsafe fn pad_then_realloc(
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CAlloc;
 
-impl AllocErrorType for CAlloc {
+impl AllocError for CAlloc {
     type Error = Error;
 }
 
@@ -162,12 +168,9 @@ impl Shrink for CAlloc {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, Error> {
-        let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
-        let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
+        sz_check!(ShrinkLargerNewLayout, old_layout < new_layout);
 
-        if old_padded.size() < new_padded.size() {
-            return Err(Error::ShrinkLargerNewLayout(old_layout.size(), new_layout.size()));
-        }
+        let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
 
         null_q_dyn_zsl_check(new_layout, |_| {
             shrink_aligned(ptr.as_ptr().cast(), new_padded.align(), new_padded.size())

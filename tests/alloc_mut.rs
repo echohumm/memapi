@@ -4,7 +4,7 @@ use {
     ::core::{ptr, ptr::NonNull},
     alloc::alloc::{alloc, dealloc},
     memapi2::{
-        AllocErrorType,
+        AllocError,
         Layout,
         alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
         error::Error,
@@ -16,7 +16,7 @@ use {
 #[derive(Debug, Clone, Copy, Default)]
 struct MutOnlyAlloc;
 
-impl AllocErrorType for MutOnlyAlloc {
+impl AllocError for MutOnlyAlloc {
     type Error = Error;
 }
 

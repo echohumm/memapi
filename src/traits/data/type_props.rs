@@ -400,7 +400,7 @@ unsafe impl VarSized for ::std::path::Path {
     type SubType = u8;
 }
 
-#[allow(clippy::undocumented_unsafe_blocks)]
+// SAFETY: obviously any VarSized struct is VarSized, we just propagate the values.
 unsafe impl<T: VarSizedStruct> VarSized for T {
     type SubType = <T::Tail as VarSized>::SubType;
 

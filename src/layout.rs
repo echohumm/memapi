@@ -400,7 +400,6 @@ impl Layout {
     #[::rustversion::attr(since(1.47), const)]
     #[inline]
     pub fn repeat_packed(&self, count: usize) -> Result<Layout, Error> {
-        #[allow(clippy::option_if_let_else)]
         let size = match checked_op(self.size(), ArithOp::Mul, count) {
             Ok(s) => s,
             Err(e) => return Err(Error::ArithmeticError(e))

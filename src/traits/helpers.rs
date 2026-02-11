@@ -41,7 +41,6 @@ pub unsafe fn grow<A: Grow<Error = E> + ?Sized, E: From<Error> + Debug + Display
     }
 }
 
-#[allow(clippy::needless_pass_by_value)]
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn grow_unchecked<A: Grow<Error = E> + ?Sized, E: From<Error> + Debug + Display>(
     a: &A,
@@ -150,8 +149,7 @@ pub mod alloc_mut {
             }
         }
     }
-
-    #[allow(clippy::needless_pass_by_value)]
+    
     #[cfg_attr(miri, track_caller)]
     pub unsafe fn grow_unchecked_mut<
         A: GrowMut<Error = E> + ?Sized,

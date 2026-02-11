@@ -251,7 +251,6 @@ pub fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[must_use]
 #[inline]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
@@ -266,7 +265,6 @@ pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta:
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[must_use]
 #[inline]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[::rustversion::attr(since(1.61), const)]
 pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
@@ -279,7 +277,6 @@ pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[must_use]
 #[inline]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
 pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe {
@@ -293,7 +290,6 @@ pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: u
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[::rustversion::attr(since(1.61), const)]
-#[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[must_use]
 #[inline]
 pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
@@ -327,7 +323,6 @@ pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
 ///
 /// <code>Err([Error::AllocFailed]\(layout, [Cause::OSErr]\(oserr\)\)</code>, where `oserr` is the
 /// error from [`io::Error::last_os_error`](::std::io::Error::last_os_error), if `ptr.is_null()`.
-#[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     if ptr.is_null() {
         Err(Error::AllocFailed(
@@ -358,14 +353,23 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
 /// # Errors
 ///
 /// <code>Err([Error::AllocFailed]\(layout, [Cause::Unknown]\)</code> if `ptr.is_null()`.
-#[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     null_q(ptr, layout)
 }
 
 /// Checks layout for being zero-sized, returning a [`dangling`](ptr::dangling) pointer if it is,
 /// otherwise attempting allocation using `f(layout)`.
-#[allow(clippy::missing_errors_doc)]
+///
+/// # Errors
+///
+/// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if `f` returns a null pointer. `cause`
+///   is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+/// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) == 0</code>.
+///
+/// [last_os_error]: ::std::io::Error::last_os_error
+/// [raw_os_error]: ::std::io::Error::raw_os_error
 pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F

@@ -44,7 +44,6 @@ pub enum Error {
     /// An arithmetic error.
     ArithmeticError(ArithErr),
     /// An unwinding panic occurred in a function which does not support unwinding; likely FFI.
-    #[allow(unused_qualifications)]
     CaughtUnwind,
     /// Any other kind of error, in the form of a string.
     Other(&'static str)
