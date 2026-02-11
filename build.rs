@@ -8,12 +8,12 @@ fn main() {
     if failures.is_empty() {
         println!("cargo:rustc-check-cfg=cfg(nightly)");
         // all success, now enable "nightly" if on the nightly toolchain
-        #[rustversion::nightly]
+        #[::rustversion::nightly]
         #[allow(clippy::items_after_statements, dead_code)]
         const fn is_nightly() -> bool {
             true
         }
-        #[rustversion::not(nightly)]
+        #[::rustversion::not(nightly)]
         #[allow(clippy::items_after_statements, dead_code)]
         const fn is_nightly() -> bool {
             false
@@ -65,7 +65,7 @@ fn run_checks() -> Vec<Failure> {
 
 mod checks {
     pub mod sp_frp {
-        use {crate::Failure, core::ptr::NonNull};
+        use {crate::Failure, ::core::ptr::NonNull};
 
         pub fn check() -> Vec<Failure> {
             let mut failures = Vec::<Failure>::new();

@@ -1,6 +1,10 @@
 use {
     crate::{Layout, alloc_temp::AllocTemp, error::Error, ffi::stack_alloc::with_alloca},
-    core::ptr::{self, NonNull}
+    ::core::{
+        ops::FnOnce,
+        ptr::{self, NonNull},
+        result::Result
+    }
 };
 
 /// An allocator that uses C's `alloca` for stack allocation.

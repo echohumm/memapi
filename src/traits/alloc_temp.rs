@@ -1,8 +1,11 @@
 use {
     crate::{BasicAlloc, Layout, error::Error},
-    core::{
+    ::core::{
+        convert::From,
         fmt::{Debug, Display},
-        ptr::{self, NonNull}
+        ops::FnOnce,
+        ptr::{self, NonNull},
+        result::Result::{self, Err, Ok}
     }
 };
 
@@ -21,17 +24,17 @@ pub trait AllocTemp {
     /// Errors are implementation-defined, refer to [`AllocTemp::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     ///
     /// # Safety
     ///
@@ -50,17 +53,17 @@ pub trait AllocTemp {
     /// Errors are implementation-defined, refer to [`AllocTemp::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     ///
     /// # Safety
     ///

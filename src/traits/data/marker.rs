@@ -1,3 +1,5 @@
+use ::core::marker::{Copy};
+
 /// Unsafe marker trait for types that can be copied, including unsized types such as slices.
 ///
 /// # Safety
@@ -14,13 +16,13 @@ unsafe impl<T: Copy> UnsizedCopy for [T] {}
 unsafe impl UnsizedCopy for str {}
 #[cfg(feature = "c_str")]
 // SAFETY: `CStr == [u8]`
-unsafe impl UnsizedCopy for core::ffi::CStr {}
+unsafe impl UnsizedCopy for ::core::ffi::CStr {}
 #[cfg(feature = "std")]
 // SAFETY: `OsStr == [u8]`
-unsafe impl UnsizedCopy for std::ffi::OsStr {}
+unsafe impl UnsizedCopy for ::std::ffi::OsStr {}
 #[cfg(feature = "std")]
 // SAFETY: `Path == OsStr == [u8]`
-unsafe impl UnsizedCopy for std::path::Path {}
+unsafe impl UnsizedCopy for ::std::path::Path {}
 
 #[cfg(all(not(feature = "metadata"), not(feature = "sized_hierarchy")))]
 /// Trait indicating that a type has no metadata.
@@ -65,7 +67,7 @@ pub unsafe trait Thin {}
 ///     assert_eq!(<&T>::SZ, usize::SZ)
 /// }
 /// ```
-pub unsafe trait Thin: core::ptr::Pointee<Metadata = ()> {}
+pub unsafe trait Thin: ::core::ptr::Pointee<Metadata = ()> {}
 
 #[cfg(all(feature = "metadata", feature = "sized_hierarchy"))]
 /// Trait indicating that a type has no metadata and may or may not have a size.
@@ -86,7 +88,7 @@ pub unsafe trait Thin: core::ptr::Pointee<Metadata = ()> {}
 /// }
 /// ```
 pub unsafe trait Thin:
-    core::ptr::Pointee<Metadata = ()> + core::marker::PointeeSized
+    ::core::ptr::Pointee<Metadata = ()> + ::core::marker::PointeeSized
 {
 }
 
@@ -126,7 +128,7 @@ pub unsafe trait SizeMeta {}
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
 /// }
 /// ```
-pub unsafe trait SizeMeta: core::marker::MetaSized {}
+pub unsafe trait SizeMeta: ::core::marker::MetaSized {}
 
 #[cfg(all(feature = "metadata", not(feature = "sized_hierarchy")))]
 /// Trait indicating that a type has `usize` metadata.
@@ -146,7 +148,7 @@ pub unsafe trait SizeMeta: core::marker::MetaSized {}
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
 /// }
 /// ```
-pub unsafe trait SizeMeta: core::ptr::Pointee<Metadata = usize> {}
+pub unsafe trait SizeMeta: ::core::ptr::Pointee<Metadata = usize> {}
 
 #[cfg(all(feature = "metadata", feature = "sized_hierarchy"))]
 /// Trait indicating that a type has `usize` metadata.
@@ -167,14 +169,14 @@ pub unsafe trait SizeMeta: core::ptr::Pointee<Metadata = usize> {}
 /// }
 /// ```
 pub unsafe trait SizeMeta:
-    core::ptr::Pointee<Metadata = usize> + core::marker::MetaSized
+    ::core::ptr::Pointee<Metadata = usize> + ::core::marker::MetaSized
 {
 }
 
 #[cfg(feature = "metadata")]
 // SAFETY: `P: Pointee<Metadata = ()>`
-unsafe impl<P: core::ptr::Pointee<Metadata = ()> + ?Sized> Thin for P {}
+unsafe impl<P: ::core::ptr::Pointee<Metadata = ()> + ?::core::marker::Sized> Thin for P {}
 
 #[cfg(feature = "metadata")]
 // SAFETY: `P: Pointee<Metadata = usize>`
-unsafe impl<P: core::ptr::Pointee<Metadata = usize> + ?Sized> SizeMeta for P {}
+unsafe impl<P: ::core::ptr::Pointee<Metadata = usize> + ?::core::marker::Sized> SizeMeta for P {}

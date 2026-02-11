@@ -59,7 +59,7 @@ fn stack_alloc() {
     }
 }
 
-#[rustversion::since(1.71)]
+#[::rustversion::since(1.71)]
 #[test]
 #[should_panic = "no UB? yippee!"]
 fn stack_alloc_unwind() {

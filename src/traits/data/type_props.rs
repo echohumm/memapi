@@ -1,6 +1,9 @@
 use {
     crate::{Layout, helpers::USIZE_MAX_NO_HIGH_BIT},
-    core::{
+    ::core::{
+        clone::Clone,
+        convert::AsRef,
+        marker::Sized,
         mem::{align_of, align_of_val, size_of, size_of_val},
         ptr::NonNull
     }
@@ -78,7 +81,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
-    unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata;
+    unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata;
 
     /// Checks whether the value is zero-sized.
     ///
@@ -126,8 +129,8 @@ macro_rules! impl_ptr_props_raw {
                     align_of_val::<T>(&**self)
                 }
                 #[cfg(feature = "metadata")]
-                unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata {
-                    core::ptr::metadata(&*(*self))
+                unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
+                    ::core::ptr::metadata(&*(*self))
                 }
             }
         )*
@@ -147,8 +150,8 @@ macro_rules! impl_ptr_props_identity {
                     align_of_val::<T>(*self)
                 }
                 #[cfg(feature = "metadata")]
-                unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata {
-                    core::ptr::metadata(*self)
+                unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
+                    ::core::ptr::metadata(*self)
                 }
             }
         )*
@@ -169,8 +172,8 @@ macro_rules! impl_ptr_props_as_ref {
                     align_of_val::<T>(self.as_ref())
                 }
                 #[cfg(feature = "metadata")]
-                unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata {
-                    core::ptr::metadata(self.as_ref())
+                unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
+                    ::core::ptr::metadata(self.as_ref())
                 }
             }
         )*
@@ -181,12 +184,12 @@ impl_ptr_props_raw! { *const T, *mut T }
 impl_ptr_props_identity! { &T, &mut T }
 #[cfg(not(feature = "no_alloc"))]
 impl_ptr_props_as_ref! {
-    stdalloc::boxed::Box<T>,
-    stdalloc::rc::Rc<T>,
-    stdalloc::sync::Arc<T>,
+    ::stdalloc::boxed::Box<T>,
+    ::stdalloc::rc::Rc<T>,
+    ::stdalloc::sync::Arc<T>,
 }
 #[cfg(not(feature = "no_alloc"))]
-impl<T: Clone> PtrProps<T> for stdalloc::borrow::Cow<'_, T> {
+impl<T: Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
     #[inline]
     unsafe fn sz(&self) -> usize {
         T::SZ
@@ -211,8 +214,8 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
     }
 
     #[cfg(feature = "metadata")]
-    unsafe fn metadata(&self) -> <T as core::ptr::Pointee>::Metadata {
-        core::ptr::metadata(&*self.as_ptr())
+    unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
+        ::core::ptr::metadata(&*self.as_ptr())
     }
 }
 
@@ -247,7 +250,7 @@ pub unsafe trait VarSized {
 /// The implementor must ensure that [`SubType`](VarSized::SubType) is the actual element type
 /// contained, and that the [`ALN`](VarSized::ALN) constant accurately reflects the type's alignment
 /// requirement in all safe contexts.
-pub unsafe trait VarSized: core::ptr::Pointee<Metadata = usize> {
+pub unsafe trait VarSized: ::core::ptr::Pointee<Metadata = usize> {
     /// The element type.
     ///
     /// [`VarSized`] types are either slices of another type or include a slice tail; this is that
@@ -325,7 +328,7 @@ pub unsafe trait VarSizedStruct {
 /// The implementor must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type
 /// contained, and that the [`ALN`](VarSizedStruct::ALN) constant accurately reflects the type's
 /// alignment requirement in all safe contexts.
-pub unsafe trait VarSizedStruct: core::ptr::Pointee<Metadata = usize> {
+pub unsafe trait VarSizedStruct: ::core::ptr::Pointee<Metadata = usize> {
     /// The [`VarSized`] tail type.
     ///
     /// [`VarSizedStruct`] types are unsized structs that contain a [`VarSized`] tail; this is that
@@ -382,18 +385,18 @@ unsafe impl VarSized for str {
 
 #[cfg(all(feature = "c_str", not(feature = "std")))]
 // SAFETY: `CStr = [u8]`
-unsafe impl VarSized for core::ffi::CStr {
+unsafe impl VarSized for ::core::ffi::CStr {
     type SubType = u8;
 }
 #[cfg(feature = "std")]
 // SAFETY: `OsStr = [u8]`
-unsafe impl VarSized for std::ffi::OsStr {
+unsafe impl VarSized for ::std::ffi::OsStr {
     type SubType = u8;
 }
 
 #[cfg(feature = "std")]
 // SAFETY: `Path = OsStr = [u8]`
-unsafe impl VarSized for std::path::Path {
+unsafe impl VarSized for ::std::path::Path {
     type SubType = u8;
 }
 

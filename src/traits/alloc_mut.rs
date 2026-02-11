@@ -14,9 +14,12 @@ use {
             default_dealloc_panic
         }
     },
-    core::{
-        cmp::Ordering,
-        ptr::{self, NonNull}
+    ::core::{
+        cmp::{Ord, Ordering},
+        convert::From,
+        marker::Sized,
+        ptr::{self, NonNull},
+        result::Result::{self, Err, Ok}
     }
 };
 
@@ -31,16 +34,16 @@ pub trait AllocMut: AllocErrorType {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the
-    ///   `os_err_reporting` feature is enabled, it will be
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
+    ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     fn alloc_mut(&mut self, layout: Layout)
     -> Result<NonNull<u8>, <Self as AllocErrorType>::Error>;
 
@@ -51,16 +54,16 @@ pub trait AllocMut: AllocErrorType {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the
-    ///   `os_err_reporting` feature is enabled, it will be
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
+    ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc_mut(
@@ -161,9 +164,9 @@ pub trait GrowMut: AllocMut + DeallocMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the
-    ///   `os_err_reporting` feature is enabled, it will be
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
+    ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
@@ -172,8 +175,8 @@ pub trait GrowMut: AllocMut + DeallocMut {
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[new_layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow_mut(
@@ -208,9 +211,9 @@ pub trait GrowMut: AllocMut + DeallocMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the
-    ///   `os_err_reporting` feature is enabled, it will be
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
+    ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
@@ -219,8 +222,8 @@ pub trait GrowMut: AllocMut + DeallocMut {
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[new_layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zgrow_mut(
@@ -262,9 +265,9 @@ pub trait ShrinkMut: AllocMut + DeallocMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the
-    ///   `os_err_reporting` feature is enabled, it will be
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
+    ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
@@ -273,8 +276,8 @@ pub trait ShrinkMut: AllocMut + DeallocMut {
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[new_layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink_mut(
         &mut self,
@@ -310,16 +313,16 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the
-    ///   `os_err_reporting` feature is enabled, it will be
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
+    ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[new_layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc_mut(
@@ -349,16 +352,16 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the
-    ///   `os_err_reporting` feature is enabled, it will be
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
+    ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[new_layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn rezalloc_mut(
@@ -695,12 +698,12 @@ macro_rules! impl_alloc_for_sync_mutalloc {
 
 #[cfg(feature = "std")]
 impl_alloc_for_sync_mutalloc! {
-    std::sync::Mutex<A>, lock, "lock ", "Mutex<impl "
+    ::std::sync::Mutex<A>, lock, "lock ", "Mutex<impl "
 }
 #[cfg(feature = "std")]
 impl_alloc_for_sync_mutalloc! {
-    std::sync::RwLock<A>, write, "write lock ", "RwLock<impl "
+    ::std::sync::RwLock<A>, write, "write lock ", "RwLock<impl "
 }
 impl_alloc_for_sync_mutalloc! {
-    core::cell::RefCell<A>, try_borrow_mut, "mutably borrow ", "RefCell<impl "
+    ::core::cell::RefCell<A>, try_borrow_mut, "mutably borrow ", "RefCell<impl "
 }

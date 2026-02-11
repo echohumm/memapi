@@ -1,16 +1,16 @@
 extern crate alloc;
 
 use {
+    ::core::{ptr, ptr::NonNull},
     alloc::alloc::{alloc, dealloc},
-    core::{ptr, ptr::NonNull},
     memapi2::{
+        AllocErrorType,
         Layout,
         alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
         error::Error,
-        helpers::null_q_dyn_zsl_check,
+        helpers::null_q_dyn_zsl_check
     }
 };
-use memapi2::AllocErrorType;
 
 /// Test allocator that only implements AllocMut and DeallocMut.
 #[derive(Debug, Clone, Copy, Default)]

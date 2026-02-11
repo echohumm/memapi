@@ -1,7 +1,7 @@
 #![allow(clippy::cast_ptr_alignment)]
 
 use {
-    core::ptr::{self, NonNull},
+    ::core::ptr::{self, NonNull},
     memapi2::{
         Alloc,
         Dealloc,

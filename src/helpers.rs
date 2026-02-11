@@ -5,10 +5,15 @@ use {
         data::type_props::{PtrProps, SizedProps, VarSized},
         error::{ArithErr, ArithOp, Cause, Error, LayoutErr}
     },
-    core::{
+    ::core::{
+        clone::Clone,
+        iter::{IntoIterator, Iterator},
+        marker::{Copy, Sized},
         mem::forget,
-        ops::Deref,
-        ptr::{self, NonNull}
+        ops::{Deref, Drop, Fn},
+        option::Option::{self, None, Some},
+        ptr::{self, NonNull},
+        result::Result::{self, Err, Ok}
     }
 };
 
@@ -31,35 +36,35 @@ pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (USIZE_MAX_NO_HIGH_BIT);
 ///
 /// <code>Err([ArithErr]\(l, op, r\))</code> if the requested operation would cause an overflow,
 /// underflow, or conversion error.
-#[rustversion::attr(since(1.47), const)]
+#[::rustversion::attr(since(1.47), const)]
 pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
-    #[rustversion::since(1.52)]
+    #[::rustversion::since(1.52)]
     #[inline(always)]
     const fn checked_div(l: usize, r: usize) -> Option<usize> {
         l.checked_div(r)
     }
-    #[rustversion::before(1.52)]
+    #[::rustversion::before(1.52)]
     const fn checked_div(l: usize, r: usize) -> Option<usize> {
         if r == 0 { None } else { Some(l / r) }
     }
 
-    #[rustversion::since(1.52)]
+    #[::rustversion::since(1.52)]
     #[inline(always)]
     const fn checked_rem(l: usize, r: usize) -> Option<usize> {
         l.checked_rem(r)
     }
-    #[rustversion::before(1.52)]
+    #[::rustversion::before(1.52)]
     const fn checked_rem(l: usize, r: usize) -> Option<usize> {
         if r == 0 { None } else { Some(l % r) }
     }
 
-    #[rustversion::since(1.50)]
+    #[::rustversion::since(1.50)]
     #[inline(always)]
     const fn checked_pow(l: usize, r: u32) -> Option<usize> {
         l.checked_pow(r)
     }
-    #[rustversion::before(1.50)]
-    #[rustversion::attr(since(1.47), const)]
+    #[::rustversion::before(1.50)]
+    #[::rustversion::attr(since(1.47), const)]
     fn checked_pow(l: usize, mut r: u32) -> Option<usize> {
         if r == 0 {
             return Some(1);
@@ -123,7 +128,7 @@ pub const fn align_up(v: usize, align: usize) -> usize {
 ///   `align` is not a power of two.
 /// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if
 ///   <code>v + (align - 1)</code> would overflow.
-#[rustversion::attr(since(1.47), const)]
+#[::rustversion::attr(since(1.47), const)]
 pub fn align_up_checked(v: usize, align: usize) -> Result<usize, Error> {
     if align == 0 {
         return Err(Error::InvalidLayout(v, align, LayoutErr::ZeroAlign));
@@ -163,7 +168,7 @@ pub fn ptr_max_align(ptr: NonNull<u8>) -> usize {
 ///
 /// This is a helper used in place of [`NonNull::slice_from_raw_parts`], which was stabilized after
 /// this crate's MSRV.
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 #[must_use]
 pub fn nonnull_slice_from_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
     varsized_nonnull_from_parts(p.cast(), len)
@@ -175,7 +180,7 @@ pub fn nonnull_slice_from_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
 ///
 /// This is a helper used in place of [`ptr::slice_from_raw_parts_mut`], which was const-stabilized
 /// after this crate's MSRV.
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 #[must_use]
 pub fn slice_ptr_from_parts_mut<T>(p: *mut T, len: usize) -> *mut [T] {
     varsized_ptr_from_parts_mut(p.cast(), len)
@@ -184,7 +189,7 @@ pub fn slice_ptr_from_parts_mut<T>(p: *mut T, len: usize) -> *mut [T] {
 /// Creates a `*mut [T]` from a pointer and a length.
 ///
 /// Note that this is only `const` on Rust versions 1.47 and above.
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 #[must_use]
 pub fn slice_ptr_from_parts<T>(p: *const T, len: usize) -> *const [T] {
     varsized_ptr_from_parts(p.cast(), len)
@@ -197,7 +202,7 @@ pub fn slice_ptr_from_parts<T>(p: *const T, len: usize) -> *const [T] {
 /// # Safety
 ///
 /// The caller must ensure `ptr` is aligned and non-dangling.
-#[rustversion::attr(since(1.58), const)]
+#[::rustversion::attr(since(1.58), const)]
 #[must_use]
 #[inline]
 pub unsafe fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
@@ -208,7 +213,7 @@ pub unsafe fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
 /// alignment.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 #[must_use]
 pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
     // SAFETY: the implementor of VarSized guarantees the ALN is valid.
@@ -219,7 +224,7 @@ pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
 /// alignment.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 #[must_use]
 pub fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *mut T {
     // SAFETY: the implementor of VarSized guarantees the ALN is valid.
@@ -229,7 +234,7 @@ pub fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *mut T {
 /// Creates a <code>[NonNull]\<T\></code> from a pointer and a `usize` size metadata.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 #[must_use]
 #[inline]
 pub fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
@@ -240,7 +245,7 @@ pub fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
     unsafe { NonNull::new_unchecked(varsized_ptr_from_parts_mut(p.as_ptr(), meta)) }
 }
 
-#[rustversion::since(1.83)]
+#[::rustversion::since(1.83)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
@@ -255,20 +260,20 @@ pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta:
             .cast::<*mut T>())
     }
 }
-#[rustversion::before(1.83)]
+#[::rustversion::before(1.83)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
 #[must_use]
 #[inline]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
     // SAFETY: VarSized trait requires T::Metadata == usize
     unsafe { crate::helpers::union_transmute::<(*mut u8, usize), *mut T>((p, meta)) }
 }
 
-#[rustversion::since(1.64)]
+#[::rustversion::since(1.64)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
@@ -283,11 +288,11 @@ pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: u
             .cast::<*const T>())
     }
 }
-#[rustversion::before(1.64)]
+#[::rustversion::before(1.64)]
 /// Creates a `*mut T` from a pointer and a `usize` size metadata.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above
-#[rustversion::attr(since(1.61), const)]
+#[::rustversion::attr(since(1.61), const)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[must_use]
 #[inline]
@@ -321,7 +326,7 @@ pub fn null_q<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
 /// # Errors
 ///
 /// <code>Err([Error::AllocFailed]\(layout, [Cause::OSErr]\(oserr\)\)</code>, where `oserr` is the
-/// error from [`io::Error::last_os_error`](std::io::Error::last_os_error), if `ptr.is_null()`.
+/// error from [`io::Error::last_os_error`](::std::io::Error::last_os_error), if `ptr.is_null()`.
 #[allow(clippy::missing_errors_doc)]
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     if ptr.is_null() {
@@ -332,9 +337,9 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
             // Copy, and other traits which Cause is.
             Cause::OSErr(unsafe {
                 #[allow(clippy::option_if_let_else)]
-                match std::io::Error::last_os_error().raw_os_error() {
+                match ::std::io::Error::last_os_error().raw_os_error() {
                     Some(e) => e,
-                    None => core::hint::unreachable_unchecked()
+                    None => ::core::hint::unreachable_unchecked()
                 }
             })
         ))
@@ -369,7 +374,7 @@ pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
 }
 // TODO: lower const msrv and generally improve these. will require some testing regarding effects
 //  of current and alternative implementations on provenance
-#[rustversion::since(1.75)]
+#[::rustversion::since(1.75)]
 /// Subtracts `n` bytes from a pointer's address.
 ///
 /// Note that this is only `const` on Rust versions 1.75 and above.
@@ -383,7 +388,7 @@ pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
 pub const unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
     p.byte_sub(n)
 }
-#[rustversion::before(1.75)]
+#[::rustversion::before(1.75)]
 /// Subtracts `n` bytes from a pointer's address.
 ///
 /// Note that this is only `const` on Rust versions 1.75 and above.
@@ -404,7 +409,7 @@ pub unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
     p
 }
 
-#[rustversion::since(1.75)]
+#[::rustversion::since(1.75)]
 /// Adds `n` bytes to a pointer's address.
 ///
 /// Note that this is only `const` on Rust versions 1.75 and above.
@@ -418,7 +423,7 @@ pub unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
 pub const unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
     p.byte_add(n)
 }
-#[rustversion::before(1.75)]
+#[::rustversion::before(1.75)]
 /// Adds `n` bytes to a pointer's address.
 ///
 /// # Safety
@@ -437,7 +442,7 @@ pub unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
     p
 }
 
-#[rustversion::since(1.49)]
+#[::rustversion::since(1.49)]
 /// Transmutes via a `union`. Performs no validity checks.
 ///
 /// Note that this requires both <code>Src: [Copy]</code> and <code>Dst: [Copy]</code> on Rust
@@ -447,9 +452,9 @@ pub unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
 ///
 /// The caller must ensure that <code>[Src::SZ](SizedProps::SZ) >= [Dst::SZ](SizedProps::SZ)</code>
 /// and that `src` is a valid `Dst`.
-#[rustversion::attr(since(1.56), const)]
+#[::rustversion::attr(since(1.56), const)]
 pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
-    use core::mem::ManuallyDrop;
+    use ::core::mem::ManuallyDrop;
 
     union Either<Src, Dst> {
         src: ManuallyDrop<Src>,
@@ -458,7 +463,7 @@ pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
 
     ManuallyDrop::into_inner(Either { src: ManuallyDrop::new(src) }.dst)
 }
-#[rustversion::before(1.49)]
+#[::rustversion::before(1.49)]
 /// Transmutes via a `union`. Performs no validity checks.
 ///
 /// Note that this requires both <code>Src: [Copy]</code> and <code>Dst: [Copy]</code> on Rust
@@ -505,7 +510,7 @@ pub const fn is_multiple_of(lhs: usize, rhs: usize) -> bool {
 /// # Examples
 ///
 /// ```
-/// # use core::ptr::NonNull;
+/// # use ::core::ptr::NonNull;
 /// # use memapi2::{helpers::AllocGuard, Layout, Alloc, DefaultAlloc};
 /// # let alloc = DefaultAlloc;
 /// // Allocate space for one `u32` and wrap it in a guard
@@ -535,7 +540,7 @@ impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
     ///
     /// The caller must ensure `ptr` is a valid, readable, writable pointer allocated using
     /// `alloc`.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[inline]
     pub unsafe fn new(ptr: NonNull<T>, alloc: &'a A) -> AllocGuard<'a, T, A> {
         AllocGuard { ptr, alloc }
@@ -544,7 +549,7 @@ impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
     /// Initializes the value by writing to the contained pointer.
     ///
     /// Note that this is only `const` on Rust versions 1.83 and above.
-    #[rustversion::attr(since(1.83), const)]
+    #[::rustversion::attr(since(1.83), const)]
     #[cfg_attr(miri, track_caller)]
     #[inline]
     pub fn init(&mut self, elem: T)
@@ -561,7 +566,7 @@ impl<'a, T: ?Sized, A: BasicAlloc + ?Sized> AllocGuard<'a, T, A> {
     /// pointer.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     #[inline]
     pub fn release(self) -> NonNull<T> {
@@ -607,7 +612,7 @@ impl<T: ?Sized, A: BasicAlloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 ///
 /// ```
 /// # extern crate alloc;
-/// # use core::ptr::NonNull;
+/// # use ::core::ptr::NonNull;
 /// # use memapi2::{
 /// #  helpers::SliceAllocGuard,
 /// #  Alloc,
@@ -653,7 +658,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// The caller must ensure that `ptr` was allocated using `alloc`, has space for `full`
     /// `T`, and is readable, writable, valid, and aligned.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[inline]
     pub unsafe fn new(ptr: NonNull<T>, alloc: &'a A, full: usize) -> SliceAllocGuard<'a, T, A> {
         SliceAllocGuard { ptr, alloc, init: 0, full }
@@ -667,7 +672,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// In addition to the restrictions of [`SliceAllocGuard::new`], the caller must ensure
     /// that `init` is the number of existing initialized elements in the slice.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[inline]
     pub unsafe fn new_with_init(
         ptr: NonNull<T>,
@@ -682,7 +687,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// <code>[NonNull]\<T\></code> pointer to the slice.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     #[inline]
     pub fn release(self) -> NonNull<[T]> {
@@ -695,7 +700,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// <code>[NonNull]\<T\></code> pointer to the slice's first element.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     #[inline]
     pub fn release_first(self) -> NonNull<T> {
@@ -707,7 +712,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Gets a <code>[NonNull]<\[T\]></code> pointer to the initialized elements of the slice.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[cfg_attr(miri, track_caller)]
     #[must_use]
     pub fn get_init_part(&self) -> NonNull<[T]> {
@@ -717,7 +722,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Gets a <code>[NonNull]<\[T\]></code> pointer to the uninitialized elements of the slice.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     pub fn get_uninit_part(&self) -> NonNull<[T]> {
         // SAFETY: `self.init` will be in bounds unless an init-setting method was used incorrectly.
@@ -733,7 +738,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Gets a <code>[NonNull]<\[T\]></code> pointer to the full slice.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[cfg_attr(miri, track_caller)]
     #[must_use]
     pub fn get_full(&self) -> NonNull<[T]> {
@@ -747,7 +752,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// # Safety
     ///
     /// The caller must ensure the new count is correct.
-    #[rustversion::attr(since(1.83), const)]
+    #[::rustversion::attr(since(1.83), const)]
     #[inline]
     pub unsafe fn set_init(&mut self, init: usize) {
         self.init = init;
@@ -760,7 +765,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// # Errors
     ///
     /// `Err(elem)` if there is not enough capacity for another element.
-    #[rustversion::attr(since(1.83), const)]
+    #[::rustversion::attr(since(1.83), const)]
     #[inline]
     pub fn init(&mut self, elem: T) -> Result<(), T> {
         if self.init == self.full {
@@ -782,7 +787,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// The caller must ensure that the slice is not at capacity.
     /// (<code>[self.initialized()](SliceAllocGuard::initialized) <
     /// [self.full()](SliceAllocGuard::full)</code>)
-    #[rustversion::attr(since(1.83), const)]
+    #[::rustversion::attr(since(1.83), const)]
     #[inline]
     pub unsafe fn init_unchecked(&mut self, elem: T) {
         ptr::write(self.ptr.as_ptr().add(self.init), elem);
@@ -792,7 +797,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Returns how many elements have been initialized.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     #[inline]
     pub fn initialized(&self) -> usize {
@@ -802,7 +807,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Returns the total number of elements in the slice.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     #[inline]
     pub fn full(&self) -> usize {
@@ -812,7 +817,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Returns `true` if every element in the slice has been initialized.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     #[inline]
     pub fn is_full(&self) -> bool {
@@ -822,7 +827,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     /// Returns `true` if no elements have been initialized.
     ///
     /// Note that this is only `const` on Rust versions 1.61 and above.
-    #[rustversion::attr(since(1.61), const)]
+    #[::rustversion::attr(since(1.61), const)]
     #[must_use]
     #[inline]
     pub fn is_empty(&self) -> bool {
@@ -841,7 +846,7 @@ impl<'a, T, A: BasicAlloc + ?Sized> SliceAllocGuard<'a, T, A> {
     ///
     /// `Err(excess)` if some elements could not be copied from the slice due to a lack of
     /// capacity.
-    #[rustversion::attr(since(1.83), const)]
+    #[::rustversion::attr(since(1.83), const)]
     pub fn copy_from_slice(&mut self, slice: &[T]) -> Result<(), usize>
     where
         T: Copy

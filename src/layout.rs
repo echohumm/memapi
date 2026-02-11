@@ -11,7 +11,13 @@ use {
             is_multiple_of
         }
     },
-    core::ptr::NonNull
+    ::core::{
+        cmp::PartialEq,
+        convert::From,
+        marker::Sized,
+        ptr::NonNull,
+        result::Result::{self, Err, Ok}
+    }
 };
 
 // TODO: check all of these docs, idk how many are correct anymore my head hurts
@@ -36,7 +42,7 @@ const fn check_lay(size: usize, align: usize, full: bool) -> Result<(), Error> {
 /// The layout of a block of memory in the form of its size and alignment in bytes.
 ///
 /// Note that this is `memapi`'s custom type, not stdlib's
-/// [`alloc::alloc::Layout`](stdalloc::alloc::Layout). If a function you want does not exist,
+/// [`alloc::alloc::Layout`](::stdalloc::alloc::Layout). If a function you want does not exist,
 /// request it in an issue.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Layout {
@@ -45,26 +51,26 @@ pub struct Layout {
 }
 
 #[cfg(not(feature = "no_alloc"))]
-impl PartialEq<stdalloc::alloc::Layout> for Layout {
-    fn eq(&self, other: &stdalloc::alloc::Layout) -> bool {
+impl PartialEq<::stdalloc::alloc::Layout> for Layout {
+    fn eq(&self, other: &::stdalloc::alloc::Layout) -> bool {
         self.align == other.align() && self.size == other.size()
     }
 }
 #[cfg(not(feature = "no_alloc"))]
-impl PartialEq<Layout> for stdalloc::alloc::Layout {
+impl PartialEq<Layout> for ::stdalloc::alloc::Layout {
     fn eq(&self, other: &Layout) -> bool {
         self.align() == other.align && self.size() == other.size
     }
 }
 #[cfg(not(feature = "no_alloc"))]
-impl From<stdalloc::alloc::Layout> for Layout {
-    fn from(layout: stdalloc::alloc::Layout) -> Layout {
+impl From<::stdalloc::alloc::Layout> for Layout {
+    fn from(layout: ::stdalloc::alloc::Layout) -> Layout {
         Layout::from_stdlib(layout)
     }
 }
 #[cfg(not(feature = "no_alloc"))]
-impl From<Layout> for stdalloc::alloc::Layout {
-    fn from(layout: Layout) -> stdalloc::alloc::Layout {
+impl From<Layout> for ::stdalloc::alloc::Layout {
+    fn from(layout: Layout) -> ::stdalloc::alloc::Layout {
         layout.to_stdlib()
     }
 }
@@ -129,7 +135,7 @@ impl Layout {
     /// [other.align()](Layout::align), [LayoutErr::ExceedsMax]\))</code> if
     /// [`self.size()`](Layout::size) rounded up to the nearest multiple of
     /// [`other.align()`](Layout::align) would exceed [`USIZE_MAX_NO_HIGH_BIT`].
-    #[rustversion::attr(since(1.47), const)]
+    #[::rustversion::attr(since(1.47), const)]
     pub fn extend(&self, other: Layout) -> Result<(Layout, usize), Error> {
         let a_sz = self.size();
         let a_aln = self.align();
@@ -154,7 +160,7 @@ impl Layout {
         }
     }
 
-    /// Returns a valid, [`dangling`](core::ptr::dangling) pointer for this layout's alignment.
+    /// Returns a valid, [`dangling`](::core::ptr::dangling) pointer for this layout's alignment.
     ///
     /// The returned pointer is non-null and correctly aligned for types that use this layout's
     /// alignment but should not be dereferenced.
@@ -213,17 +219,19 @@ impl Layout {
     ///
     /// C's `aligned_alloc(alignment, size)` requires:
     /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
-    ///   [c_void](core::ffi::c_void)>()</code>.
+    ///   [c_void](::core::ffi::c_void)>()</code>.
     /// - `size` is a multiple of `alignment`.
     ///
     /// Therefore:
     /// - `align` will be rounded up to the nearest multiple of <code>[size_of]::<*mut
-    ///   [c_void](core::ffi::c_void)>()</code> if it isn't already.
+    ///   [c_void](::core::ffi::c_void)>()</code> if it isn't already.
     /// - `size` will be rounded up to the nearest multiple of the resulting alignment.
     ///
     /// This is semantically equivalent to <code>[Layout::from_size_align]\(size,
     /// align\).[and_then](Result::and_then)\(|l|
     /// l.[to_aligned_alloc_compatible](Layout::to_aligned_alloc_compatible)\(\)\)</code>.
+    ///
+    /// [size_of]: ::core::mem::size_of
     ///
     /// # Errors
     ///
@@ -341,7 +349,7 @@ impl Layout {
     #[inline]
     pub const fn pad_to_align(&self) -> Layout {
         // SAFETY: constructors require that the size and alignment are valid for this operation.
-        let aligned_sz = unsafe { align_up(self.size(), self.align()) };
+        let aligned_sz = align_up(self.size(), self.align());
         // SAFETY: above.
         unsafe { Layout::from_size_align_unchecked(aligned_sz, self.align()) }
     }
@@ -359,7 +367,7 @@ impl Layout {
     /// <code>Err([Error::ArithmeticError])</code> if multiplying `count` by
     ///   [`layout.size()`](Layout::size), rounded up to the nearest multiple of
     ///   [`layout.align()`](Layout::align), would overflow.
-    #[rustversion::attr(since(1.47), const)]
+    #[::rustversion::attr(since(1.47), const)]
     #[inline]
     pub fn repeat(&self, count: usize) -> Result<(Layout, usize), Error> {
         let padded = self.pad_to_align();
@@ -389,7 +397,7 @@ impl Layout {
     ///   [self.align()](Layout::align), [LayoutErr::ExceedsMax]\))</code> if
     ///   <code>[self.size()](Layout::size) * count</code> rounded up to the nearest multiple of
     ///   [`self.align()`](Layout::align) would exceed [`USIZE_MAX_NO_HIGH_BIT`].
-    #[rustversion::attr(since(1.47), const)]
+    #[::rustversion::attr(since(1.47), const)]
     #[inline]
     pub fn repeat_packed(&self, count: usize) -> Result<Layout, Error> {
         #[allow(clippy::option_if_let_else)]
@@ -464,12 +472,12 @@ impl Layout {
     ///
     /// C's `aligned_alloc(alignment, size)` requires:
     /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
-    ///   [c_void](core::ffi::c_void)>()</code>.
+    ///   [c_void](::core::ffi::c_void)>()</code>.
     /// - `size` is a multiple of `alignment`.
     ///
     /// Therefore:
     /// - The alignment will be rounded up to the nearest multiple of <code>[size_of]::<*mut
-    ///   [c_void](core::ffi::c_void)>()</code> if it isn't already.
+    ///   [c_void](::core::ffi::c_void)>()</code> if it isn't already.
     /// - The size will be rounded up to the nearest multiple of the resulting alignment.
     ///
     /// # Errors
@@ -478,9 +486,11 @@ impl Layout {
     /// [self.align()](Layout::align), [LayoutErr::CRoundUp]\))</code> if:
     /// - `align == 0`.
     /// - `align` is not a power of two.
-    /// - `align` rounded up to <code>[size_of]::<*mut [c_void](core::ffi::c_void)>()</code> would
+    /// - `align` rounded up to <code>[size_of]::<*mut [c_void](::core::ffi::c_void)>()</code> would
     ///   exceed the maximum allowed alignment.
     /// - `size` rounded up to the new alignment would exceed [`USIZE_MAX_NO_HIGH_BIT`].
+    ///
+    /// [size_of]: ::core::mem::size_of
     ///
     /// # Examples
     ///
@@ -506,22 +516,22 @@ impl Layout {
     }
 
     #[cfg(not(feature = "no_alloc"))]
-    /// Converts this layout to an [`alloc::alloc::Layout`](stdalloc::alloc::Layout).
+    /// Converts this layout to an [`alloc::alloc::Layout`](::stdalloc::alloc::Layout).
     #[must_use]
     #[inline]
-    pub const fn to_stdlib(self) -> stdalloc::alloc::Layout {
+    pub const fn to_stdlib(self) -> ::stdalloc::alloc::Layout {
         // SAFETY: we validate all layout's requirements ourselves
-        unsafe { stdalloc::alloc::Layout::from_size_align_unchecked(self.size(), self.align()) }
+        unsafe { ::stdalloc::alloc::Layout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
     #[cfg(not(feature = "no_alloc"))]
-    /// Converts an [`alloc::alloc::Layout`](stdalloc::alloc::Layout) to a [`Layout`].
+    /// Converts an [`alloc::alloc::Layout`](::stdalloc::alloc::Layout) to a [`Layout`].
     ///
     /// Note that this is only `const` on Rust versions 1.50 and above.
-    #[rustversion::attr(since(1.50), const)]
+    #[::rustversion::attr(since(1.50), const)]
     #[must_use]
     #[inline]
-    pub fn from_stdlib(layout: stdalloc::alloc::Layout) -> Layout {
+    pub fn from_stdlib(layout: ::stdalloc::alloc::Layout) -> Layout {
         // SAFETY: we share layout's requirements.
         unsafe { Layout::from_size_align_unchecked(layout.size(), layout.align()) }
     }

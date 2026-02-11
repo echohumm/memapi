@@ -11,7 +11,12 @@ use {
         ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned},
         helpers::null_q_dyn_zsl_check
     },
-    core::{cmp::Ordering, ffi::c_void, ptr::NonNull}
+    ::core::{
+        cmp::{Ord, Ordering},
+        ffi::c_void,
+        ptr::NonNull,
+        result::Result::{self, Err, Ok}
+    }
 };
 // TODO: we should use the builtin malloc and realloc if align <= guaranteed align
 

@@ -1,4 +1,4 @@
-use core::{
+use ::core::{
     ffi::c_void,
     ptr::{self, null_mut}
 };
@@ -30,7 +30,7 @@ pub unsafe fn try_move(ptr: *mut c_void, old_ptr: *mut c_void, size: usize) {
 
 /// Allocates `size` bytes with at least `align` alignment.
 ///
-/// The closest Rust equivalent is [`alloc`](stdalloc::alloc::alloc).
+/// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc).
 ///
 /// On non-Windows platforms this forwards to `aligned_alloc`, which requires `align` to be a
 /// power of two and a multiple of `size_of::<*mut c_void>()`, and `size` to be a multiple of
@@ -57,7 +57,7 @@ pub fn c_alloc(align: usize, size: usize) -> *mut c_void {
 
 /// Frees memory previously returned by the primary C allocator.
 ///
-/// The closest Rust equivalent is [`dealloc`](stdalloc::alloc::dealloc).
+/// The closest Rust equivalent is [`dealloc`](::stdalloc::alloc::dealloc).
 ///
 /// # Safety
 ///
@@ -86,7 +86,8 @@ pub unsafe fn c_dealloc(ptr: *mut c_void) {
 /// # Safety
 ///
 /// The caller must ensure:
-/// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
+/// - `align` is a power of two and a multiple of <code>[size_of](::core::mem::size_of)::<*mut
+///   [c_void]>()</code>.
 /// - `size` is a multiple of `align`.
 #[must_use = "this function allocates memory on success, and dropping the returned pointer will \
               leak memory"]
@@ -123,7 +124,8 @@ pub unsafe fn c_zalloc(align: usize, size: usize) -> *mut c_void {
 /// The caller must ensure:
 /// - `old_ptr` was allocated by this allocator and is valid for reads of `old_size` bytes.
 /// - `old_size` equals the size of the allocation requested at `old_ptr`.
-/// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
+/// - `align` is a power of two and a multiple of <code>[size_of](::core::mem::size_of)::<*mut
+///   [c_void]>()</code>.
 /// - `size` is greater than or equal to `old_size` and a multiple of `align`.
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn grow_aligned(
@@ -162,7 +164,8 @@ pub unsafe fn grow_aligned(
 ///
 /// The caller must ensure:
 /// - `old_ptr` was allocated by this allocator and is valid for reads of at least `size` bytes.
-/// - `align` is a power of two and a multiple of <code>[size_of]::<*mut [c_void]>()</code>.
+/// - `align` is a power of two and a multiple of <code>[size_of](::core::mem::size_of)::<*mut
+///   [c_void]>()</code>.
 /// - `size` is less than or equal to the size of the allocation at `old_ptr` and a multiple of
 ///   `align`.
 #[cfg_attr(miri, track_caller)]
@@ -188,8 +191,8 @@ pub unsafe fn shrink_aligned(
 extern "C" {
     /// Allocates `size` bytes.
     ///
-    /// The closest Rust equivalent is [`alloc`](stdalloc::alloc::alloc) with the `layout`
-    /// parameter's alignment being <code>[align_of]::\<usize\>()</code>
+    /// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc) with the `layout`
+    /// parameter's alignment being <code>[align_of](::core::mem::align_of)::\<usize\>()</code>
     ///
     /// # Safety
     ///
@@ -199,7 +202,7 @@ extern "C" {
     #[cfg(not(windows))]
     /// Allocates `size` bytes with at least `align` alignment.
     ///
-    /// The closest Rust equivalent is [`alloc`](stdalloc::alloc::alloc).
+    /// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc).
     ///
     /// # Returns
     ///
@@ -216,7 +219,7 @@ extern "C" {
     #[cfg(not(windows))]
     /// Frees memory previously returned by the primary C allocator.
     ///
-    /// The closest Rust equivalent is [`dealloc`](stdalloc::alloc::dealloc).
+    /// The closest Rust equivalent is [`dealloc`](::stdalloc::alloc::dealloc).
     ///
     /// # Safety
     ///

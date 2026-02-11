@@ -5,10 +5,13 @@ use {
         error::Error,
         traits::helpers::{Bytes, default_dealloc_panic, grow, ralloc, shrink_unchecked}
     },
-    core::{
-        cmp::Ordering,
+    ::core::{
+        cmp::{Ord, Ordering},
+        convert::From,
         fmt::{Debug, Display},
-        ptr::{self, NonNull}
+        marker::Sized,
+        ptr::{self, NonNull},
+        result::Result::{self, Err, Ok}
     }
 };
 
@@ -29,15 +32,15 @@ pub trait Alloc: AllocErrorType + AllocMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, <Self as AllocErrorType>::Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
@@ -47,15 +50,15 @@ pub trait Alloc: AllocErrorType + AllocMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, <Self as AllocErrorType>::Error> {
@@ -146,18 +149,18 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn grow(
@@ -192,18 +195,18 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
     ///   [new_layout.size()](Layout::size)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn zgrow(
@@ -242,18 +245,18 @@ pub trait Shrink: Alloc + Dealloc + ShrinkMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
     ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
     ///   [new_layout.size()](Layout::size)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     unsafe fn shrink(
         &self,
@@ -285,15 +288,15 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(
@@ -323,15 +326,15 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
     /// Errors are implementation-defined, refer to [`AllocErrorType::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation
-    ///   fails. `cause` is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is
-    ///   enabled, it will be <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be
-    ///   the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
+    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
+    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
+    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
     /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
     ///   0</code>.
     ///
-    /// [last_os_error]: std::io::Error::last_os_error
-    /// [raw_os_error]: std::io::Error::raw_os_error
+    /// [last_os_error]: ::std::io::Error::last_os_error
+    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn rezalloc(
@@ -470,7 +473,7 @@ macro_rules! impl_alloc_ref {
 
 impl_alloc_ref! { &A, &mut A }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl_alloc_ref! { stdalloc::boxed::Box<A>, stdalloc::rc::Rc<A>, stdalloc::sync::Arc<A> }
+impl_alloc_ref! { ::stdalloc::boxed::Box<A>, ::stdalloc::rc::Rc<A>, ::stdalloc::sync::Arc<A> }
 
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
 macro_rules! sysalloc {
@@ -478,18 +481,18 @@ macro_rules! sysalloc {
         crate::helpers::null_q_dyn_zsl_check(
             $layout,
             // SAFETY: System::$alloc is only called after the layout is verified non-zero-sized.
-            |layout| unsafe { stdalloc::alloc::GlobalAlloc::$alloc($self, layout.to_stdlib()) }
+            |layout| unsafe { ::stdalloc::alloc::GlobalAlloc::$alloc($self, layout.to_stdlib()) }
         )
     };
 }
 
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl AllocErrorType for std::alloc::System {
+impl AllocErrorType for ::std::alloc::System {
     type Error = Error;
 }
 
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl Alloc for std::alloc::System {
+impl Alloc for ::std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, Error> {
@@ -503,21 +506,21 @@ impl Alloc for std::alloc::System {
     }
 }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl Dealloc for std::alloc::System {
+impl Dealloc for ::std::alloc::System {
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
         if layout.is_zero_sized() {
             Err(Error::ZeroSizedLayout)
         } else if ptr == layout.dangling() {
             Err(Error::DanglingDeallocation)
         } else {
-            stdalloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
+            ::stdalloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
             Ok(())
         }
     }
 }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl Grow for std::alloc::System {}
+impl Grow for ::std::alloc::System {}
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl Shrink for std::alloc::System {}
+impl Shrink for ::std::alloc::System {}
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl Realloc for std::alloc::System {}
+impl Realloc for ::std::alloc::System {}

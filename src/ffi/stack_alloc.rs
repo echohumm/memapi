@@ -1,16 +1,18 @@
 use {
     crate::{Layout, error::Error},
-    core::{
+    ::core::{
         ffi::c_void,
         mem::{ManuallyDrop, MaybeUninit},
-        ptr::NonNull
+        ops::FnOnce,
+        ptr::NonNull,
+        result::Result::{self, Err, Ok},
     }
 };
 
 #[cfg(feature = "catch_unwind")]
-thread_local! {
-    static UNWIND: core::cell::RefCell<bool> =
-        core::cell::RefCell::new(false);
+::std::thread_local! {
+    static UNWIND: ::core::cell::RefCell<bool> =
+        ::core::cell::RefCell::new(false);
 }
 
 /// Attempts to allocate a block of memory fitting the given [`Layout`] on the stack with C
@@ -19,8 +21,8 @@ thread_local! {
 ///
 /// The allocation is only valid for the duration of the call.
 ///
-/// If [`layout.size()`](Layout::size) is zero, `f` will receive a [`dangling`](core::ptr::dangling)
-/// pointer.
+/// If [`layout.size()`](Layout::size) is zero, `f` will receive a
+/// [`dangling`](::core::ptr::dangling) pointer.
 ///
 /// # Errors
 ///
@@ -31,7 +33,7 @@ thread_local! {
 /// The caller must ensure:
 /// - `layout` is valid and <code>[layout.size()](Layout::size) + ([layout.align()](Layout::align) -
 ///   1)</code> will not exceed the stack allocation limit.
-/// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](core::ptr::dangling)
+/// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](::core::ptr::dangling)
 ///   pointer.
 /// - `f` must initialize the value behind its second parameter before returning.
 /// - On Rust versions below `1.71` with `catch_unwind` disabled, `f` must never unwind.
@@ -96,7 +98,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
 
 macro_rules! c_cb {
     ($verdef:ident, $ffi:literal) => {
-        #[rustversion::$verdef(1.71)]
+        #[::rustversion::$verdef(1.71)]
         /// Helper to call `callback` with `NonNull::new_unchecked(ptr)` and `out` from C.
         ///
         /// # Safety
@@ -120,7 +122,7 @@ macro_rules! c_cb {
             run();
             #[cfg(feature = "catch_unwind")]
             if $ffi == "C-unwind" {
-                if std::panic::catch_unwind(std::panic::AssertUnwindSafe(run)).is_err() {
+                if ::std::panic::catch_unwind(::std::panic::AssertUnwindSafe(run)).is_err() {
                     UNWIND.with(|v| *v.borrow_mut() = true);
                 }
             } else {
@@ -131,14 +133,14 @@ macro_rules! c_cb {
 }
 macro_rules! c_ext {
     ($verdef:ident, $ffi:literal) => {
-        #[rustversion::$verdef(1.71)]
+        #[::rustversion::$verdef(1.71)]
         extern $ffi {
             /// Allocates `size` bytes on the stack with at least `align` alignment and calls
             /// `cb(closure, allocation, out)`.
             ///
             /// The allocation is only valid for the duration of this call.
             ///
-            /// If `size == 0`, `cb` receives a [`dangling`](core::ptr::dangling) pointer.
+            /// If `size == 0`, `cb` receives a [`dangling`](::core::ptr::dangling) pointer.
             ///
             /// # Safety
             ///

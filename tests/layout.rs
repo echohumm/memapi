@@ -1,5 +1,5 @@
 use {
-    core::mem::{align_of, size_of},
+    ::core::mem::{align_of, size_of},
     memapi2::{
         Layout,
         error::{Error, LayoutErr},

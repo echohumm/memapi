@@ -1,9 +1,13 @@
 use {
     crate::{Grow, Layout, Realloc, Shrink, error::Error},
-    core::{
-        cmp::Ordering,
+    ::core::{
+        cmp::{Ord, Ordering},
+        convert::From,
         fmt::{Debug, Display},
-        ptr::{self, NonNull}
+        marker::Sized,
+        ptr::{self, NonNull},
+        result::Result::{self, Err, Ok},
+        panic
     }
 };
 
@@ -114,10 +118,13 @@ pub mod alloc_mut {
             error::Error,
             traits::helpers::Bytes
         },
-        core::{
-            cmp::Ordering,
+        ::core::{
+            cmp::{Ord, Ordering},
+            convert::From,
             fmt::{Debug, Display},
-            ptr::{self, NonNull}
+            marker::Sized,
+            ptr::{self, NonNull},
+            result::Result::{self, Err, Ok}
         }
     };
 

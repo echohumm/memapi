@@ -1,6 +1,9 @@
 use {
     crate::{Layout, data::type_props::SizedProps},
-    core::fmt::{Debug, Display, Formatter, Result as FmtResult}
+    ::core::{
+        fmt::{Debug, Display, Formatter, Result as FmtResult},
+        write
+    }
 };
 
 /// Helper macro to implement the Error trait based on its availability. Uses [`std::error::Error`]
@@ -8,11 +11,11 @@ use {
 macro_rules! impl_error {
     ($ty:ident) => {
         #[cfg(feature = "std")]
-        impl std::error::Error for $ty {}
+        impl ::std::error::Error for $ty {}
         #[cfg(not(feature = "std"))]
         // error_in_core stable since 1.81
-        #[rustversion::since(1.81)]
-        impl core::error::Error for $ty {}
+        #[::rustversion::since(1.81)]
+        impl ::core::error::Error for $ty {}
     };
 }
 
@@ -125,7 +128,7 @@ impl Display for Cause {
             Cause::OutOfMemory => write!(f, "out of memory"),
             Cause::Other(other) => write!(f, "{}", other),
             #[cfg(feature = "os_err_reporting")]
-            Cause::OSErr(e) => write!(f, "os error:\n\t{}", std::io::Error::from_raw_os_error(*e))
+            Cause::OSErr(e) => write!(f, "os error:\n\t{}", ::std::io::Error::from_raw_os_error(*e))
         }
     }
 }

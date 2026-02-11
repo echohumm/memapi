@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cargo clean
+
 export MIRIFLAGS=-Zmiri-permissive-provenance
 export RUSTDOCFLAGS="-D warnings"
 
 echo "clippy: stable"
-cargo +stable clippy -- -D warnings  > /dev/null
+cargo +stable clippy -- -D unused_unsafe -D warnings  > /dev/null
 echo "clippy: nightly"
-cargo +nightly clippy -- -D warnings > /dev/null
+cargo +nightly clippy -- -D unused_unsafe -D warnings > /dev/null
 
 echo "test: 1.46"
 cargo +1.46.0 test --features full_msrv > /dev/null
