@@ -5,3 +5,5 @@ pub mod c_alloc;
 #[cfg(feature = "stack_alloc")]
 /// An allocator which uses C's `alloca`/`_alloca` allocation function.
 pub mod stack_alloc;
+
+// TODO: basic ptr-inc alloc with a backer + arrayalloc, rename stackalloc for clarity
