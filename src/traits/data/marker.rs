@@ -1,4 +1,4 @@
-use ::core::marker::{Copy};
+use ::core::marker::Copy;
 
 /// Unsafe marker trait for types that can be copied, including unsized types such as slices.
 ///

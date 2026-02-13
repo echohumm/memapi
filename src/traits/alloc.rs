@@ -112,6 +112,8 @@ pub trait Dealloc: Alloc + DeallocMut {
     ///   0</code>.
     /// - <code>Err([Error::DanglingDeallocation])</code> if <code>ptr ==
     ///   [layout.dangling](Layout::dangling)</code>.
+    /// - <code>Err([Error::Unsupported])</code> if deallocation is unsupported. In this case,
+    ///   reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
     ///
     /// However, if the `alloc_mut` feature is enabled, and using this method on a synchronization
     /// primitive wrapping a type which implements [`AllocMut`], an
@@ -122,6 +124,8 @@ pub trait Dealloc: Alloc + DeallocMut {
         ptr: NonNull<u8>,
         layout: Layout
     ) -> Result<(), <Self as AllocError>::Error>;
+
+    // TODO: checked_dealloc that is safe, default impl returns Err(Unsupported)?
 }
 
 /// A memory allocation interface which can also grow allocations.
@@ -377,7 +381,7 @@ macro_rules! impl_alloc_ref {
             fn alloc(
                 &self,
                 layout: Layout
-            ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
+            ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
                 (**self).alloc(layout)
             }
 
@@ -386,7 +390,7 @@ macro_rules! impl_alloc_ref {
             fn zalloc(
                 &self,
                 layout: Layout
-            ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
+            ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
                 (**self).zalloc(layout)
             }
         }
@@ -402,7 +406,7 @@ macro_rules! impl_alloc_ref {
                 &self,
                 ptr: NonNull<u8>,
                 layout: Layout
-            ) -> Result<(), <Self as AllocError>::Error> {
+            ) -> Result<(), <$t as AllocError>::Error> {
                 (**self).try_dealloc(ptr, layout)
             }
         }
@@ -415,7 +419,7 @@ macro_rules! impl_alloc_ref {
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout
-            ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
+            ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
                 (**self).grow(ptr, old_layout, new_layout)
             }
 
@@ -426,7 +430,7 @@ macro_rules! impl_alloc_ref {
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout
-            ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
+            ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
                 (**self).zgrow(ptr, old_layout, new_layout)
             }
         }
@@ -439,7 +443,7 @@ macro_rules! impl_alloc_ref {
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout
-            ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
+            ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
                 (**self).shrink(ptr, old_layout, new_layout)
             }
         }
@@ -452,7 +456,7 @@ macro_rules! impl_alloc_ref {
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout
-            ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
+            ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
                 (**self).realloc(ptr, old_layout, new_layout)
             }
 
@@ -463,7 +467,7 @@ macro_rules! impl_alloc_ref {
                 ptr: NonNull<u8>,
                 old_layout: Layout,
                 new_layout: Layout
-            ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
+            ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
                 (**self).rezalloc(ptr, old_layout, new_layout)
             }
         }

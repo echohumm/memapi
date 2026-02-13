@@ -5,9 +5,9 @@ use {
         convert::From,
         fmt::{Debug, Display},
         marker::Sized,
+        panic,
         ptr::{self, NonNull},
-        result::Result::{self, Err, Ok},
-        panic
+        result::Result::{self, Err, Ok}
     }
 };
 
@@ -26,16 +26,17 @@ pub unsafe fn grow<A: Grow<Error = E> + ?Sized, E: From<Error> + Debug + Display
     new_layout: Layout,
     b: Bytes
 ) -> Result<NonNull<u8>, E> {
-    match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => grow_unchecked(a, ptr, old_layout, new_layout, b),
+    match new_layout.size().cmp(&old_layout.size()) {
+        Ordering::Greater => grow_unchecked(a, ptr, old_layout, new_layout, b),
         Ordering::Equal => {
+            // TODO: maybe smaller align should be an error? in most cases that's ub
             if new_layout.align() > old_layout.align() {
                 grow_unchecked(a, ptr, old_layout, new_layout, b)
             } else {
                 Ok(ptr)
             }
         }
-        Ordering::Greater => {
+        Ordering::Less => {
             Err(E::from(Error::GrowSmallerNewLayout(old_layout.size(), new_layout.size())))
         }
     }
@@ -89,16 +90,16 @@ pub unsafe fn ralloc<A: Realloc<Error = E> + ?Sized, E: From<Error> + Debug + Di
     new_layout: Layout,
     b: Bytes
 ) -> Result<NonNull<u8>, E> {
-    match old_layout.size().cmp(&new_layout.size()) {
-        Ordering::Less => grow_unchecked(&a, ptr, old_layout, new_layout, b),
+    match new_layout.size().cmp(&old_layout.size()) {
+        Ordering::Greater => grow_unchecked(&a, ptr, old_layout, new_layout, b),
         Ordering::Equal => {
             if new_layout.align() > old_layout.align() {
-                grow_unchecked(&a, ptr, old_layout, new_layout, b)
+                shrink_unchecked(&a, ptr, old_layout, new_layout)
             } else {
                 Ok(ptr)
             }
         }
-        Ordering::Greater => shrink_unchecked(&a, ptr, old_layout, new_layout)
+        Ordering::Less => shrink_unchecked(&a, ptr, old_layout, new_layout)
     }
 }
 
@@ -149,7 +150,7 @@ pub mod alloc_mut {
             }
         }
     }
-    
+
     #[cfg_attr(miri, track_caller)]
     pub unsafe fn grow_unchecked_mut<
         A: GrowMut<Error = E> + ?Sized,

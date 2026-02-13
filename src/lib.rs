@@ -46,7 +46,15 @@
 //! - `full`, `full_nightly`: convenience bundles for docs/tests
 
 #![allow(unknown_lints)]
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::multiple_unsafe_ops_per_block)]
+#![deny(
+    clippy::all,
+    clippy::pedantic,
+    clippy::nursery,
+    clippy::multiple_unsafe_ops_per_block,
+    clippy::undocumented_unsafe_blocks,
+    missing_docs
+)]
+#![warn(clippy::missing_errors_doc)]
 #![allow(
     clippy::inline_always,
     clippy::borrow_as_ptr,
@@ -55,7 +63,6 @@
     clippy::question_mark,
     unused_unsafe
 )]
-#![deny(missing_docs, unused_variables, clippy::undocumented_unsafe_blocks)]
 #![warn(unknown_lints)]
 #![no_implicit_prelude]
 #![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
@@ -133,11 +140,10 @@ macro_rules! default_dealloc {
 
 macro_rules! default_shrink {
     ($self:ident::$unchecked:ident, $ptr:ident, $old:ident, $new:ident) => {
-        match $old.size().cmp(&$new.size()) {
-            Ordering::Less => Err(<Self as AllocError>::Error::from(Error::ShrinkLargerNewLayout(
-                $old.size(),
-                $new.size()
-            ))),
+        match $new.size().cmp(&$old.size()) {
+            Ordering::Greater => Err(<Self as AllocError>::Error::from(
+                Error::ShrinkLargerNewLayout($old.size(), $new.size())
+            )),
             Ordering::Equal => {
                 if $new.align() > $old.align() {
                     $unchecked($self, $ptr, $old, $new)
@@ -145,7 +151,7 @@ macro_rules! default_shrink {
                     Ok($ptr)
                 }
             }
-            Ordering::Greater => $unchecked($self, $ptr, $old, $new)
+            Ordering::Less => $unchecked($self, $ptr, $old, $new)
         }
     };
 }
@@ -354,5 +360,5 @@ pub(crate) mod nightly {
     default_alloc_impl!(Global);
 
     // TODO: either Allocator for A: Alloc or vice versa, not sure which. i think i removed that at
-    // some point but i can't remember why.
+    //  some point but i can't remember why.
 }

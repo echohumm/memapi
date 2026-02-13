@@ -5,7 +5,7 @@ use {
         mem::{ManuallyDrop, MaybeUninit},
         ops::FnOnce,
         ptr::NonNull,
-        result::Result::{self, Err, Ok},
+        result::Result::{self, Err, Ok}
     }
 };
 

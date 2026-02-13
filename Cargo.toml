@@ -55,9 +55,10 @@ std = []
 # allocator support
 ## the standard c allocator
 c_alloc = []
+## c alloca-based allocator
+stack_alloc = ["alloc_temp_trait", "c_alloc", "cc"]
 ## adds a trait for temporary, scoped allocations
 alloc_temp_trait = []
-stack_alloc = ["alloc_temp_trait", "c_alloc", "cc"]
 
 # actual features
 ## support best-effort os error reporting from errno

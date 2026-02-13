@@ -19,6 +19,8 @@ macro_rules! impl_error {
     };
 }
 
+// TODO: simplify this. it's getting a little absurd again.
+
 /// Errors for allocator operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -45,6 +47,8 @@ pub enum Error {
     ArithmeticError(ArithErr),
     /// An unwinding panic occurred in a function which does not support unwinding; likely FFI.
     CaughtUnwind,
+    /// The requested operation is unsupported.
+    Unsupported,
     /// Any other kind of error, in the form of a string.
     Other(&'static str)
 }
@@ -60,6 +64,7 @@ impl Display for Error {
             InvalidLayout,
             Other,
             ShrinkLargerNewLayout,
+            Unsupported,
             ZeroSizedLayout
         };
 
@@ -90,6 +95,7 @@ impl Display for Error {
             CaughtUnwind => {
                 write!(f, "unwind caught in unsupported function")
             }
+            Unsupported => write!(f, "unsupported operation"),
             Other(other) => write!(f, "{}", other)
         }
     }
