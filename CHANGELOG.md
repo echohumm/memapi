@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 
+## [0.11.1]
+
+### Changed
+
+- Switch `CAlloc` from using `aligned_alloc` on unix to `posix_memalign`.
+
 ## [0.11.0]
 
 ### Changed
