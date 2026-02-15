@@ -12,7 +12,7 @@ env:
 
 jobs:
   test:
-    name: Test on ${{ matrix.os }}
+    name: Test on ${{ matrix.os }}+${{ matrix.rust }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -20,15 +20,15 @@ jobs:
         rust: [stable, nightly, 1.46.0, 1.56.0, 1.64]
         include:
           - rust: 1.46.0
-            features: full_msrv
+            features: full_msrv, dev
           - rust: 1.56.0
-            features: full_msrv
+            features: full_msrv, dev
           - rust: 1.64
-            features: full
+            features: full, dev
           - rust: stable
-            features: full
+            features: full, dev
           - rust: nightly
-            features: full_nightly
+            features: full_nightly, dev
 
     steps:
       - uses: actions/checkout@v4
