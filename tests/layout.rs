@@ -156,6 +156,6 @@ fn posix_memalign_compatible_roundtrip() {
     assert_eq!(compatible, from_fn);
     assert!(compatible.align() >= ptr_sz);
     assert_eq!(compatible.align() % ptr_sz, 0);
-    assert_eq!(compatible.size() % compatible.align(), 0);
     assert!(compatible.size() >= original.size());
+    assert!(compatible.align().is_power_of_two());
 }

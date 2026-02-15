@@ -7,13 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 
-## [0.11.1]
+## [Unreleased]
+
+### Added
+
+- `ffi::c_alloc::MIN_ALIGN`, the current platform's minimum guaranteed alignment returned by implicitly aligned allocation functions
 
 ### Changed
 
-- Switch `CAlloc` from using `aligned_alloc` on unix to `posix_memalign`.
+- `CAlloc` now uses `malloc`/`calloc` when possible instead of explicitly aligned allocation functions
 
-## [0.11.0]
+### Fixed
+
+- Crate compiles on Windows with the `c_alloc` feature
+- The return code of `posix_memalign` is now handled properly.
+
+## [0.11.1] - 2026-02-16
+
+### Changed
+
+- Switch `CAlloc` from using `aligned_alloc` on unix to `posix_memalign`
+
+## [0.11.0] - 2026-02-15
 
 ### Changed
 
@@ -40,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Dealloc` traits' fallible functions now treat zero-sized layouts and dangling pointers as a hard
   error
 - `Dealloc` traits' fallible functions are now a noop for ZSLs and dangling pointers
-- All other allocation functions now treat ZSLs as an error.
+- All other allocation functions now treat ZSLs as an error
 
 ### Added
 

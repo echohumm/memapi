@@ -61,6 +61,7 @@
     clippy::nursery,
     clippy::multiple_unsafe_ops_per_block,
     clippy::undocumented_unsafe_blocks,
+    clippy::unsafe_op_in_unsafe_fn,
     missing_docs
 )]
 #![warn(clippy::missing_errors_doc)]
