@@ -1,9 +1,10 @@
+#![cfg(any(not(feature = "no_alloc"), feature = "std"))]
 use {
     ::core::mem::{align_of, size_of},
     memapi2::{
-        Layout,
         error::{Error, LayoutErr},
-        helpers::USIZE_HIGH_BIT
+        helpers::USIZE_HIGH_BIT,
+        layout::Layout
     },
     std::alloc::Layout as StdLayout
 };

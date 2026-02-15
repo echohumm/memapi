@@ -1,9 +1,11 @@
 use {
     crate::{
-        BasicAlloc,
-        Layout,
-        data::type_props::{PtrProps, SizedProps, VarSized},
-        error::{ArithErr, ArithOp, Cause, Error, LayoutErr}
+        error::{ArithErr, ArithOp, Cause, Error, LayoutErr},
+        layout::Layout,
+        traits::{
+            alloc::BasicAlloc,
+            data::type_props::{PtrProps, SizedProps, VarSized}
+        }
     },
     ::core::{
         clone::Clone,
@@ -515,7 +517,7 @@ pub const fn is_multiple_of(lhs: usize, rhs: usize) -> bool {
 ///
 /// ```
 /// # use ::core::ptr::NonNull;
-/// # use memapi2::{helpers::AllocGuard, Layout, Alloc, DefaultAlloc};
+/// # use memapi2::{helpers::AllocGuard, prelude::{Layout, Alloc, DefaultAlloc}};
 /// # let alloc = DefaultAlloc;
 /// // Allocate space for one `u32` and wrap it in a guard
 /// let layout = Layout::new::<u32>();
@@ -619,20 +621,21 @@ impl<T: ?Sized, A: BasicAlloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 /// # use ::core::ptr::NonNull;
 /// # use memapi2::{
 /// #  helpers::SliceAllocGuard,
-/// #  Alloc,
 /// #  DefaultAlloc,
-/// #  data::type_props::SizedProps,
-/// #  Layout
+/// #  traits::{data::type_props::SizedProps, alloc::Alloc},
+/// #  layout::Layout
 /// # };
 /// # let alloc = DefaultAlloc;
 /// # let len = 5;
 ///
-/// let mut guard = unsafe { SliceAllocGuard::new(
-///     alloc.alloc(unsafe { Layout::from_size_align_unchecked(u32::SZ * len, u32::ALN) })
+/// let mut guard = unsafe {
+///     SliceAllocGuard::new(
+///         alloc.alloc(unsafe { Layout::from_size_align_unchecked(u32::SZ * len, u32::ALN) })
 ///             .unwrap().cast(),
-///     &alloc,
-///     len
-/// ) };
+///         &alloc,
+///         len
+///     )
+/// };
 ///
 /// for i in 0..len {
 ///     guard.init(i as u32).unwrap();

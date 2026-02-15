@@ -1,5 +1,5 @@
 use {
-    crate::{BasicAlloc, Layout, error::Error},
+    crate::{error::Error, layout::Layout, traits::alloc::BasicAlloc},
     ::core::{
         convert::From,
         fmt::{Debug, Display},

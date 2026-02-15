@@ -1,5 +1,5 @@
 use {
-    crate::{Layout, data::type_props::SizedProps},
+    crate::{layout::Layout, traits::data::type_props::SizedProps},
     ::core::{
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         write

@@ -1,9 +1,16 @@
+#![cfg(any(not(feature = "no_alloc"), feature = "std"))]
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 
 use {
     ::core::ptr,
-    memapi2::{DefaultAlloc, Layout, error::Error, traits::*}
+    memapi2::{
+        DefaultAlloc,
+        error::Error,
+        layout::Layout,
+        traits::alloc::{Alloc, Dealloc, Grow, Shrink}
+    }
 };
+
 #[test]
 fn test_alloc_and_dealloc() {
     let allocator = DefaultAlloc;

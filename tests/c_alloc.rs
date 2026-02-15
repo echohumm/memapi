@@ -3,14 +3,13 @@
 
 use {
     memapi2::{
-        Alloc,
-        Dealloc,
-        Grow,
-        Layout,
-        Shrink,
-        c_alloc::CAlloc,
-        data::type_props::SizedProps,
-        error::Error
+        allocs::c_alloc::CAlloc,
+        error::Error,
+        layout::Layout,
+        traits::{
+            alloc::{Alloc, Dealloc, Grow, Shrink},
+            data::type_props::SizedProps
+        }
     },
     std::ptr
 };

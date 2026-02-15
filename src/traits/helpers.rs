@@ -1,5 +1,9 @@
 use {
-    crate::{Grow, Layout, Realloc, Shrink, error::Error},
+    crate::{
+        error::Error,
+        layout::Layout,
+        traits::alloc::{Grow, Realloc, Shrink}
+    },
     ::core::{
         cmp::{Ord, Ordering},
         convert::From,
@@ -113,10 +117,12 @@ pub enum Bytes {
 pub mod alloc_mut {
     use {
         crate::{
-            Layout,
-            alloc_mut::{GrowMut, ReallocMut, ShrinkMut},
             error::Error,
-            traits::helpers::Bytes
+            layout::Layout,
+            traits::{
+                alloc_mut::{GrowMut, ReallocMut, ShrinkMut},
+                helpers::Bytes
+            }
         },
         ::core::{
             cmp::{Ord, Ordering},

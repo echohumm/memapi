@@ -5,11 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+[//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
+
+## [0.11.0]
 
 ### Changed
 
 - Rename shared `AllocErrorType` trait to `AllocError`
+- Remove most public re-exports and non-modules from the main crate in favor of a `prelude` module
+- `no_alloc` feature now just switches to using the `std` crate if both features are enabled
 
 ## [0.10.0] - 2026-02-11
 

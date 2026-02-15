@@ -1,7 +1,12 @@
 // miri doesn't like non-standard c functions like stack_alloc relies on
 #![cfg(not(miri))]
 use {
-    memapi2::{Layout, alloc_temp::AllocTemp, helpers::ptr_max_align, stack_alloc::StackAlloc},
+    memapi2::{
+        allocs::stack_alloc::StackAlloc,
+        helpers::ptr_max_align,
+        layout::Layout,
+        traits::alloc_temp::AllocTemp
+    },
     std::process::abort
 };
 

@@ -1,17 +1,15 @@
 use {
     crate::{
-        Alloc,
-        AllocError,
-        Dealloc,
-        Grow,
-        Layout,
-        Realloc,
-        Shrink,
         error::Error,
-        traits::helpers::{
-            Bytes,
-            alloc_mut::{grow_mut, ralloc_mut, shrink_unchecked_mut},
-            default_dealloc_panic
+        layout::Layout,
+        traits::{
+            AllocError,
+            alloc::{Alloc, Dealloc, Grow, Realloc, Shrink},
+            helpers::{
+                Bytes,
+                alloc_mut::{grow_mut, ralloc_mut, shrink_unchecked_mut},
+                default_dealloc_panic
+            }
         }
     },
     ::core::{
@@ -123,15 +121,31 @@ pub trait DeallocMut: AllocMut {
     ///   [layout.dangling](Layout::dangling)</code>.
     /// - <code>Err([Error::Unsupported]))</code> if deallocation is unsupported. In this case,
     ///   reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
-    ///
-    /// However, if using this method through a synchronization primitive wrapping a type which
-    /// implements [`DeallocMut`], an [`Error::Other`] wrapping a generic error message will be
-    /// returned if acquiring mutable access to the allocator fails.
     unsafe fn try_dealloc_mut(
         &mut self,
         ptr: NonNull<u8>,
         layout: Layout
     ) -> Result<(), <Self as AllocError>::Error>;
+
+    /// Attempts to deallocate a previously allocated block after performing validity checks.
+    ///
+    /// This method must return an error rather than silently accepting the deallocation and
+    /// potentially causing UB.
+    ///
+    /// # Errors
+    ///
+    /// Implementations commonly return:
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if `layout.size() == 0`.
+    /// - <code>Err([Error::DanglingDeallocation])</code> if `ptr == layout.dangling()`.
+    /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
+    /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures.
+    fn checked_dealloc_mut(
+        &mut self,
+        _ptr: NonNull<u8>,
+        _layout: Layout
+    ) -> Result<(), <Self as AllocError>::Error> {
+        Err(<Self as AllocError>::Error::from(Error::Unsupported))
+    }
 }
 
 /// A memory allocation interface which may require mutable access to itself and can also grow
@@ -483,9 +497,11 @@ impl<A: Realloc + ?Sized> ReallocMut for A {
 // no AllocMut for &mut A: AllocMut because rust is dumb and "downstream crates may implement Alloc
 // for &mut A: AllocMut"
 
+const LOCK_ERR: Error = Error::Other("lock_failed");
+
 // TODO: decide on inlining for the below
 macro_rules! impl_alloc_for_sync_mutalloc {
-    ($t:ty, $borrow_call:ident, $($borrow_wrap:ident,)? $err_verb:literal, $t_desc:literal) => {
+    ($t:ty, $borrow_call:ident) => {
         impl<A: AllocError + ?Sized> AllocError for $t {
             type Error = A::Error;
         }
@@ -496,18 +512,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 &self,
                 layout: Layout
             ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "AllocMut> for immutable allocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                ).alloc_mut(layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .alloc_mut(layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -515,36 +521,17 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 &self,
                 layout: Layout
             ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "AllocMut> for immutable allocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                ).zalloc_mut(layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .zalloc_mut(layout)
             }
         }
 
         impl<A: DeallocMut + ?Sized> Dealloc for $t {
             #[track_caller]
             unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-                match $($borrow_wrap)?(self.$borrow_call()) {
+                match self.$borrow_call() {
                     Ok(mut guard) => guard.dealloc_mut(ptr, layout),
-                    Err(_) => default_dealloc_panic(
-                        ptr,
-                        layout,
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "DeallocMut> for `Dealloc` deallocation call"
-                        )),
-                    ),
+                    Err(_) => default_dealloc_panic(ptr, layout, LOCK_ERR),
                 }
             }
 
@@ -554,19 +541,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 ptr: NonNull<u8>,
                 layout: Layout
             ) -> Result<(), <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "DeallocMut> for `Dealloc` deallocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                )
-                .try_dealloc_mut(ptr, layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .try_dealloc_mut(ptr, layout)
             }
         }
 
@@ -578,19 +554,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "GrowMut> for `Grow` reallocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                )
-                .grow_mut(ptr, old_layout, new_layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .grow_mut(ptr, old_layout, new_layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -600,19 +565,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "GrowMut> for `Grow` reallocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                )
-                .zgrow_mut(ptr, old_layout, new_layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .zgrow_mut(ptr, old_layout, new_layout)
             }
         }
 
@@ -624,19 +578,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "ShrinkMut> for `Shrink` reallocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                )
-                .shrink_mut(ptr, old_layout, new_layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .shrink_mut(ptr, old_layout, new_layout)
             }
         }
 
@@ -648,19 +591,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "ReallocMut> for `Realloc` reallocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                )
-                .realloc_mut(ptr, old_layout, new_layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .realloc_mut(ptr, old_layout, new_layout)
             }
 
             #[cfg_attr(miri, track_caller)]
@@ -670,19 +602,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 old_layout: Layout,
                 new_layout: Layout,
             ) -> Result<NonNull<u8>, <$t as AllocError>::Error> {
-                tri!(
-                    cmap(
-                        Error::Other(concat!(
-                            "failed to ",
-                            $err_verb,
-                            $t_desc,
-                            "ReallocMut> for `Realloc` reallocation call"
-                        ))
-                    )
-                    from <Self as AllocError>::Error,
-                    $($borrow_wrap)?(self.$borrow_call())
-                )
-                .rezalloc_mut(ptr, old_layout, new_layout)
+                tri!(cmap(LOCK_ERR) from <Self as AllocError>::Error, self.$borrow_call())
+                    .rezalloc_mut(ptr, old_layout, new_layout)
             }
         }
     };
@@ -690,12 +611,12 @@ macro_rules! impl_alloc_for_sync_mutalloc {
 
 #[cfg(feature = "std")]
 impl_alloc_for_sync_mutalloc! {
-    ::std::sync::Mutex<A>, lock, "lock ", "Mutex<impl "
+    ::std::sync::Mutex<A>, lock
 }
 #[cfg(feature = "std")]
 impl_alloc_for_sync_mutalloc! {
-    ::std::sync::RwLock<A>, write, "write lock ", "RwLock<impl "
+    ::std::sync::RwLock<A>, write
 }
 impl_alloc_for_sync_mutalloc! {
-    ::core::cell::RefCell<A>, try_borrow_mut, "mutably borrow ", "RefCell<impl "
+    ::core::cell::RefCell<A>, try_borrow_mut
 }

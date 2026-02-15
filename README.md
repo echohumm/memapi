@@ -16,13 +16,16 @@ MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature fla
 - Mutable versions of allocator traits for allocation operations which require mutable access to the
   allocator
 - Temporary/scoped allocation trait for function-scoped allocations
-- Custom `Layout` type with conversion to/from `alloc::alloc::Layout` (unless `no_alloc` is on)
+- Custom `Layout` type with conversion to/from `alloc::alloc::Layout` (unless `no_alloc` is on and
+  `std` isn't)
 - Generic `Error` types for allocation traits
 - Structured error reporting via `Error` and `Cause`, with optional OS error capture
 - Optional allocator implementations: `DefaultAlloc`, `std::alloc::System`, `c_alloc::CAlloc`,
-  `stack_alloc::StackAlloc` (experimental)
-- Data utilities for size/alignment/metadata via `data::type_props` and `data::marker`
-- `no_std` by default; `alloc` is used unless `no_alloc` is enabled
+  `stack_alloc::StackAlloc`
+- Data utilities for size/alignment/metadata via `traits::data::type_props` and
+  `traits::data::marker`
+- `no_std` by default; `alloc` is used unless `no_alloc` is enabled (`std` is used in place of
+  `alloc` if `std` and `no_alloc` are both enabled)
 
 ## Installation
 
@@ -69,7 +72,7 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `metadata`: nightly `core::ptr::Pointee` metadata support
 - `sized_hierarchy`: nightly `core::marker::MetaSized` support
 - `no_alloc`: disable the `alloc` crate (removes `DefaultAlloc`, `StdLayout`, and implementations
-  for the `System` allocator)
+  for the `System` allocator, unless `std` is on)
 - `no_nightly`: disable automatic nightly detection in `build.rs`
 - `full_msrv`: convenience bundle (`os_err_reporting`, `c_alloc`, `stack_alloc`)
 - `full`: `full_msrv` + `c_str`

@@ -1,12 +1,10 @@
+#![cfg(any(not(feature = "no_alloc"), feature = "std"))]
 #![allow(clippy::cast_ptr_alignment)]
 
 use {
     ::core::ptr::{self, NonNull},
     memapi2::{
-        Alloc,
-        Dealloc,
         DefaultAlloc,
-        Layout,
         error::{ArithErr, ArithOp, Error, LayoutErr},
         helpers::{
             align_up,
@@ -19,7 +17,9 @@ use {
             null_q_dyn_zsl_check,
             slice_ptr_from_parts_mut,
             varsized_ptr_from_parts_mut
-        }
+        },
+        layout::Layout,
+        traits::alloc::{Alloc, Dealloc}
     }
 };
 

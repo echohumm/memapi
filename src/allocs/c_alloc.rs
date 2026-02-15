@@ -1,15 +1,13 @@
 use {
     crate::{
-        Alloc,
-        AllocError,
-        Dealloc,
-        Grow,
-        Layout,
-        Realloc,
-        Shrink,
         error::Error,
         ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned},
-        helpers::null_q_dyn_zsl_check
+        helpers::null_q_dyn_zsl_check,
+        layout::Layout,
+        traits::{
+            AllocError,
+            alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
+        }
     },
     ::core::{
         cmp::{Ord, Ordering},

@@ -1,5 +1,10 @@
 use {
-    crate::{Layout, alloc_temp::AllocTemp, error::Error, ffi::stack_alloc::with_alloca},
+    crate::{
+        error::Error,
+        ffi::stack_alloc::with_alloca,
+        layout::Layout,
+        traits::alloc_temp::AllocTemp
+    },
     ::core::{
         ops::FnOnce,
         ptr::{self, NonNull},

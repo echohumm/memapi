@@ -1,27 +1,23 @@
 use {
     crate::{
-        Layout,
-        alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
         error::Error,
-        traits::helpers::{Bytes, default_dealloc_panic, grow, ralloc, shrink_unchecked}
+        layout::Layout,
+        traits::{
+            AllocError,
+            alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
+            helpers::{Bytes, default_dealloc_panic, grow, ralloc, shrink_unchecked}
+        }
     },
     ::core::{
         cmp::{Ord, Ordering},
         convert::From,
-        fmt::{Debug, Display},
         marker::Sized,
         ptr::{self, NonNull},
-        result::Result::{self, Err, Ok}
+        result::Result::{self, Err}
     }
 };
 
 #[allow(unused_imports)] use crate::error::Cause;
-
-/// Trait defining the shared error type of an allocator.
-pub trait AllocError {
-    /// The error type returned by this allocator.
-    type Error: From<Error> + Debug + Display;
-}
 
 /// A memory allocation interface.
 pub trait Alloc: AllocError + AllocMut {
@@ -125,7 +121,28 @@ pub trait Dealloc: Alloc + DeallocMut {
         layout: Layout
     ) -> Result<(), <Self as AllocError>::Error>;
 
-    // TODO: checked_dealloc that is safe, default impl returns Err(Unsupported)?
+    /// Attempts to deallocate a previously allocated block after performing validity checks.
+    ///
+    /// This method must return an error rather than silently accepting the deallocation and
+    /// potentially causing UB.
+    ///
+    /// # Errors
+    ///
+    /// Implementations commonly return:
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if `layout.size() == 0`.
+    /// - <code>Err([Error::DanglingDeallocation])</code> if `ptr == layout.dangling()`.
+    /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
+    /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If the
+    ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
+    ///   wrapping a type which implements [`AllocMut`], a generic error message will also be
+    ///   returned if locking the primitive fails.
+    fn checked_dealloc(
+        &self,
+        _ptr: NonNull<u8>,
+        _layout: Layout
+    ) -> Result<(), <Self as AllocError>::Error> {
+        Err(<Self as AllocError>::Error::from(Error::Unsupported))
+    }
 }
 
 /// A memory allocation interface which can also grow allocations.
@@ -518,7 +535,7 @@ impl Dealloc for ::std::alloc::System {
             Err(Error::DanglingDeallocation)
         } else {
             ::stdalloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
-            Ok(())
+            ::core::result::Result::Ok(())
         }
     }
 }

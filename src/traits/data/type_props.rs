@@ -1,5 +1,5 @@
 use {
-    crate::{Layout, helpers::USIZE_MAX_NO_HIGH_BIT},
+    crate::{helpers::USIZE_MAX_NO_HIGH_BIT, layout::Layout},
     ::core::{
         clone::Clone,
         convert::AsRef,
@@ -182,13 +182,13 @@ macro_rules! impl_ptr_props_as_ref {
 
 impl_ptr_props_raw! { *const T, *mut T }
 impl_ptr_props_identity! { &T, &mut T }
-#[cfg(not(feature = "no_alloc"))]
+#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 impl_ptr_props_as_ref! {
     ::stdalloc::boxed::Box<T>,
     ::stdalloc::rc::Rc<T>,
     ::stdalloc::sync::Arc<T>,
 }
-#[cfg(not(feature = "no_alloc"))]
+#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 impl<T: Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
     #[inline]
     unsafe fn sz(&self) -> usize {

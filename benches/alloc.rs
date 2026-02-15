@@ -6,7 +6,11 @@ extern crate memapi2;
 use {
     ::core::hint::black_box,
     criterion::Criterion,
-    memapi2::{Alloc, Dealloc, DefaultAlloc, Grow, Layout, Realloc, Shrink}
+    memapi2::{
+        DefaultAlloc,
+        layout::Layout,
+        traits::alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
+    }
 };
 
 fn bench_allocs<A>(c: &mut Criterion, name: &str, alloc: A)
@@ -111,10 +115,9 @@ where
     group.finish();
 }
 
-#[cfg(feature = "alloc_mut_traits")]
 fn bench_allocs_mut<A>(c: &mut Criterion, name: &str, alloc: A)
 where
-    A: memapi2::FullAllocMut + Copy
+    A: memapi2::traits::alloc_mut::FullAllocMut + Copy
 {
     let mut group = c.benchmark_group(name);
     let small = unsafe { Layout::from_size_align_unchecked(32, 8) };
@@ -217,7 +220,7 @@ where
 #[cfg(feature = "alloc_temp_trait")]
 fn bench_allocs_temp<A>(c: &mut Criterion, name: &str, alloc: A)
 where
-    A: memapi2::AllocTemp + Copy
+    A: memapi2::traits::alloc_temp::AllocTemp + Copy
 {
     let mut group = c.benchmark_group(name);
     let small = unsafe { Layout::from_size_align_unchecked(32, 8) };
@@ -249,21 +252,20 @@ fn main() {
         .configure_from_args();
 
     bench_allocs(&mut c, "default_alloc", DefaultAlloc);
-    bench_allocs(&mut c, "c_alloc", memapi2::c_alloc::CAlloc);
+    #[cfg(feature = "c_alloc")]
+    bench_allocs(&mut c, "c_alloc", memapi2::allocs::c_alloc::CAlloc);
 
-    #[cfg(feature = "alloc_mut_traits")]
-    {
-        bench_allocs_mut(&mut c, "default_alloc_mut", DefaultAlloc);
-        bench_allocs_mut(&mut c, "c_alloc_mut", memapi2::c_alloc::CAlloc);
-    }
+    bench_allocs_mut(&mut c, "default_alloc_mut", DefaultAlloc);
+    #[cfg(feature = "c_alloc")]
+    bench_allocs_mut(&mut c, "c_alloc_mut", memapi2::allocs::c_alloc::CAlloc);
 
     #[cfg(feature = "alloc_temp_trait")]
     {
         bench_allocs_temp(&mut c, "default_alloc_temp", DefaultAlloc);
         #[cfg(feature = "c_alloc")]
-        bench_allocs_temp(&mut c, "c_alloc_temp", memapi2::c_alloc::CAlloc);
+        bench_allocs_temp(&mut c, "c_alloc_temp", memapi2::allocs::c_alloc::CAlloc);
         #[cfg(feature = "stack_alloc")]
-        bench_allocs_temp(&mut c, "stack_alloc_temp", memapi2::stack_alloc::StackAlloc);
+        bench_allocs_temp(&mut c, "stack_alloc_temp", memapi2::allocs::stack_alloc::StackAlloc);
     }
 
     c.final_summary();

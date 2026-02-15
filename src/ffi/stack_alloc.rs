@@ -1,5 +1,5 @@
 use {
-    crate::{Layout, error::Error},
+    crate::{error::Error, layout::Layout},
     ::core::{
         ffi::c_void,
         mem::{ManuallyDrop, MaybeUninit},
@@ -41,7 +41,6 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     layout: Layout,
     f: F
 ) -> Result<R, Error> {
-    // TODO: maybe i should just make F take a Result instead and not skip running it on error
     if layout.size() == 0 {
         return Err(Error::ZeroSizedLayout);
     }

@@ -1,14 +1,17 @@
+#![cfg(not(feature = "no_alloc"))]
 extern crate alloc;
 
 use {
     ::core::{ptr, ptr::NonNull},
     alloc::alloc::{alloc, dealloc},
     memapi2::{
-        AllocError,
-        Layout,
-        alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
         error::Error,
-        helpers::null_q_dyn_zsl_check
+        helpers::null_q_dyn_zsl_check,
+        layout::Layout,
+        traits::{
+            AllocError,
+            alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut}
+        }
     }
 };
 

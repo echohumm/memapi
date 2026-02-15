@@ -6,7 +6,11 @@ extern crate memapi2;
 use {
     ::core::hint::black_box,
     criterion::Criterion,
-    memapi2::{Layout, data::type_props::SizedProps, helpers::USIZE_MAX_NO_HIGH_BIT}
+    memapi2::{
+        helpers::USIZE_MAX_NO_HIGH_BIT,
+        layout::Layout,
+        traits::data::type_props::SizedProps
+    }
 };
 
 fn to_aligned_alloc_compatible(c: &mut Criterion) {

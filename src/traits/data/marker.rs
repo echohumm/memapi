@@ -36,10 +36,7 @@ unsafe impl UnsizedCopy for ::std::path::Path {}
 /// # Example
 ///
 /// ```
-/// # use memapi2::data::{
-/// # marker::Thin,
-/// # type_props::SizedProps
-/// # };
+/// # use memapi2::traits::data::{marker::Thin, type_props::SizedProps};
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -61,7 +58,7 @@ pub unsafe trait Thin {}
 /// # Example
 ///
 /// ```
-/// # use memapi2::{data::type_props::SizedProps, data::marker::Thin};
+/// # use memapi2::traits::{data::type_props::SizedProps, data::marker::Thin};
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -81,7 +78,7 @@ pub unsafe trait Thin: ::core::ptr::Pointee<Metadata = ()> {}
 /// # Example
 ///
 /// ```
-/// # use memapi2::{data::type_props::SizedProps, data::marker::Thin};
+/// # use memapi2::{traits::data::{type_props::SizedProps, marker::{SizeMeta, Thin}}};
 ///
 /// fn never_panics<T: Thin>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ)
@@ -103,7 +100,7 @@ pub unsafe trait Thin:
 /// # Example
 ///
 /// ```
-/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -122,7 +119,7 @@ pub unsafe trait SizeMeta {}
 /// # Example
 ///
 /// ```
-/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -142,7 +139,7 @@ pub unsafe trait SizeMeta: ::core::marker::MetaSized {}
 /// # Example
 ///
 /// ```
-/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///    assert_eq!(<&T>::SZ, usize::SZ * 2)
@@ -162,7 +159,7 @@ pub unsafe trait SizeMeta: ::core::ptr::Pointee<Metadata = usize> {}
 /// # Example
 ///
 /// ```
-/// # use memapi2::{data::type_props::SizedProps, data::marker::SizeMeta};
+/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
 ///
 /// fn never_panics<T: SizeMeta>() {
 ///     assert_eq!(<&T>::SZ, usize::SZ * 2)

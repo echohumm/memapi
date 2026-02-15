@@ -1,6 +1,5 @@
 use {
     crate::{
-        data::type_props::{PtrProps, SizedProps},
         error::{ArithOp, Error, LayoutErr},
         helpers::{
             USIZE_HIGH_BIT,
@@ -9,7 +8,8 @@ use {
             checked_op,
             dangling_nonnull,
             is_multiple_of
-        }
+        },
+        traits::data::type_props::{PtrProps, SizedProps}
     },
     ::core::{
         cmp::PartialEq,
@@ -19,6 +19,10 @@ use {
         result::Result::{self, Err, Ok}
     }
 };
+
+#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
+/// A type alias for [`alloc::alloc::Layout`](::stdalloc::alloc::Layout).
+pub type StdLayout = ::stdalloc::alloc::Layout;
 
 // TODO: check all of these docs, idk how many are correct anymore my head hurts
 
@@ -50,27 +54,27 @@ pub struct Layout {
     align: usize
 }
 
-#[cfg(not(feature = "no_alloc"))]
-impl PartialEq<::stdalloc::alloc::Layout> for Layout {
-    fn eq(&self, other: &::stdalloc::alloc::Layout) -> bool {
+#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
+impl PartialEq<StdLayout> for Layout {
+    fn eq(&self, other: &StdLayout) -> bool {
         self.align == other.align() && self.size == other.size()
     }
 }
-#[cfg(not(feature = "no_alloc"))]
-impl PartialEq<Layout> for ::stdalloc::alloc::Layout {
+#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
+impl PartialEq<Layout> for StdLayout {
     fn eq(&self, other: &Layout) -> bool {
         self.align() == other.align && self.size() == other.size
     }
 }
-#[cfg(not(feature = "no_alloc"))]
-impl From<::stdalloc::alloc::Layout> for Layout {
-    fn from(layout: ::stdalloc::alloc::Layout) -> Layout {
+#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
+impl From<StdLayout> for Layout {
+    fn from(layout: StdLayout) -> Layout {
         Layout::from_stdlib(layout)
     }
 }
-#[cfg(not(feature = "no_alloc"))]
-impl From<Layout> for ::stdalloc::alloc::Layout {
-    fn from(layout: Layout) -> ::stdalloc::alloc::Layout {
+#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
+impl From<Layout> for StdLayout {
+    fn from(layout: Layout) -> StdLayout {
         layout.to_stdlib()
     }
 }
@@ -244,7 +248,7 @@ impl Layout {
     /// # Examples
     ///
     /// ```
-    /// # use memapi2::{Layout, data::type_props::SizedProps};
+    /// # use memapi2::prelude::{Layout, SizedProps};
     /// let l = Layout::aligned_alloc_compatible_from_size_align(10, 1).unwrap();
     ///
     /// assert!(l.align() >= usize::SZ);
@@ -325,7 +329,7 @@ impl Layout {
     /// # Example
     ///
     /// ```
-    /// # use memapi2::Layout;
+    /// # use memapi2::layout::Layout;
     ///
     /// assert_eq!(unsafe { Layout::from_size_align_unchecked(6, 8) }.padding_needed_for(8), Ok(2));
     /// ```
@@ -450,7 +454,7 @@ impl Layout {
     /// # Examples
     ///
     /// ```
-    /// # use memapi2::Layout;
+    /// # use memapi2::layout::Layout;
     /// // current alignment 8, round up to a multiple of 16 => next multiple is 16
     /// let l = unsafe { Layout::from_size_align_unchecked(30, 8) };
     /// let rounded = l.align_to_multiple_of(16).unwrap();
@@ -494,7 +498,7 @@ impl Layout {
     /// # Examples
     ///
     /// ```
-    /// # use memapi2::{Layout, data::type_props::SizedProps};
+    /// # use memapi2::prelude::{Layout, SizedProps};
     /// let l = Layout::from_size_align(10, 1).unwrap();
     /// let compatible = l.to_aligned_alloc_compatible().unwrap();
     ///
@@ -514,23 +518,23 @@ impl Layout {
         }
     }
 
-    #[cfg(not(feature = "no_alloc"))]
-    /// Converts this layout to an [`alloc::alloc::Layout`](::stdalloc::alloc::Layout).
+    #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
+    /// Converts this layout to a [`StdLayout`].
     #[must_use]
     #[inline]
-    pub const fn to_stdlib(self) -> ::stdalloc::alloc::Layout {
+    pub const fn to_stdlib(self) -> StdLayout {
         // SAFETY: we validate all layout's requirements ourselves
-        unsafe { ::stdalloc::alloc::Layout::from_size_align_unchecked(self.size(), self.align()) }
+        unsafe { StdLayout::from_size_align_unchecked(self.size(), self.align()) }
     }
 
-    #[cfg(not(feature = "no_alloc"))]
-    /// Converts an [`alloc::alloc::Layout`](::stdalloc::alloc::Layout) to a [`Layout`].
+    #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
+    /// Converts a [`StdLayout`] to a [`Layout`].
     ///
     /// Note that this is only `const` on Rust versions 1.50 and above.
     #[::rustversion::attr(since(1.50), const)]
     #[must_use]
     #[inline]
-    pub fn from_stdlib(layout: ::stdalloc::alloc::Layout) -> Layout {
+    pub fn from_stdlib(layout: StdLayout) -> Layout {
         // SAFETY: we share layout's requirements.
         unsafe { Layout::from_size_align_unchecked(layout.size(), layout.align()) }
     }
