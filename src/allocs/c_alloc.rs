@@ -31,7 +31,7 @@ fn pad_then_alloc(
     layout: Layout,
     alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
-    let padded = tri!(do layout.to_aligned_alloc_compatible());
+    let padded = tri!(do layout.to_posix_memalign_compatible());
     null_q_dyn_zsl_check(
         layout,
         // SAFETY: we rounded up the layout's values to satisfy the requirements.
@@ -48,8 +48,8 @@ unsafe fn pad_then_grow(
 ) -> Result<NonNull<u8>, Error> {
     sz_check!(GrowSmallerNewLayout, old_layout > new_layout);
 
-    let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
-    let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
+    let old_padded = tri!(do old_layout.to_posix_memalign_compatible());
+    let new_padded = tri!(do new_layout.to_posix_memalign_compatible());
 
     null_q_dyn_zsl_check(new_layout, |_| {
         grow_aligned(
@@ -69,8 +69,8 @@ unsafe fn pad_then_realloc(
     new_layout: Layout,
     alloc: unsafe fn(usize, usize) -> *mut c_void
 ) -> Result<NonNull<u8>, Error> {
-    let old_padded = tri!(do old_layout.to_aligned_alloc_compatible());
-    let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
+    let old_padded = tri!(do old_layout.to_posix_memalign_compatible());
+    let new_padded = tri!(do new_layout.to_posix_memalign_compatible());
 
     null_q_dyn_zsl_check(new_layout, |_| {
         let old_ptr = ptr.as_ptr().cast();
@@ -103,7 +103,7 @@ unsafe fn pad_then_realloc(
 ///
 /// Note that layouts passed to this allocator's allocation methods will have their size and
 /// alignment rounded up to meet C's [`c_alloc`] requirements. See
-/// [`Layout::to_aligned_alloc_compatible`] for details.
+/// [`Layout::to_posix_memalign_compatible`] for details.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CAlloc;
 
@@ -168,7 +168,7 @@ impl Shrink for CAlloc {
     ) -> Result<NonNull<u8>, Error> {
         sz_check!(ShrinkLargerNewLayout, old_layout < new_layout);
 
-        let new_padded = tri!(do new_layout.to_aligned_alloc_compatible());
+        let new_padded = tri!(do new_layout.to_posix_memalign_compatible());
 
         null_q_dyn_zsl_check(new_layout, |_| {
             shrink_aligned(ptr.as_ptr().cast(), new_padded.align(), new_padded.size())

@@ -47,7 +47,7 @@
 //! - `std`: enables `std` integration (including [`System`](::std::alloc::System))
 //! - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
 //! - `alloc_temp_trait`: scoped/temporary allocation trait
-//! - `c_alloc`: C `aligned_alloc`-style allocator ([`allocs::c_alloc`])
+//! - `c_alloc`: C `posix_memalign`-style allocator ([`allocs::c_alloc`])
 //! - `stack_alloc`: `alloca`-based allocator ([`allocs::stack_alloc`])
 //! - `c_str`: enables `CStr`-specific data traits in `no_std` (MSRV: 1.64)
 //! - `metadata`: enables [`core::ptr::Pointee`] metadata support on nightly
@@ -87,6 +87,8 @@
 
 extern crate core;
 extern crate rustversion;
+#[cfg(feature = "c_alloc")]
+extern crate cty;
 
 #[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 #[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;

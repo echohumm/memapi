@@ -155,7 +155,7 @@ pub enum LayoutErr {
     /// An arithmetic error occurred.
     ArithErr(ArithErr),
     /// An error occurred while rounding the alignment of the requested layout up to a value
-    /// compatible with C's `aligned_alloc`.
+    /// compatible with C's `posix_memalign`.
     CRoundUp
 }
 

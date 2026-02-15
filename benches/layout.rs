@@ -13,7 +13,7 @@ use {
     }
 };
 
-fn to_aligned_alloc_compatible(c: &mut Criterion) {
+fn to_posix_memalign_compatible(c: &mut Criterion) {
     // i'm not lazy wdym
     let mut group = c.benchmark_group("taac");
 
@@ -24,32 +24,32 @@ fn to_aligned_alloc_compatible(c: &mut Criterion) {
 
     group.bench_function("noop", |c| {
         c.iter(|| {
-            let _ = black_box(black_box(noop).to_aligned_alloc_compatible());
+            let _ = black_box(black_box(noop).to_posix_memalign_compatible());
         });
     });
 
     group.bench_function("round_size", |c| {
         c.iter(|| {
-            let _ = black_box(black_box(round_size).to_aligned_alloc_compatible());
+            let _ = black_box(black_box(round_size).to_posix_memalign_compatible());
         });
     });
 
     group.bench_function("round_align", |c| {
         c.iter(|| {
-            let _ = black_box(black_box(round_align).to_aligned_alloc_compatible());
+            let _ = black_box(black_box(round_align).to_posix_memalign_compatible());
         });
     });
 
     group.bench_function("round_both", |c| {
         c.iter(|| {
-            let _ = black_box(black_box(round_both).to_aligned_alloc_compatible());
+            let _ = black_box(black_box(round_both).to_posix_memalign_compatible());
         });
     });
 
     group.finish();
 }
 
-fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
+fn posix_memalign_compatible_from_size_align(c: &mut Criterion) {
     let mut group = c.benchmark_group("aacfsa");
 
     let noop = (usize::SZ, usize::ALN);
@@ -59,7 +59,7 @@ fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
 
     group.bench_function("noop", |c| {
         c.iter(|| {
-            let _ = black_box(Layout::aligned_alloc_compatible_from_size_align(
+            let _ = black_box(Layout::posix_memalign_compatible_from_size_align(
                 black_box(noop.0),
                 black_box(noop.1)
             ));
@@ -68,7 +68,7 @@ fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
 
     group.bench_function("round_size", |c| {
         c.iter(|| {
-            let _ = black_box(Layout::aligned_alloc_compatible_from_size_align(
+            let _ = black_box(Layout::posix_memalign_compatible_from_size_align(
                 black_box(round_size.0),
                 black_box(round_size.1)
             ));
@@ -77,7 +77,7 @@ fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
 
     group.bench_function("round_align", |c| {
         c.iter(|| {
-            let _ = black_box(Layout::aligned_alloc_compatible_from_size_align(
+            let _ = black_box(Layout::posix_memalign_compatible_from_size_align(
                 black_box(round_align.0),
                 black_box(round_align.1)
             ));
@@ -86,7 +86,7 @@ fn aligned_alloc_compatible_from_size_align(c: &mut Criterion) {
 
     group.bench_function("round_both", |c| {
         c.iter(|| {
-            let _ = black_box(Layout::aligned_alloc_compatible_from_size_align(
+            let _ = black_box(Layout::posix_memalign_compatible_from_size_align(
                 black_box(round_both.0),
                 black_box(round_both.1)
             ));
@@ -226,8 +226,8 @@ fn main() {
         .confidence_level(0.99)
         .configure_from_args();
 
-    to_aligned_alloc_compatible(&mut c);
-    aligned_alloc_compatible_from_size_align(&mut c);
+    to_posix_memalign_compatible(&mut c);
+    posix_memalign_compatible_from_size_align(&mut c);
     array(&mut c);
     repeat(&mut c);
     repeat_packed(&mut c);

@@ -147,10 +147,10 @@ fn align_to_multiple_of_rounds_up() {
 }
 
 #[test]
-fn aligned_alloc_compatible_roundtrip() {
+fn posix_memalign_compatible_roundtrip() {
     let original = Layout::from_size_align(10, 1).unwrap();
-    let compatible = original.to_aligned_alloc_compatible().unwrap();
-    let from_fn = Layout::aligned_alloc_compatible_from_size_align(10, 1).unwrap();
+    let compatible = original.to_posix_memalign_compatible().unwrap();
+    let from_fn = Layout::posix_memalign_compatible_from_size_align(10, 1).unwrap();
     let ptr_sz = size_of::<usize>();
 
     assert_eq!(compatible, from_fn);

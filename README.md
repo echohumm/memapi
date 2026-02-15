@@ -65,7 +65,7 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `std`: enable `std` integration (including `std::alloc::System`)
 - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
 - `alloc_temp_trait`: scoped/temporary allocation trait (`AllocTemp`)
-- `c_alloc`: C `aligned_alloc`-style allocator (`c_alloc::CAlloc`)
+- `c_alloc`: C `posix_memalign`-style allocator (`c_alloc::CAlloc`)
 - `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, experimental, requires a C
   toolchain)
 - `c_str`: enable `CStr`-specific data traits in `no_std` (MSRV: 1.64)

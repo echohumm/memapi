@@ -218,10 +218,10 @@ impl Layout {
         Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
     }
 
-    /// Creates a layout compatible with C's `aligned_alloc` requirements from the given `size` and
+    /// Creates a layout compatible with C's `posix_memalign` requirements from the given `size` and
     /// `align`.
     ///
-    /// C's `aligned_alloc(alignment, size)` requires:
+    /// C's `posix_memalign(alignment, size)` requires:
     /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
     ///   [c_void](::core::ffi::c_void)>()</code>.
     /// - `size` is a multiple of `alignment`.
@@ -233,7 +233,7 @@ impl Layout {
     ///
     /// This is semantically equivalent to <code>[Layout::from_size_align]\(size,
     /// align\).[and_then](Result::and_then)\(|l|
-    /// l.[to_aligned_alloc_compatible](Layout::to_aligned_alloc_compatible)\(\)\)</code>.
+    /// l.[to_posix_memalign_compatible](Layout::to_posix_memalign_compatible)\(\)\)</code>.
     ///
     /// [size_of]: ::core::mem::size_of
     ///
@@ -249,7 +249,7 @@ impl Layout {
     ///
     /// ```
     /// # use memapi2::prelude::{Layout, SizedProps};
-    /// let l = Layout::aligned_alloc_compatible_from_size_align(10, 1).unwrap();
+    /// let l = Layout::posix_memalign_compatible_from_size_align(10, 1).unwrap();
     ///
     /// assert!(l.align() >= usize::SZ);
     /// assert_eq!(l.size() % l.align(), 0);
@@ -257,7 +257,7 @@ impl Layout {
     /// // on 64-bit systems, l == Layout(size = 16, align = 8).
     /// // 32-bit, l == Layout(size = 12, align = 4)
     /// ```
-    pub const fn aligned_alloc_compatible_from_size_align(
+    pub const fn posix_memalign_compatible_from_size_align(
         size: usize,
         align: usize
     ) -> Result<Layout, Error> {
@@ -268,7 +268,7 @@ impl Layout {
         }
     }
 
-    // TODO: try_aligned_alloc_compatible_from_size_align to only return Ok(layout) if the sz and
+    // TODO: try_posix_memalign_compatible_from_size_align to only return Ok(layout) if the sz and
     //  aln are already valid
 
     /// Creates a layout with the given size and alignment.
@@ -471,9 +471,9 @@ impl Layout {
         }
     }
 
-    /// Converts this layout into one compatible with C's `aligned_alloc` requirements.
+    /// Converts this layout into one compatible with C's `posix_memalign` requirements.
     ///
-    /// C's `aligned_alloc(alignment, size)` requires:
+    /// C's `posix_memalign(alignment, size)` requires:
     /// - `alignment` is a power of two, non-zero, and a multiple of <code>[size_of]::<*mut
     ///   [c_void](::core::ffi::c_void)>()</code>.
     /// - `size` is a multiple of `alignment`.
@@ -500,7 +500,7 @@ impl Layout {
     /// ```
     /// # use memapi2::prelude::{Layout, SizedProps};
     /// let l = Layout::from_size_align(10, 1).unwrap();
-    /// let compatible = l.to_aligned_alloc_compatible().unwrap();
+    /// let compatible = l.to_posix_memalign_compatible().unwrap();
     ///
     /// assert!(compatible.align() >= usize::SZ);
     /// assert_eq!(compatible.size() % compatible.align(), 0);
@@ -509,7 +509,7 @@ impl Layout {
     /// // 32-bit, compatible == Layout(size = 12, align = 4)
     /// ```
     #[inline]
-    pub const fn to_aligned_alloc_compatible(&self) -> Result<Layout, Error> {
+    pub const fn to_posix_memalign_compatible(&self) -> Result<Layout, Error> {
         // first, make the alignment a multiple of `size_of::<*mut c_void>()`.
         match self.align_to_multiple_of(usize::SZ) {
             // then pad the size up to a multiple of the new alignment

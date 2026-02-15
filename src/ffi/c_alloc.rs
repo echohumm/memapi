@@ -32,7 +32,7 @@ pub unsafe fn try_move(ptr: *mut c_void, old_ptr: *mut c_void, size: usize) {
 ///
 /// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc).
 ///
-/// On non-Windows platforms this forwards to `aligned_alloc`, which requires `align` to be a
+/// On non-Windows platforms this forwards to `posix_memalign`, which requires `align` to be a
 /// power of two and a multiple of `size_of::<*mut c_void>()`, and `size` to be a multiple of
 /// `align`.
 ///
@@ -49,10 +49,25 @@ pub fn c_alloc(align: usize, size: usize) -> *mut c_void {
         _aligned_malloc(size, align)
     }
     #[cfg(not(windows))]
-    // SAFETY: this function is safe to call
-    unsafe {
-        aligned_alloc(align, size)
+    // SAFETY: these functions are safe to call
+    unsafe { c_alloc_inner(align, size) }
+}
+
+#[cfg(not(any(target_os = "horizon", target_os = "vita")))]
+#[inline(always)]
+fn c_alloc_inner(align: usize, size: usize) -> *mut c_void {
+    let mut out = ptr::null_mut();
+    // SAFETY: todo
+    if unsafe { posix_memalign(&mut out as *mut *mut c_void, align, size) } == 0 {
+        out
+    } else {
+        ptr::null_mut()
     }
+}
+#[cfg(any(target_os = "horizon", target_os = "vita"))]
+#[inline(always)]
+unsafe fn c_alloc_inner(layout: &Layout) -> *mut c_void {
+    unsafe { memalign(layout.align(), layout.size()) }
 }
 
 /// Frees memory previously returned by the primary C allocator.
@@ -198,6 +213,14 @@ extern "C" {
     ///
     /// This function is safe to call but may return `NULL` if allocation fails, or `size` is 0.
     pub fn malloc(size: usize) -> *mut c_void;
+
+    #[cfg(all(not(windows), not(any(target_os = "horizon", target_os = "vita"))))]
+    /// <placeholder>
+    pub fn posix_memalign(out: *mut *mut c_void, align: usize, size: usize) -> ::cty::c_int;
+
+    #[cfg(all(not(windows), any(target_os = "horizon", target_os = "vita")))]
+    /// <placeholder>
+    pub fn memalign(align: usize, size: usize) -> *mut c_void;
 
     #[cfg(not(windows))]
     /// Allocates `size` bytes with at least `align` alignment.
