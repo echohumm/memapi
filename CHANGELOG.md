@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 
-## Unreleased
+## [Unreleased]
+
+---
+
+## [0.11.3]
+
+### Fixed
+
+* Crate failing to compile on Apple systems with the `c_alloc` feature
 
 ---
 
@@ -15,16 +23,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* `ffi::c_alloc::MIN_ALIGN`, the current platform's minimum guaranteed alignment returned by implicitly aligned allocation functions
+* `ffi::c_alloc::MIN_ALIGN`, the current platform's minimum guaranteed alignment returned by
+  implicitly aligned allocation functions
 
 ### Changed
 
-* `CAlloc` now uses `malloc`/`calloc` when possible instead of explicitly aligned allocation functions
+* `CAlloc` now uses `malloc`/`calloc` when possible instead of explicitly aligned allocation
+  functions
 
 ### Fixed
 
-* Crate compiles on Windows with the `c_alloc` feature
-* The return code of `posix_memalign` is now handled properly.
+* Crate failing to compile on Windows with the `c_alloc` feature
+* Return code of `posix_memalign` being discarded
 
 ---
 

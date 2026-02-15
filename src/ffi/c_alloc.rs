@@ -181,8 +181,9 @@ pub unsafe fn c_alloc(align: usize, size: usize) -> (*mut c_void, c_int) {
 unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
     #[cfg(target_vendor = "apple")]
     {
-        if layout.align() > (1 << 31) {
-            return ptr::null_mut();
+        if align > (1 << 31) {
+            // 22 is the errno for EINVAL
+            return (NULL, 22);
         }
     }
     let mut out = NULL;
