@@ -43,10 +43,12 @@ jobs:
 
       - name: Run all tests
         if: steps.install_rust.outcome == 'success'
+        continue-on-error: false
         run: cargo +${{ matrix.rust }} test --verbose --features ${{ matrix.features }}
 
       - name: Run Miri
         if: matrix.rust == 'nightly' && steps.install_rust.outcome == 'success'
+        continue-on-error: false
         env:
           MIRIFLAGS: -Zmiri-permissive-provenance
         run: cargo +${{ matrix.rust }} miri test --verbose --features ${{ matrix.features }}

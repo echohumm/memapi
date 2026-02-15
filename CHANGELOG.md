@@ -11,7 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.11.3]
+## [0.11.3] - 2026-02-15
+
+### Fixed
+
+* Crate failing to compile on Windows with the `c_alloc` feature
+
+## [0.11.3] - 2026-02-15
 
 ### Fixed
 

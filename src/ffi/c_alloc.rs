@@ -130,17 +130,23 @@ const NULL: *mut c_void = null_mut();
 ///
 /// - `old_ptr` must point to a C allocation of at least `size` bytes.
 /// - `ptr` must point to an allocation of at least `size` bytes.
-pub unsafe fn try_move(ptr: *mut c_void, old_ptr: *mut c_void, size: usize, old_align: usize) {
+pub unsafe fn try_move(
+    ptr: *mut c_void,
+    old_ptr: *mut c_void,
+    copy_count: usize,
+    old_align: usize,
+    old_size: usize
+) {
     if ptr != NULL {
         // SAFETY: `ptr` validated nonnull, caller guarantees `old_ptr` is valid. caller guarantees
         // `size` is <= size of allocation at `ptr` and <= size of allocation at `old_ptr`,
         // so copying that many bytes is safe.
         unsafe {
-            memcpy(ptr, old_ptr, size);
+            memcpy(ptr, old_ptr, copy_count);
         }
         // SAFETY: caller guarantees that `old_ptr` is valid
         unsafe {
-            c_dealloc(old_ptr, old_align);
+            c_dealloc(old_ptr, old_align, old_size);
         }
     }
 }
@@ -249,11 +255,11 @@ pub unsafe fn c_zalloc(align: usize, size: usize) -> (*mut c_void, c_int) {
 /// - `ptr` points to the start of a valid allocation returned by an allocation function listed
 ///   above, or is `NULL`.
 /// - `ptr` has not yet been deallocated.
-pub unsafe fn c_dealloc(ptr: *mut c_void, _align: usize) {
+pub unsafe fn c_dealloc(ptr: *mut c_void, _size: usize, _align: usize) {
     #[cfg(windows)]
     {
         #[allow(clippy::used_underscore_binding)]
-        if _align > MIN_ALIGN && size >= align {
+        if _align > MIN_ALIGN && _size >= _align {
             // SAFETY: requirements are passed onto the caller; as align > MIN_ALIGN,
             // _aligned_{malloc,realloc} was used so _aligned_free works.
             unsafe {
@@ -316,7 +322,7 @@ pub unsafe fn grow_aligned(
     // if successful, move data to new pointer
     // SAFETY: requirements are passed on to the caller
     unsafe {
-        try_move(ptr, old_ptr, old_size, old_align);
+        try_move(ptr, old_ptr, old_size, old_align, old_size);
     }
 
     (ptr, status)
@@ -346,6 +352,7 @@ pub unsafe fn grow_aligned(
 pub unsafe fn shrink_aligned(
     old_ptr: *mut c_void,
     old_align: usize,
+    old_size: usize,
     align: usize,
     size: usize // a zero here is useless, as it will just be overwritten anyway.
 ) -> (*mut c_void, c_int) {
@@ -357,7 +364,7 @@ pub unsafe fn shrink_aligned(
     // if successful, move data to new pointer
     // SAFETY: requirements are passed on to the caller
     unsafe {
-        try_move(ptr, old_ptr, size, old_align);
+        try_move(ptr, old_ptr, size, old_align, old_size);
     }
 
     (ptr, status)
@@ -426,7 +433,6 @@ extern "C" {
                   will leak memory"]
     pub fn aligned_alloc(align: usize, size: usize) -> *mut c_void;
 
-    #[cfg(not(windows))]
     /// Frees memory previously returned by the primary C allocator.
     ///
     /// The closest Rust equivalent is [`dealloc`](::stdalloc::alloc::dealloc).

@@ -88,8 +88,8 @@
 
 extern crate core;
 extern crate rustversion;
-#[cfg(feature = "c_alloc")]
-extern crate cty;
+
+#[cfg(feature = "c_alloc")] extern crate cty;
 
 #[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 #[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;

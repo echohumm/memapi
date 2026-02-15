@@ -1,12 +1,11 @@
 use {
     crate::{
         error::{Cause, Error},
-        ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned}
-        ,
+        ffi::c_alloc::{c_alloc, c_dealloc, c_zalloc, grow_aligned, shrink_aligned},
         layout::Layout,
         traits::{
-            alloc::{Alloc, Dealloc, Grow, Realloc, Shrink},
-            AllocError
+            AllocError,
+            alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
         }
     },
     ::core::{
@@ -106,7 +105,9 @@ unsafe fn pad_then_realloc(
         match old_size.cmp(&new_padded.size()) {
             // SAFETY: caller guarantees that `old_ptr` and `old_size` are valid, we just
             // checked that `size >= old_size`
-            Ordering::Less => unsafe { grow_aligned(old_ptr, old_align, old_size, align, size, zeroed) },
+            Ordering::Less => unsafe {
+                grow_aligned(old_ptr, old_align, old_size, align, size, zeroed)
+            },
             Ordering::Equal => {
                 if align > old_align {
                     // SAFETY: above
@@ -117,7 +118,9 @@ unsafe fn pad_then_realloc(
             }
             // SAFETY: caller guarantees that `old_ptr` and `size` are valid, we just checked
             // that `size <= old_size`
-            Ordering::Greater => unsafe { shrink_aligned(old_ptr, old_align, align, size) }
+            Ordering::Greater => unsafe {
+                shrink_aligned(old_ptr, old_align, old_size, align, size)
+            }
         }
     })
 }
@@ -157,7 +160,7 @@ impl Dealloc for CAlloc {
             Err(Error::DanglingDeallocation)
         } else {
             let padded = tri!(do layout.to_posix_memalign_compatible());
-            c_dealloc(ptr.as_ptr().cast(), padded.align());
+            c_dealloc(ptr.as_ptr().cast(), padded.align(), padded.size());
             Ok(())
         }
     }
@@ -196,7 +199,13 @@ impl Shrink for CAlloc {
         let new_padded = tri!(do new_layout.to_posix_memalign_compatible());
 
         null_q_dyn_zsl_check_or_errcode(new_layout, |_| {
-            shrink_aligned(ptr.as_ptr().cast(), old_padded.align(), new_padded.align(), new_padded.size())
+            shrink_aligned(
+                ptr.as_ptr().cast(),
+                old_padded.align(),
+                old_padded.size(),
+                new_padded.align(),
+                new_padded.size()
+            )
         })
     }
 }
