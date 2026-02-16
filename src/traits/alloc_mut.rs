@@ -17,7 +17,7 @@ use {
         convert::From,
         marker::Sized,
         ptr::{self, NonNull},
-        result::Result::{self, Err, Ok}
+        result::Result::{self, Err}
     }
 };
 
@@ -495,11 +495,10 @@ impl<A: Realloc + ?Sized> ReallocMut for A {
 }
 
 // no AllocMut for &mut A: AllocMut because rust is dumb and "downstream crates may implement Alloc
-// for &mut A: AllocMut"
+// for &mut A"
 
-const LOCK_ERR: Error = Error::Other("lock_failed");
+const LOCK_ERR: Error = Error::Other("lock failed");
 
-// TODO: decide on inlining for the below
 macro_rules! impl_alloc_for_sync_mutalloc {
     ($t:ty, $borrow_call:ident) => {
         impl<A: AllocError + ?Sized> AllocError for $t {
@@ -508,6 +507,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
 
         impl<A: AllocMut + ?Sized> Alloc for $t {
             #[cfg_attr(miri, track_caller)]
+            #[inline]
             fn alloc(
                 &self,
                 layout: Layout
@@ -517,6 +517,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
             }
 
             #[cfg_attr(miri, track_caller)]
+            #[inline]
             fn zalloc(
                 &self,
                 layout: Layout
@@ -527,15 +528,8 @@ macro_rules! impl_alloc_for_sync_mutalloc {
         }
 
         impl<A: DeallocMut + ?Sized> Dealloc for $t {
-            #[track_caller]
-            unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-                match self.$borrow_call() {
-                    Ok(mut guard) => guard.dealloc_mut(ptr, layout),
-                    Err(_) => default_dealloc_panic(ptr, layout, LOCK_ERR),
-                }
-            }
-
             #[cfg_attr(miri, track_caller)]
+            #[inline]
             unsafe fn try_dealloc(
                 &self,
                 ptr: NonNull<u8>,

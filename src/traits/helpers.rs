@@ -19,8 +19,6 @@ pub fn default_dealloc_panic<E: Display>(ptr: NonNull<u8>, layout: Layout, e: E)
     panic!("deallocation of block at {:p} with layout {:?} failed: {}", ptr.as_ptr(), layout, e)
 }
 
-// TODO: fast path that just deallocates and returns dangling if new size is 0?
-
 //noinspection DuplicatedCode
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn grow<A: Grow<Error = E> + ?Sized, E: From<Error> + Debug + Display>(

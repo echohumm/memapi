@@ -4,7 +4,7 @@ extern crate criterion;
 extern crate memapi2;
 
 use {
-    ::core::hint::black_box,
+    core::hint::black_box,
     criterion::Criterion,
     memapi2::{
         helpers::USIZE_MAX_NO_HIGH_BIT,
