@@ -142,7 +142,7 @@ pub unsafe fn try_move(
         // `size` is <= size of allocation at `ptr` and <= size of allocation at `old_ptr`,
         // so copying that many bytes is safe.
         unsafe {
-            memcpy(ptr, old_ptr, copy_count);
+            ptr::copy_nonoverlapping(old_ptr, ptr, copy_count);
         }
         // SAFETY: caller guarantees that `old_ptr` is valid
         unsafe {
@@ -301,8 +301,7 @@ pub unsafe fn c_dealloc(ptr: *mut c_void, _size: usize, _align: usize) {
 ///   `old_size` bytes.
 /// - `old_align` equals the alignment of the allocation requested at `old_ptr`.
 /// - `old_size` equals the size of the allocation requested at `old_ptr`.
-/// - `align` is a power of two and a multiple of <code>[size_of](::core::mem::size_of)::<*mut
-///   [c_void]>()</code>.
+/// - `align` is a power of two and non-zero.
 /// - `size` is greater than or equal to `old_size` and non-zero.
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn grow_aligned(
@@ -328,6 +327,7 @@ pub unsafe fn grow_aligned(
     (ptr, status)
 }
 
+
 /// Shrinks a block of memory previously returned by [`c_alloc`], [`c_zalloc`], [`c_realloc`],
 /// [`malloc`], [`calloc`], [`realloc`], [`grow_aligned`], or [`shrink_aligned`].
 ///
@@ -342,12 +342,12 @@ pub unsafe fn grow_aligned(
 /// # Safety
 ///
 /// The caller must ensure:
-/// - `old_ptr` was allocated by an allocation function listed above and is valid for reads of at
-///   least `size` bytes.
+/// - `old_ptr` was allocated by an allocation function listed above and is valid for reads of
+///   `size` bytes.
 /// - `old_align` equals the alignment of the allocation requested at `old_ptr`.
-/// - `align` is a power of two and a multiple of <code>[size_of](::core::mem::size_of)::<*mut
-///   [c_void]>()</code>.
-/// - `size` is less than or equal to the size of the allocation at `old_ptr` and non-zero.
+/// - `old_size` equals the size of the allocation requested at `old_ptr`.
+/// - `align` is a power of two and non-zero.
+/// - `size` is less than or equal to `old_size` and non-zero.
 #[cfg_attr(miri, track_caller)]
 pub unsafe fn shrink_aligned(
     old_ptr: *mut c_void,
@@ -372,125 +372,207 @@ pub unsafe fn shrink_aligned(
 
 // public in case the user wants them for some reason
 extern "C" {
-    /// Allocates `size` bytes.
+    /// Allocates `size` bytes of uninitialized storage.
     ///
-    /// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc) with the `layout`
-    /// parameter's alignment being [`MIN_ALIGN`].
+    /// C reference:
+    /// <https://en.cppreference.com/w/c/memory/malloc>.
     ///
     /// # Safety
     ///
-    /// This function is safe to call but may return `NULL` if allocation fails, or `size` is 0.
-    #[must_use = "this function allocates memory on success, and dropping the returned pointer \
-                  will leak memory"]
+    /// - Returns a pointer suitably aligned for any object type with fundamental alignment
+    ///   (`max_align_t`, at least [`MIN_ALIGN`]).
+    /// - On allocation failure, returns `NULL`.
+    /// - If `size == 0`, the result is implementation-defined and may be `NULL` or a unique pointer
+    ///   that must not be dereferenced but should be freed to avoid memory leaks.
+    ///
+    /// # Notes
+    ///
+    /// If successful, the returned pointer should be freed with [`free`].
+    #[must_use = "this function allocates memory on success; dropping the returned pointer will \
+                  leak memory"]
     pub fn malloc(size: usize) -> *mut c_void;
 
-    /// Allocates `size * count` bytes of zeroed memory.
+    /// Allocates storage for an array of `count` objects of `size` bytes each; bytes are
+    /// zero-initialized.
     ///
-    /// The closest Rust equivalent is [`alloc_zeroed`](::stdalloc::alloc::alloc_zeroed) with the
-    /// `layout` parameter's size being `count * size` and its alignment being [`MIN_ALIGN`].
+    /// C reference:
+    /// <https://en.cppreference.com/w/c/memory/calloc>.
     ///
     /// # Safety
     ///
-    /// This function is safe to call but may return `NULL` if allocation fails or `size` or `count`
-    /// is 0.
-    #[must_use = "this function allocates memory on success, and dropping the returned pointer \
-                  will leak memory"]
+    /// - Returns a pointer suitably aligned for any object type with fundamental alignment
+    ///   (`max_align_t`, at least [`MIN_ALIGN`]).
+    /// - On allocation failure, returns `NULL`.
+    /// - If `count == 0` or `size == 0`, the result is implementation-defined and may be `NULL` or
+    ///   a unique pointer that must not be dereferenced but should be freed to avoid memory leaks.
+    ///
+    /// # Notes
+    ///
+    /// If successful, the returned pointer should be freed with [`free`].
+    #[must_use = "this function allocates memory on success; dropping the returned pointer will \
+                  leak memory"]
     pub fn calloc(count: usize, size: usize) -> *mut c_void;
 
-    /// <placeholder>
-    #[must_use = "this function allocates memory on success, and dropping the returned pointer \
-                  will leak memory"]
+    /// Changes the size of the memory block pointed to by `ptr` to `size` bytes.
+    ///
+    /// C reference:
+    /// <https://en.cppreference.com/w/c/memory/realloc>.
+    ///
+    /// # Safety
+    ///
+    /// - Returns a pointer suitably aligned for any object type with fundamental alignment
+    ///   (`max_align_t`, at least [`MIN_ALIGN`]).
+    /// - If `ptr` is non-null, it must have been returned by [`malloc`], [`calloc`].
+    ///   [`posix_memalign`], or a previous [`realloc`] and must not have been freed.
+    /// - If the call fails, it returns `NULL` and the original `ptr` remains valid.
+    /// - If `size == 0`, the result is implementation-defined and may be `NULL` or a unique pointer
+    ///   that must not be dereferenced but should be freed to avoid memory leaks.
+    ///
+    /// # Notes
+    ///
+    /// If successful, the returned pointer should be freed with [`free`].
+    #[must_use = "this function allocates memory on success; dropping the returned pointer will \
+                  leak memory"]
     pub fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 
     #[cfg(all(not(windows), not(any(target_os = "horizon", target_os = "vita"))))]
-    /// <placeholder>
-    #[must_use = "this function allocates memory on success, and dropping the returned pointer \
+    /// Allocates `size` bytes aligned to `align` and store the result in `*out`.
+    ///
+    /// POSIX reference:
+    /// <https://pubs.opengroup.org/onlinepubs/9699919799/functions/posix_memalign.html>
+    ///
+    /// # Returns
+    ///
+    /// - On success returns 0 and stores the pointer in `*out`.
+    /// - On error returns an error code, and `*out` is either unmodified or set to `NULL`.
+    ///
+    /// # Safety
+    ///
+    /// - On allocation failure, returns `NULL`.
+    /// - If `size == 0`, the result is implementation-defined and may be `NULL` or a unique pointer
+    ///   that must not be dereferenced but should be freed to avoid memory leaks.
+    ///
+    /// # Notes
+    ///
+    /// If successful, the returned pointer should be freed with [`free`].
+    #[must_use = "on success this function produces an allocation; dropping the returned value \
                   will leak memory"]
     pub fn posix_memalign(out: *mut *mut c_void, align: usize, size: usize) -> c_int;
 
     #[cfg(all(not(windows), any(target_os = "horizon", target_os = "vita")))]
-    /// <placeholder>
-    #[must_use = "this function allocates memory on success, and dropping the returned pointer \
-                  will leak memory"]
+    /// Allocates `size` bytes aligned to `align`.
+    ///
+    /// # Safety
+    ///
+    /// Platform-dependent. Check platform documentation or assume behavior is similar to
+    /// [`posix_memalign`].
+    #[must_use = "this function allocates memory on success; dropping the returned pointer will \
+                  leak memory"]
     pub fn memalign(align: usize, size: usize) -> *mut c_void;
 
-    #[cfg(not(windows))]
-    /// Allocates `size` bytes with at least `align` alignment.
+    /// Frees memory previously returned by the system allocator.
     ///
-    /// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc).
-    ///
-    /// # Returns
-    ///
-    /// - On success returns a nonnull pointer to the allocated memory.
-    /// - On allocation failure returns `NULL`.
+    /// C reference:
+    /// <https://en.cppreference.com/w/c/memory/free>.
     ///
     /// # Safety
     ///
-    /// This function is safe to call but may return `NULL` if:
-    /// - `align` is not a power of two and a multiple of `size_of::<*mut c_void>()`.
-    /// - `size` is not a multiple of `align`.
-    #[must_use = "this function allocates memory on success, and dropping the returned pointer \
-                  will leak memory"]
-    pub fn aligned_alloc(align: usize, size: usize) -> *mut c_void;
-
-    /// Frees memory previously returned by the primary C allocator.
-    ///
-    /// The closest Rust equivalent is [`dealloc`](::stdalloc::alloc::dealloc).
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure:
-    /// - `ptr` points to the start of a valid allocation returned by this allocator _or_ is `NULL`.
-    /// - `ptr` has not yet been deallocated.
+    /// `ptr` must be either `NULL` or a pointer previously returned by [`malloc`], [`calloc`],
+    /// [`realloc`], [`posix_memalign`], or another compatible allocator for the platform, and not
+    /// yet freed.
     pub fn free(ptr: *mut c_void);
 
     #[cfg(windows)]
-    /// Windows version of [`aligned_alloc`].
-    #[must_use = "this function allocates memory on success, and dropping the returned pointer \
-                  will leak memory"]
-    pub fn _aligned_malloc(size: usize, alignment: usize) -> *mut c_void;
+    /// Microsoft version of `aligned_alloc`/[`posix_memalign`]. Allocates `size` bytes aligned to
+    /// `align`.
+    ///
+    /// Microsoft documentation:
+    /// <https://learn.microsoft.com/cpp/c-runtime-library/reference/aligned-malloc>.
+    ///
+    /// # Returns
+    ///
+    /// - On success returns a non-null pointer.
+    /// - On failure or if `size == 0`, returns `NULL`.
+    ///
+    /// # Safety
+    ///
+    /// - `align` must be a power of two.
+    /// - Memory returned by this function must be freed with [`_aligned_free`], _not_ [`free`].
+    #[must_use = "this function allocates memory on success; dropping the returned pointer will \
+                  leak memory"]
+    pub fn _aligned_malloc(size: usize, align: usize) -> *mut c_void;
+
     #[cfg(windows)]
-    /// Windows version of [`free`] specifically for memory returned by [`_aligned_malloc`].
+    /// Frees memory allocated by `_aligned_malloc`.
+    ///
+    /// Microsoft documentation:
+    /// <https://learn.microsoft.com/cpp/c-runtime-library/reference/aligned-free>.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must be either `NULL` or a pointer previously returned by [`_aligned_malloc`],
+    /// [`_aligned_realloc`], or another compatible allocator, and not
+    /// yet freed.
     pub fn _aligned_free(ptr: *mut c_void);
+
     #[cfg(windows)]
-    /// Windows version of [`realloc`] specifically for memory returned by [`_aligned_malloc`].
+    /// Reallocates memory previously returned by [`_aligned_malloc`].
+    ///
+    /// Microsoft documentation:
+    /// <https://learn.microsoft.com/cpp/c-runtime-library/reference/aligned-realloc>.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must have been returned by [`_aligned_malloc`], a previous
+    ///   [`_aligned_realloc`]/[`_aligned_recalloc`], or another compatible allocator, and not yet
+    ///   freed.
+    /// - On failure returns `NULL` and the original pointer remains valid.
     pub fn _aligned_realloc(ptr: *mut c_void, size: usize, align: usize) -> *mut c_void;
 
-    /// Sets `count` bytes at `ptr` to `val`. The returned pointer is a copy of `ptr`.
+    // TODO: fix these docs
+    #[cfg(windows)]
+    /// Reallocates memory previously returned by [`_aligned_malloc`] and initializes new bytes to
+    /// 0.
     ///
-    /// The closest Rust equivalent is [`write_bytes`](ptr::write_bytes).
+    /// Microsoft documentation:
+    /// <https://learn.microsoft.com/cpp/c-runtime-library/reference/aligned-realloc>.
     ///
     /// # Safety
     ///
-    /// The caller must ensure:
-    /// - `ptr` points to `count` valid bytes.
-    /// - `val` contains a value less than [`u8::MAX`].
+    /// - `ptr` must have been returned by [`_aligned_malloc`], a previous
+    ///   [`_aligned_realloc`]/[`_aligned_recalloc`], or another compatible allocator, and not yet
+    ///   freed.
+    /// - On failure returns `NULL` and the original pointer remains valid.
+    pub fn _aligned_recalloc(ptr: *mut c_void, num: usize, size: usize, align: usize) -> *mut c_void;
+
+    /// Set `count` bytes starting at `ptr` to the byte value `val`. Returns `ptr`.
+    ///
+    /// C reference: <https://en.cppreference.com/w/c/string/byte/memset>.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must be valid for writes of at least `count` bytes.
+    /// - `val` is converted to `unsigned char`/`u8` before being stored.
     pub fn memset(ptr: *mut c_void, val: i32, count: usize) -> *mut c_void;
 
-    /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
+    /// Copy `count` bytes from `src` to `dest`. The regions must not overlap. Returns `dest`.
     ///
-    /// `src` and `dest` must not overlap, or the result stored in `dest` may be unexpected.
-    ///
-    /// The closest Rust equivalent is [`copy_nonoverlapping`](ptr::copy_nonoverlapping)
+    /// C reference: <https://en.cppreference.com/w/c/string/byte/memcpy>.
     ///
     /// # Safety
     ///
-    /// The caller must ensure:
-    /// - `src` points to a valid block of memory of at least `count` bytes.
-    /// - `dest` points to a valid block of memory of at least `count` bytes.
-    /// - `src` and `dest` do not overlap.
+    /// - `src` must be valid for reads of at least `count` bytes.
+    /// - `dest` must be valid for writes of at least `count` bytes.
+    /// - The source and destination must not overlap.
     pub fn memcpy(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 
-    /// Copies `count` bytes from `src` to `dest`. The returned pointer is a copy of `dest`.
+    /// Copy `count` bytes from `src` to `dest`. The regions may overlap. Returns `dest`.
     ///
-    /// Unlike [`memcpy`], `src` and `dest` may overlap.
-    ///
-    /// The closest Rust equivalent is [`copy`](ptr::copy)
+    /// C reference: <https://en.cppreference.com/w/c/string/byte/memmove>.
     ///
     /// # Safety
     ///
-    /// The caller must ensure:
-    /// - `src` points to a valid block of memory of at least `count` bytes.
-    /// - `dest` points to a valid block of memory of at least `count` bytes.
+    /// - `src` must be valid for reads of at least `count` bytes.
+    /// - `dest` must be valid for writes of at least `count` bytes.
     pub fn memmove(dest: *mut c_void, src: *const c_void, count: usize) -> *mut c_void;
 }

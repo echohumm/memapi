@@ -13,6 +13,7 @@
       <w>nonpow</w>
       <w>oserr</w>
       <w>ralloc</w>
+      <w>recalloc</w>
       <w>rezalloc</w>
       <w>stdalloc</w>
       <w>sysalloc</w>

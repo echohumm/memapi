@@ -74,12 +74,12 @@ full_nightly = ["all_nightly", "full"]
 
 
 [dependencies]
-rustversion = "1.0.22"
-cty = { version = "0.2.2", optional = true }
+rustversion = "=1.0.22"
+cty = { version = "=0.2.2", optional = true }
 
 [build-dependencies]
-rustversion = "1.0.22"
-cc = { version = "=1.0.79", optional = true }
+rustversion = "=1.0.22"
+cc = { version = "=1.0.83", optional = true }
 
 
 
