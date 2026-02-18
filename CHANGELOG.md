@@ -11,11 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-* `Error::ReallocSmallerAlign` for when attempting to reallocate with a smaller new alignment.
+* `Error::ReallocSmallerAlign` for when attempting to reallocate with a smaller new alignment
+* `Layout::try_posix_memalign_compatible_from_size_align` to only allow layout creation if the
+  provided size and alignment are compatible with `posix_memalign`
 
 ### Fixed
 
-* Reallocation that requests a smaller alignment is now treated as an error 
+* Reallocation that requests a smaller alignment is now treated as an error
   (`Error::ReallocSmallerAlign`) instead of allowing potential undefined behavior
 
 ---

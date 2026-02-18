@@ -16,8 +16,7 @@ pub trait SizedProps: Sized {
     /// The alignment of the type.
     const ALN: usize = align_of::<Self>();
     /// The memory layout for the type.
-    // SAFETY: this is the same as Layout::new::<T>().
-    const LAYOUT: Layout = unsafe { Layout::from_size_align_unchecked(Self::SZ, Self::ALN) };
+    const LAYOUT: Layout = Layout::new::<Self>();
 
     /// Whether the type is zero-sized.
     const IS_ZST: bool = Self::SZ == 0;
@@ -27,6 +26,8 @@ pub trait SizedProps: Sized {
         0 => usize::MAX,
         sz => USIZE_MAX_NO_HIGH_BIT / sz
     };
+    
+    // TODO: maybe DANGLING constant?
 }
 
 impl<T> SizedProps for T {}
@@ -67,7 +68,7 @@ pub trait PtrProps<T: ?Sized> {
     /// References are always valid.
     #[inline]
     unsafe fn layout(&self) -> Layout {
-        Layout::from_size_align_unchecked(self.sz(), self.aln())
+        Layout::for_value(self)
     }
 
     #[cfg(feature = "metadata")]

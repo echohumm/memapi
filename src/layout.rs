@@ -24,8 +24,6 @@ use {
 /// A type alias for [`alloc::alloc::Layout`](::stdalloc::alloc::Layout).
 pub type StdLayout = ::stdalloc::alloc::Layout;
 
-// TODO: check all of these docs, idk how many are correct anymore my head hurts
-
 const fn align_up_checked(val: usize, align: usize, on_size: bool) -> Result<usize, Error> {
     tri!(do check_lay(val, align, on_size));
 
@@ -81,12 +79,11 @@ impl From<Layout> for StdLayout {
 
 impl Layout {
     /// Creates a layout for the given type.
-    ///
-    /// This just delegates to <code><T as [SizedProps]>::[LAYOUT](SizedProps::LAYOUT)</code>.
     #[inline(always)]
     #[must_use]
     pub const fn new<T>() -> Layout {
-        T::LAYOUT
+        // SAFETY: the size and alignment of a sized type cannot be invalid for a layout
+        unsafe { Layout::from_size_align_unchecked(Self::SZ, Self::ALN) }
     }
 
     // could be deduped with repeat*, but stdlib doesn't, and it's logically meaningfully faster, so
@@ -176,18 +173,13 @@ impl Layout {
     }
 
     /// Creates a layout for the value behind the given reference
-    ///
-    /// This just delegates to <code><&T as [PtrProps]>::[layout](PtrProps::layout)\(\)</code>.
     #[inline(always)]
     pub fn for_value<T: ?Sized>(val: &T) -> Layout {
-        // SAFETY: references are always valid
-        unsafe { val.layout() }
+        // SAFETY: references are always valid for sz()/aln()
+        unsafe { Layout::for_value_raw(val) }
     }
 
     /// Creates a layout for the value behind the given reference
-    ///
-    /// This just delegates to <code><*const T as
-    /// [PtrProps]>::[layout](PtrProps::layout)\(\)</code>.
     ///
     /// # Safety
     ///
@@ -197,7 +189,13 @@ impl Layout {
     /// - aligned
     #[inline(always)]
     pub unsafe fn for_value_raw<T: ?Sized>(val: *const T) -> Layout {
-        val.layout()
+        // SAFETY: caller guarantee
+        let sz = unsafe { val.sz() };
+        // SAFETY: caller guarantee
+        let aln = unsafe { val.aln() };
+        // SAFETY: the size and alignment for a value behind a pointer cannot be invalid for a
+        // layout
+        unsafe { Layout::from_size_align_unchecked(sz, aln) }
     }
 
     /// Creates a layout with the given size and alignment.
@@ -237,6 +235,7 @@ impl Layout {
     ///
     /// <code>Err([Error::InvalidLayout]\([self.align()](Layout::align),
     /// [self.align()](Layout::align), [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
+    // TODO: missing other errors
     ///
     /// # Examples
     ///
@@ -263,8 +262,43 @@ impl Layout {
         }
     }
 
-    // TODO: try_posix_memalign_compatible_from_size_align to only return Ok(layout) if the sz and
-    //  aln are already valid
+    /// Attempts to create a layout compatible with C's `posix_memalign` requirements from the given
+    /// `size` and `align`.
+    ///
+    /// C's `posix_memalign(out, alignment, size)` requires `alignment` is a power of two, non-zero,
+    /// and a multiple of <code>[size_of]::<*mut [c_void](::core::ffi::c_void)>()</code>.
+    ///
+    /// Therefore, this call will fail if `align` does not meet these requirements.
+    ///
+    /// [size_of]: ::core::mem::size_of
+    ///
+    /// # Errors
+    ///
+    /// <code>Err([Error::InvalidLayout]\([self.align()](Layout::align),
+    /// [self.align()](Layout::align), [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
+    // TODO: other errs
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use memapi2::prelude::{Layout, SizedProps};
+    /// let l = Layout::posix_memalign_compatible_from_size_align(10, 1).unwrap();
+    ///
+    /// assert!(l.align() >= usize::SZ);
+    /// assert!(l.size() >= 10);
+    /// // on 64-bit systems, l == Layout(size = 10, align = 8).
+    /// // 32-bit, l == Layout(size = 10, align = 4)
+    /// Attempts to create
+    pub const fn try_posix_memalign_compatible_from_size_align(
+        size: usize,
+        align: usize
+    ) -> Result<Layout, Error> {
+        if !is_multiple_of(align, usize::SZ) {
+            return Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp));
+        }
+
+        Layout::from_size_align(size, align)
+    }
 
     /// Creates a layout with the given size and alignment.
     ///

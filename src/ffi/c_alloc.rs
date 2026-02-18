@@ -412,6 +412,9 @@ extern "C" {
     #[cfg(windows)]
     /// Reallocates memory previously returned by [`_aligned_malloc`].
     ///
+    /// `align` must match the previous alignment of the allocation, or the call will result in an
+    /// error.
+    ///
     /// Microsoft documentation:
     /// <https://learn.microsoft.com/cpp/c-runtime-library/reference/aligned-realloc>.
     ///
@@ -423,10 +426,12 @@ extern "C" {
     /// - On failure returns `NULL` and the original pointer remains valid.
     pub fn _aligned_realloc(ptr: *mut c_void, size: usize, align: usize) -> *mut c_void;
 
-    // TODO: fix these docs
     #[cfg(windows)]
     /// Reallocates memory previously returned by [`_aligned_malloc`] and initializes new bytes to
     /// 0.
+    ///
+    /// `align` must match the previous alignment of the allocation, or the call will result in an
+    /// error.
     ///
     /// Microsoft documentation:
     /// <https://learn.microsoft.com/cpp/c-runtime-library/reference/aligned-realloc>.
