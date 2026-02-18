@@ -121,7 +121,7 @@ pub mod prelude {
             data::marker::{SizeMeta, Thin, UnsizedCopy}
         }
     };
-    
+
     // alloc_temp trait too if the feature is on
     #[cfg(feature = "alloc_temp_trait")] pub use crate::traits::alloc_temp::AllocTemp;
 
