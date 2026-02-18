@@ -37,12 +37,14 @@ pub enum Error {
     /// In most reasonable cases, [`layout.dangling()`](Layout::dangling) can and should be used
     /// instead.
     ZeroSizedLayout,
-    /// An attempt was made to deallocate a dangling pointer.
+    /// Attempted to deallocate a dangling pointer.
     DanglingDeallocation,
     /// Attempted to grow to a smaller size.
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
     ShrinkLargerNewLayout(usize, usize),
+    /// Attempted to reallocate a block with a smaller alignment.
+    ReallocSmallerAlign(usize, usize),
     /// An arithmetic error.
     ArithmeticError(ArithErr),
     /// An unwinding panic occurred in a function which does not support unwinding; likely FFI.
@@ -63,6 +65,7 @@ impl Display for Error {
             GrowSmallerNewLayout,
             InvalidLayout,
             Other,
+            ReallocSmallerAlign,
             ShrinkLargerNewLayout,
             Unsupported,
             ZeroSizedLayout
@@ -90,6 +93,13 @@ impl Display for Error {
             }
             ShrinkLargerNewLayout(old, new) => {
                 write!(f, "attempted to shrink from a size of {} to a larger size of {}", old, new)
+            }
+            ReallocSmallerAlign(old, new) => {
+                write!(
+                    f,
+                    "attempted to reallocate from an align of {} to a smaller align of {}",
+                    old, new
+                )
             }
             ArithmeticError(overflow) => write!(f, "{}", overflow),
             CaughtUnwind => {

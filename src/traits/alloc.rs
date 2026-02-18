@@ -5,13 +5,13 @@ use {
         traits::{
             AllocError,
             alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
-            helpers::{Bytes, default_dealloc_panic, grow, ralloc, shrink_unchecked}
+            helpers::{default_dealloc_panic, ralloc}
         }
     },
     ::core::{
-        cmp::{Ord, Ordering},
         convert::From,
         marker::Sized,
+        option::Option::{None, Some},
         ptr::{self, NonNull},
         result::Result::{self, Err}
     }
@@ -32,7 +32,7 @@ pub trait Alloc: AllocError + AllocMut {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
@@ -50,7 +50,7 @@ pub trait Alloc: AllocError + AllocMut {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
@@ -66,7 +66,7 @@ pub trait Alloc: AllocError + AllocMut {
 pub trait Dealloc: Alloc + DeallocMut {
     /// Deallocates a previously allocated block.
     ///
-    /// This is a noop if <code>[layout.size()](Layout::size) == 0</code> or `ptr` is
+    /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
     /// [`dangling`](ptr::dangling).
     ///
     /// The default implementation simply calls [`try_dealloc`](Dealloc::try_dealloc) and panics if
@@ -82,7 +82,7 @@ pub trait Dealloc: Alloc + DeallocMut {
     ///
     /// This function may panic if the [`try_dealloc`](Dealloc::try_dealloc) implementation returns
     /// an error, or the implementation chooses to panic for any other reason. It will not panic if
-    /// `ptr` is [`dangling`](ptr::dangling) or <code>[layout.size()](Layout::size) == 0</code>.
+    /// `ptr` is [`dangling`](ptr::dangling) or <code>layout.[size](Layout::size)() == 0</code>.
     #[track_caller]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
@@ -104,7 +104,7 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// Errors are implementation-defined, refer to [`AllocError::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     /// - <code>Err([Error::DanglingDeallocation])</code> if <code>ptr ==
     ///   [layout.dangling](Layout::dangling)</code>.
@@ -151,14 +151,6 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
     ///
     /// On failure, the original memory will not be deallocated.
     ///
-    /// Note that the default implementation simply:
-    /// 1. Checks that the new layout is larger or the same size. If both layouts are the same,
-    ///    `ptr` is returned and no operation is performed.
-    /// 2. Allocates a new block of memory via [`Alloc::alloc`].
-    /// 3. Copies [`old_layout.size()`](Layout::size) bytes from the old block to the new block.
-    /// 4. Deallocates the old block.
-    /// 5. Returns a pointer to the new block.
-    ///
     /// # Safety
     ///
     /// The caller must ensure:
@@ -174,10 +166,12 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
-    ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
-    ///   [new_layout.size()](Layout::size)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::GrowSmallerNewLayout]\(old_layout.[size](Layout::size)(),
+    ///   new_layout.[size](Layout::size)())\)</code> if <code>old_layout.[size](Layout::size)() >
+    ///   new_layout.[size](Layout::size)()</code>.
+    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
+    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
@@ -190,20 +184,23 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        grow(self, ptr, old_layout, new_layout, Bytes::Uninitialized)
+        ralloc(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            Alloc::alloc,
+            Some(<Self as AllocError>::Error::from(Error::GrowSmallerNewLayout(
+                old_layout.size(),
+                new_layout.size()
+            ))),
+            None
+        )
     }
 
     /// Grows the given block to a new, larger layout, with extra bytes being zeroed.
     ///
     /// On failure, the original memory will not be deallocated.
-    ///
-    /// Note that the default implementation simply:
-    /// 1. Checks that the new layout is larger or the same size. If both layouts are the same,
-    ///    `ptr` is returned and no operation is performed.
-    /// 2. Allocates a new block of memory via [`Alloc::zalloc`].
-    /// 3. Copies [`old_layout.size()`](Layout::size) bytes from the old block to the new block.
-    /// 4. Deallocates the old block.
-    /// 5. Returns a pointer to the new block.
     ///
     /// # Safety
     ///
@@ -220,10 +217,12 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::GrowSmallerNewLayout]\([old_layout.size()](Layout::size),
-    ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) >
-    ///   [new_layout.size()](Layout::size)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::GrowSmallerNewLayout]\(old_layout.[size](Layout::size)(),
+    ///   new_layout.[size](Layout::size)())\)</code> if <code>old_layout.[size](Layout::size)() >
+    ///   new_layout.[size](Layout::size)()</code>.
+    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
+    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
@@ -236,7 +235,18 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        grow(self, ptr, old_layout, new_layout, Bytes::Zeroed)
+        ralloc(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            Alloc::zalloc,
+            Some(<Self as AllocError>::Error::from(Error::GrowSmallerNewLayout(
+                old_layout.size(),
+                new_layout.size()
+            ))),
+            None
+        )
     }
 }
 
@@ -245,15 +255,6 @@ pub trait Shrink: Alloc + Dealloc + ShrinkMut {
     /// Shrink the given block to a new, smaller layout.
     ///
     /// On failure, the original memory will not be deallocated.
-    ///
-    /// Note that the default implementation simply:
-    /// 1. Checks that the new layout is smaller or the same size. If both layouts are the same,
-    ///    `ptr` is returned and no operation is performed.
-    /// 2. Allocates a new block of memory via [`Alloc::alloc`].
-    /// 3. Copies [`new_layout.size()`](Layout::size) bytes from the old block to the new block.
-    ///    This will discard any extra bytes from the old block.
-    /// 4. Deallocates the old block.
-    /// 5. Returns a pointer to the new block.
     ///
     /// # Safety
     ///
@@ -270,10 +271,12 @@ pub trait Shrink: Alloc + Dealloc + ShrinkMut {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ShrinkLargerNewLayout]\([old_layout.size()](Layout::size),
-    ///   [new_layout.size()](Layout::size))\)</code> if <code>[old_layout.size()](Layout::size) <
-    ///   [new_layout.size()](Layout::size)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ShrinkLargerNewLayout]\(old_layout.[size](Layout::size)(),
+    ///   new_layout.[size](Layout::size)())\)</code> if <code>old_layout.[size](Layout::size)() <
+    ///   new_layout.[size](Layout::size)()</code>.
+    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
+    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
@@ -285,7 +288,18 @@ pub trait Shrink: Alloc + Dealloc + ShrinkMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        default_shrink!(self::shrink_unchecked, ptr, old_layout, new_layout)
+        ralloc(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            Alloc::alloc,
+            None,
+            Some(<Self as AllocError>::Error::from(Error::ShrinkLargerNewLayout(
+                old_layout.size(),
+                new_layout.size()
+            )))
+        )
     }
 }
 
@@ -293,8 +307,8 @@ pub trait Shrink: Alloc + Dealloc + ShrinkMut {
 pub trait Realloc: Grow + Shrink + ReallocMut {
     /// Reallocates a block, growing or shrinking as needed.
     ///
-    /// On grow, preserves existing contents up to [`old_layout.size()`](Layout::size), and on
-    /// shrink, truncates to [`new_layout.size()`](Layout::size).
+    /// On grow, preserves existing contents up to <code>old_layout.[size](Layout::size)()</code>,
+    /// and on shrink, truncates to <code>new_layout.[size](Layout::size)()</code>.
     ///
     /// On failure, the original memory will not be deallocated.
     ///
@@ -313,7 +327,9 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
+    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
@@ -326,13 +342,13 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        ralloc(self, ptr, old_layout, new_layout, Bytes::Uninitialized)
+        ralloc(self, ptr, old_layout, new_layout, Alloc::alloc, None, None)
     }
 
     /// Reallocates a block, growing or shrinking as needed, with extra bytes being zeroed.
     ///
-    /// On grow, preserves existing contents up to [`old_layout.size()`](Layout::size), and on
-    /// shrink, truncates to [`new_layout.size()`](Layout::size).
+    /// On grow, preserves existing contents up to <code>old_layout.[size](Layout::size)()</code>,
+    /// and on shrink, truncates to <code>new_layout.[size](Layout::size)()</code>.
     ///
     /// On failure, the original memory will not be deallocated.
     ///
@@ -351,7 +367,9 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
+    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
@@ -364,7 +382,7 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        ralloc(self, ptr, old_layout, new_layout, Bytes::Zeroed)
+        ralloc(self, ptr, old_layout, new_layout, Alloc::zalloc, None, None)
     }
 }
 

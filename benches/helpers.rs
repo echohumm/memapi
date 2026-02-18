@@ -4,9 +4,16 @@ extern crate criterion;
 extern crate memapi2;
 
 use {
-    core::hint::black_box,
+    core::{
+        hint::black_box,
+        ptr::{dangling_mut, null_mut}
+    },
     criterion::Criterion,
-    memapi2::{error::ArithOp, helpers::checked_op}
+    memapi2::{
+        error::ArithOp,
+        helpers::{checked_op, null_q, null_q_dyn, null_q_dyn_zsl_check},
+        layout::Layout
+    }
 };
 
 fn checked_ops(c: &mut Criterion) {
@@ -139,7 +146,8 @@ fn checked_ops(c: &mut Criterion) {
 
     group.bench_function("invalid_toolarge", |b| {
         b.iter(|| {
-            let _ = black_box(checked_op(black_box(2), ArithOp::Pow, black_box(u32::MAX as usize + 1)));
+            let _ =
+                black_box(checked_op(black_box(2), ArithOp::Pow, black_box(u32::MAX as usize + 1)));
         });
     });
 
@@ -158,6 +166,75 @@ fn checked_ops(c: &mut Criterion) {
     group.finish();
 }
 
+fn null_q_variants(c: &mut Criterion) {
+    let mut group = c.benchmark_group("null_q");
+
+    let invalid_ptr: *mut u8 = null_mut();
+    let valid_ptr: *mut u8 = dangling_mut();
+
+    let layout = Layout::new::<usize>();
+    let zsl_layout = Layout::from_size_align(0, 1).unwrap();
+
+    group.bench_function("null_q_valid", |b| {
+        b.iter(|| black_box(null_q(black_box(valid_ptr), black_box(layout))))
+    });
+    group.bench_function("null_q_invalid", |b| {
+        b.iter(|| black_box(null_q(black_box(invalid_ptr), black_box(layout))))
+    });
+
+    group.bench_function("null_q_dyn_valid", |b| {
+        b.iter(|| black_box(null_q_dyn(black_box(valid_ptr), black_box(layout))))
+    });
+    group.bench_function("null_q_dyn_invalid", |b| {
+        b.iter(|| black_box(null_q_dyn(black_box(invalid_ptr), black_box(layout))))
+    });
+
+    group.bench_function("null_q_dyn_zsl_check_valid", |b| {
+        b.iter(|| {
+            let _ = black_box(null_q_dyn_zsl_check(
+                black_box(layout),
+                black_box(|l| {
+                    black_box(l);
+                    black_box(valid_ptr)
+                })
+            ));
+        });
+    });
+    group.bench_function("null_q_dyn_zsl_check_invalid_ptr", |b| {
+        b.iter(|| {
+            let _ = black_box(null_q_dyn_zsl_check(
+                black_box(layout),
+                black_box(|l| {
+                    black_box(l);
+                    black_box(invalid_ptr)
+                })
+            ));
+        });
+    });
+    group.bench_function("null_q_dyn_zsl_check_invalid_layout", |b| {
+        b.iter(|| {
+            let _ = black_box(null_q_dyn_zsl_check(
+                black_box(zsl_layout),
+                black_box(|l| {
+                    black_box(l);
+                    black_box(valid_ptr)
+                })
+            ));
+        });
+    });
+    group.bench_function("null_q_dyn_zsl_check_invalid", |b| {
+        b.iter(|| {
+            let _ = black_box(null_q_dyn_zsl_check(
+                black_box(zsl_layout),
+                black_box(|l| {
+                    black_box(l);
+                    black_box(invalid_ptr)
+                })
+            ));
+        });
+    });
+}
+
 fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
@@ -166,6 +243,7 @@ fn main() {
         .configure_from_args();
 
     checked_ops(&mut c);
+    null_q_variants(&mut c);
 
     c.final_summary();
 }

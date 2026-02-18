@@ -364,8 +364,8 @@ impl Layout {
     /// # Errors
     ///
     /// <code>Err([Error::ArithmeticError])</code> if multiplying `count` by
-    ///   [`layout.size()`](Layout::size), rounded up to the nearest multiple of
-    ///   [`layout.align()`](Layout::align), would overflow.
+    ///   <code>layout.[size](Layout::size)()</code>, rounded up to the nearest multiple of
+    ///   <code>layout.[align](Layout::align)()</code>, would overflow.
     #[::rustversion::attr(since(1.47), const)]
     #[inline]
     pub fn repeat(&self, count: usize) -> Result<(Layout, usize), Error> {
@@ -390,8 +390,8 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// - <code>Err([Error::ArithmeticError])</code> if multiplying [`layout.size()`](Layout::size)
-    ///   by `count` would overflow.
+    /// - <code>Err([Error::ArithmeticError])</code> if multiplying
+    ///   <code>layout.[size](Layout::size)()</code> by `count` would overflow.
     /// - <code>Err([Error::InvalidLayout]\([self.size()](Layout::size) * count,
     ///   [self.align()](Layout::align), [LayoutErr::ExceedsMax]\))</code> if
     ///   <code>[self.size()](Layout::size) * count</code> rounded up to the nearest multiple of
@@ -499,9 +499,8 @@ impl Layout {
     /// ```
     #[inline]
     pub const fn to_posix_memalign_compatible(&self) -> Result<Layout, Error> {
-        // first, make the alignment a multiple of `size_of::<*mut c_void>()`.
+        // make the alignment a multiple of `size_of::<*mut c_void>()`.
         match self.align_to_multiple_of(usize::SZ) {
-            // then pad the size up to a multiple of the new alignment
             Ok(l) => Ok(l),
             Err(_) => Err(Error::InvalidLayout(self.size(), self.align(), LayoutErr::CRoundUp))
         }

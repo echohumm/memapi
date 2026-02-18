@@ -7,6 +7,7 @@ A small, `no_std`/`no_alloc`-friendly allocation interface for raw buffers, with
 split allocator traits, and structured errors.
 
 Version: 0.11.4
+
 MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature flags](#feature-flags))
 
 ## Highlights
@@ -66,8 +67,7 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
 - `alloc_temp_trait`: scoped/temporary allocation trait (`AllocTemp`)
 - `c_alloc`: C `posix_memalign`-style allocator (`c_alloc::CAlloc`)
-- `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, experimental, requires a C
-  toolchain)
+- `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, requires a C toolchain)
 - `c_str`: enable `CStr`-specific data traits in `no_std` (MSRV: 1.64)
 - `metadata`: nightly `core::ptr::Pointee` metadata support
 - `sized_hierarchy`: nightly `core::marker::MetaSized` support

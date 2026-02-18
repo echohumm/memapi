@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+* `Error::ReallocSmallerAlign` for when attempting to reallocate with a smaller new alignment.
+
+### Fixed
+
+* Reallocation that requests a smaller alignment is now treated as an error 
+  (`Error::ReallocSmallerAlign`) instead of allowing potential undefined behavior
+
 ---
 
 ## [0.11.3] - 2026-02-15

@@ -21,7 +21,7 @@ use {
 ///
 /// The allocation is only valid for the duration of the call.
 ///
-/// If [`layout.size()`](Layout::size) is zero, `f` will receive a
+/// If <code>layout.[size](Layout::size)()</code> is zero, `f` will receive a
 /// [`dangling`](::core::ptr::dangling) pointer.
 ///
 /// # Errors
@@ -31,7 +31,7 @@ use {
 /// # Safety
 ///
 /// The caller must ensure:
-/// - `layout` is valid and <code>[layout.size()](Layout::size) + ([layout.align()](Layout::align) -
+/// - `layout` is valid and <code>layout.[size](Layout::size)() + (layout.[align](Layout::align)() -
 ///   1)</code> will not exceed the stack allocation limit.
 /// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](::core::ptr::dangling)
 ///   pointer.

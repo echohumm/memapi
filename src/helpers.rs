@@ -299,8 +299,8 @@ pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) 
     unsafe { crate::helpers::union_transmute::<(*const u8, usize), *const T>((p, meta)) }
 }
 
-// Allocation/Result helpers
-
+// for some reason, making these non-generic to take a *mut u8 instead causes up to a +590% perf
+// loss soooo.. not doing that, i guess.
 /// Converts a possibly null pointer into a [`NonNull`] result.
 ///
 /// # Errors
@@ -368,7 +368,7 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
 ///   is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
 ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
 ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-/// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) == 0</code>.
+/// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() == 0</code>.
 ///
 /// [last_os_error]: ::std::io::Error::last_os_error
 /// [raw_os_error]: ::std::io::Error::raw_os_error

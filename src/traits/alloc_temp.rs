@@ -28,7 +28,7 @@ pub trait AllocTemp {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
@@ -57,7 +57,7 @@ pub trait AllocTemp {
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>[layout.size()](Layout::size) ==
+    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
     ///   0</code>.
     /// - <code>Err([Error::CaughtUnwind])</code> if the `catch_unwind` feature is enabled and an
     ///   unwind occurs in a function which is not allowed to unwind.
