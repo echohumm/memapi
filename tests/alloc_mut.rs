@@ -3,10 +3,9 @@ extern crate alloc;
 
 use {
     ::core::{ptr, ptr::NonNull},
-    alloc::alloc::{alloc, dealloc},
     memapi2::{
+        DefaultAlloc,
         error::Error,
-        helpers::null_q_dyn_zsl_check,
         layout::Layout,
         traits::{
             AllocError,
@@ -26,19 +25,14 @@ impl AllocError for MutOnlyAlloc {
 impl AllocMut for MutOnlyAlloc {
     #[inline]
     fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, Error> {
-        null_q_dyn_zsl_check(
-            layout,
-            // SAFETY: layout is checked non-zero-sized by null_q_dyn_zsl_check
-            |layout| unsafe { alloc(layout.to_stdlib()) }
-        )
+        DefaultAlloc.alloc_mut(layout)
     }
 }
 
 impl DeallocMut for MutOnlyAlloc {
     #[inline]
     unsafe fn try_dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        dealloc(ptr.as_ptr(), layout.to_stdlib());
-        Ok(())
+        DefaultAlloc.try_dealloc_mut(ptr, layout)
     }
 }
 

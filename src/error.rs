@@ -37,8 +37,6 @@ pub enum Error {
     /// In most reasonable cases, [`layout.dangling()`](Layout::dangling) can and should be used
     /// instead.
     ZeroSizedLayout,
-    /// Attempted to deallocate a dangling pointer.
-    DanglingDeallocation,
     /// Attempted to grow to a smaller size.
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
@@ -61,7 +59,6 @@ impl Display for Error {
             AllocFailed,
             ArithmeticError,
             CaughtUnwind,
-            DanglingDeallocation,
             GrowSmallerNewLayout,
             InvalidLayout,
             Other,
@@ -87,7 +84,6 @@ impl Display for Error {
             ZeroSizedLayout => {
                 write!(f, "received a zero-sized layout")
             }
-            DanglingDeallocation => write!(f, "attempted to deallocate a dangling pointer"),
             GrowSmallerNewLayout(old, new) => {
                 write!(f, "attempted to grow from a size of {} to a smaller size of {}", old, new)
             }
@@ -202,6 +198,7 @@ impl Display for ArithErr {
 
 impl_error! { ArithErr }
 
+// TODO: divceil
 /// An arithmetic operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]

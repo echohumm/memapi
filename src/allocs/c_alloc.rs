@@ -23,7 +23,7 @@ fn null_q_dyn_zsl_check_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
     layout: Layout,
     f: F
 ) -> Result<NonNull<u8>, Error> {
-    if layout.is_zero_sized() {
+    if layout.is_zsl() {
         Err(Error::ZeroSizedLayout)
     } else {
         let (ptr, status) = f(layout);
@@ -84,15 +84,11 @@ impl Dealloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        if layout.is_zero_sized() {
-            Err(Error::ZeroSizedLayout)
-        } else if ptr == layout.dangling() {
-            Err(Error::DanglingDeallocation)
-        } else {
+        if !layout.is_zsl() && ptr != layout.dangling() {
             let padded = tri!(do layout.to_posix_memalign_compatible());
             c_dealloc(ptr.as_ptr().cast(), padded.align(), padded.size());
-            Ok(())
         }
+        Ok(())
     }
 }
 impl Grow for CAlloc {}

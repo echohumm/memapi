@@ -69,14 +69,13 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `c_alloc`: C `posix_memalign`-style allocator (`c_alloc::CAlloc`)
 - `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, requires a C toolchain)
 - `c_str`: enable `CStr`-specific data traits in `no_std` (MSRV: 1.64)
-- `metadata`: nightly `core::ptr::Pointee` metadata support
-- `sized_hierarchy`: nightly `core::marker::MetaSized` support
+- `metadata`: nightly `core::ptr::Pointee` and `core::ptr::metadata` metadata support
 - `no_alloc`: disable the `alloc` crate (removes `DefaultAlloc`, `StdLayout`, and implementations
   for the `System` allocator, unless `std` is on)
 - `no_nightly`: disable automatic nightly detection in `build.rs`
 - `full_msrv`: convenience bundle (`os_err_reporting`, `c_alloc`, `stack_alloc`)
 - `full`: `full_msrv` + `c_str`
-- `all_nightly`: `metadata` + `sized_hierarchy`
+- `all_nightly`: `metadata`
 - `full_nightly`: `full` + `all_nightly`
 
 ## Notes

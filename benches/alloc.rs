@@ -4,7 +4,7 @@ extern crate criterion;
 extern crate memapi2;
 
 use {
-    core::hint::black_box,
+    core::{hint::black_box, ptr::NonNull},
     criterion::Criterion,
     memapi2::{
         DefaultAlloc,
@@ -18,6 +18,7 @@ where
     A: Alloc + Dealloc + Grow + Shrink + Realloc
 {
     let mut group = c.benchmark_group(name);
+    let zero = unsafe { Layout::from_size_align_unchecked(0, 8) };
     let small = unsafe { Layout::from_size_align_unchecked(32, 8) };
     let large = unsafe { Layout::from_size_align_unchecked(64, 8) };
 
@@ -105,6 +106,28 @@ where
         });
     });
 
+    group.bench_function("realloc_oldzsl_dangling", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(zero);
+            let new_l = black_box(large);
+            let ptr = NonNull::dangling();
+            let new_ptr =
+                alloc.realloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap();
+            alloc.dealloc(black_box(new_ptr), black_box(new_l));
+        })
+    });
+
+    group.bench_function("rezalloc_oldzsl_dangling", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(zero);
+            let new_l = black_box(large);
+            let ptr = NonNull::dangling();
+            let new_ptr =
+                alloc.rezalloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap();
+            alloc.dealloc(black_box(new_ptr), black_box(new_l));
+        })
+    });
+
     group.finish();
 }
 
@@ -115,6 +138,7 @@ where
     let mut alloc = alloc;
 
     let mut group = c.benchmark_group(name);
+    let zero = unsafe { Layout::from_size_align_unchecked(0, 8) };
     let small = unsafe { Layout::from_size_align_unchecked(32, 8) };
     let large = unsafe { Layout::from_size_align_unchecked(64, 8) };
 
@@ -205,6 +229,28 @@ where
         });
     });
 
+    group.bench_function("realloc_oldzsl_dangling", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(zero);
+            let new_l = black_box(large);
+            let ptr = NonNull::dangling();
+            let new_ptr =
+                alloc.realloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap();
+            alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
+        })
+    });
+
+    group.bench_function("rezalloc_oldzsl_dangling", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(zero);
+            let new_l = black_box(large);
+            let ptr = NonNull::dangling();
+            let new_ptr =
+                alloc.rezalloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap();
+            alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
+        })
+    });
+
     group.finish();
 }
 
@@ -237,6 +283,7 @@ fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
         .nresamples(200_000)
+        .noise_threshold(0.005)
         .confidence_level(0.99)
         .configure_from_args();
 
@@ -244,20 +291,20 @@ fn main() {
     #[cfg(feature = "c_alloc")]
     bench_allocs(&mut c, "c_alloc", memapi2::allocs::c_alloc::CAlloc);
 
-    bench_allocs_mut(&mut c, "default_alloc_mut", DefaultAlloc);
+    bench_allocs_mut(&mut c, "default_alloc", DefaultAlloc);
     #[cfg(feature = "c_alloc")]
-    bench_allocs_mut(&mut c, "c_alloc_mut", memapi2::allocs::c_alloc::CAlloc);
+    bench_allocs_mut(&mut c, "c_alloc", memapi2::allocs::c_alloc::CAlloc);
 
     #[cfg(feature = "std")]
-    bench_allocs(&mut c, "default_alloc_mut_wrapped", std::sync::Mutex::new(DefaultAlloc));
+    bench_allocs(&mut c, "default_alloc_wrapped", std::sync::Mutex::new(DefaultAlloc));
 
     #[cfg(feature = "alloc_temp_trait")]
     {
-        bench_allocs_temp(&mut c, "default_alloc_temp", DefaultAlloc);
+        bench_allocs_temp(&mut c, "default_alloc", DefaultAlloc);
         #[cfg(feature = "c_alloc")]
-        bench_allocs_temp(&mut c, "c_alloc_temp", memapi2::allocs::c_alloc::CAlloc);
+        bench_allocs_temp(&mut c, "c_alloc", memapi2::allocs::c_alloc::CAlloc);
         #[cfg(feature = "stack_alloc")]
-        bench_allocs_temp(&mut c, "stack_alloc_temp", memapi2::allocs::stack_alloc::StackAlloc);
+        bench_allocs_temp(&mut c, "stack_alloc", memapi2::allocs::stack_alloc::StackAlloc);
     }
 
     c.final_summary();

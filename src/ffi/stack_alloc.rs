@@ -22,7 +22,7 @@ use {
 /// The allocation is only valid for the duration of the call.
 ///
 /// If <code>layout.[size](Layout::size)()</code> is zero, `f` will receive a
-/// [`dangling`](::core::ptr::dangling) pointer.
+/// [dangling](::core::ptr::dangling) pointer.
 ///
 /// # Errors
 ///
@@ -33,7 +33,7 @@ use {
 /// The caller must ensure:
 /// - `layout` is valid and <code>layout.[size](Layout::size)() + (layout.[align](Layout::align)() -
 ///   1)</code> will not exceed the stack allocation limit.
-/// - If `layout.size() == 0`, `f` must treat the pointer as a [`dangling`](::core::ptr::dangling)
+/// - If `layout.size() == 0`, `f` must treat the pointer as a [dangling](::core::ptr::dangling)
 ///   pointer.
 /// - `f` must initialize the value behind its second parameter before returning.
 /// - On Rust versions below `1.71` with `catch_unwind` disabled, `f` must never unwind.
@@ -139,7 +139,7 @@ macro_rules! c_ext {
             ///
             /// The allocation is only valid for the duration of this call.
             ///
-            /// If `size == 0`, `cb` receives a [`dangling`](::core::ptr::dangling) pointer.
+            /// If `size == 0`, `cb` receives a [dangling](::core::ptr::dangling) pointer.
             ///
             /// # Safety
             ///

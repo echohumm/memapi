@@ -1,8 +1,6 @@
 use {
     crate::{helpers::USIZE_MAX_NO_HIGH_BIT, layout::Layout},
     ::core::{
-        clone::Clone,
-        convert::AsRef,
         marker::Sized,
         mem::{align_of, align_of_val, size_of, size_of_val},
         ptr::NonNull
@@ -26,14 +24,22 @@ pub trait SizedProps: Sized {
         0 => usize::MAX,
         sz => USIZE_MAX_NO_HIGH_BIT / sz
     };
-    
-    // TODO: maybe DANGLING constant?
+
+    /// A valid, [dangling](::core::ptr::dangling) pointer for this layout's alignment.
+    ///
+    /// # Safety
+    ///
+    /// This pointer is non-null and correctly aligned for this type, but should not be
+    /// dereferenced.
+    // SAFETY: an alignment cannot be 0 so it is not a null pointer; caller
+    const DANGLING_PTR: NonNull<Self> = unsafe { NonNull::new_unchecked(Self::ALN as *mut Self) };
 }
 
 impl<T> SizedProps for T {}
 
 /// A trait providing methods for pointers to provide the properties of their pointees.
 pub trait PtrProps<T: ?Sized> {
+    // TODO: should be must_use
     /// Gets the size of the value.
     ///
     /// # Safety
@@ -68,7 +74,12 @@ pub trait PtrProps<T: ?Sized> {
     /// References are always valid.
     #[inline]
     unsafe fn layout(&self) -> Layout {
-        Layout::for_value(self)
+        // SAFETY: caller guarantees
+        let sz = unsafe { self.sz() };
+        // SAFETY: above
+        let aln = unsafe { self.aln() };
+        // SAFETY: size and alignment of a value cannot be invalid for a layout
+        unsafe { Layout::from_size_align_unchecked(sz, aln) }
     }
 
     #[cfg(feature = "metadata")]
@@ -84,6 +95,26 @@ pub trait PtrProps<T: ?Sized> {
     /// References are always valid.
     unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata;
 
+    #[cfg(feature = "metadata")]
+    /// <placeholder>
+    ///
+    /// # Safety
+    fn varsized_metadata(&self) -> usize
+    where
+        T: VarSized
+    {
+        // SAFETY: requirements are passed on to the caller
+        unsafe { self.metadata() }
+    }
+
+    #[cfg(not(feature = "metadata"))]
+    /// <placeholder>
+    ///
+    /// # Safety
+    fn varsized_metadata(&self) -> usize
+    where
+        T: VarSized;
+
     /// Checks whether the value is zero-sized.
     ///
     /// # Safety
@@ -94,7 +125,8 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
-    unsafe fn is_zst(&self) -> bool {
+    #[inline]
+    unsafe fn is_zero_sized(&self) -> bool {
         self.sz() == 0
     }
 
@@ -130,8 +162,14 @@ macro_rules! impl_ptr_props_raw {
                     align_of_val::<T>(&**self)
                 }
                 #[cfg(feature = "metadata")]
+                #[inline]
                 unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
                     ::core::ptr::metadata(&*(*self))
+                }
+                #[cfg(not(feature = "metadata"))]
+                #[inline]
+                fn varsized_metadata(&self) -> usize where T: VarSized {
+                    split_varsized_ptr(*self).1
                 }
             }
         )*
@@ -151,30 +189,42 @@ macro_rules! impl_ptr_props_identity {
                     align_of_val::<T>(*self)
                 }
                 #[cfg(feature = "metadata")]
+                #[inline]
                 unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
                     ::core::ptr::metadata(*self)
+                }
+                #[cfg(not(feature = "metadata"))]
+                #[inline]
+                fn varsized_metadata(&self) -> usize where T: VarSized {
+                    split_varsized_ptr(*self).1
                 }
             }
         )*
     };
 }
 
-macro_rules! impl_ptr_props_as_ref {
+macro_rules! impl_ptr_props_deref {
     ($($name:ty),* $(,)?) => {
         $(
             #[allow(unused_qualifications)]
             impl<T: ?Sized> PtrProps<T> for $name {
                 #[inline]
                 unsafe fn sz(&self) -> usize {
-                    size_of_val::<T>(self.as_ref())
+                    size_of_val::<T>(&**self)
                 }
                 #[inline]
                 unsafe fn aln(&self) -> usize {
-                    align_of_val::<T>(self.as_ref())
+                    align_of_val::<T>(&**self)
                 }
                 #[cfg(feature = "metadata")]
+                #[inline]
                 unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
-                    ::core::ptr::metadata(self.as_ref())
+                    ::core::ptr::metadata(&**self)
+                }
+                #[cfg(not(feature = "metadata"))]
+                #[inline]
+                fn varsized_metadata(&self) -> usize where T: VarSized {
+                    split_varsized_ptr(&**self).1
                 }
             }
         )*
@@ -184,13 +234,13 @@ macro_rules! impl_ptr_props_as_ref {
 impl_ptr_props_raw! { *const T, *mut T }
 impl_ptr_props_identity! { &T, &mut T }
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
-impl_ptr_props_as_ref! {
+impl_ptr_props_deref! {
     ::stdalloc::boxed::Box<T>,
     ::stdalloc::rc::Rc<T>,
     ::stdalloc::sync::Arc<T>,
 }
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
-impl<T: Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
+impl<T: ::core::clone::Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
     #[inline]
     unsafe fn sz(&self) -> usize {
         T::SZ
@@ -201,22 +251,40 @@ impl<T: Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
     }
     #[cfg(feature = "metadata")]
     unsafe fn metadata(&self) {}
+    #[cfg(not(feature = "metadata"))]
+    fn varsized_metadata(&self) -> usize
+    where
+        T: VarSized
+    {
+        #[allow(unused_imports)] use ::core::panic;
+
+        ::core::unreachable!("`Cow<T>` can never be unsized as it requires `T: Clone`")
+    }
 }
 
 impl<T: ?Sized> PtrProps<T> for NonNull<T> {
     #[inline]
     unsafe fn sz(&self) -> usize {
-        size_of_val::<T>(&*self.as_ptr())
+        size_of_val::<T>(&(*self.as_ptr()))
     }
 
     #[inline]
     unsafe fn aln(&self) -> usize {
-        align_of_val::<T>(&*self.as_ptr())
+        align_of_val::<T>(&(*self.as_ptr()))
     }
 
     #[cfg(feature = "metadata")]
+    #[inline]
     unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
-        ::core::ptr::metadata(&*self.as_ptr())
+        ::core::ptr::metadata(self.as_ptr())
+    }
+    #[cfg(not(feature = "metadata"))]
+    #[inline]
+    fn varsized_metadata(&self) -> usize
+    where
+        T: VarSized
+    {
+        self.as_ptr().varsized_metadata()
     }
 }
 
@@ -241,6 +309,19 @@ pub unsafe trait VarSized {
     /// Override this if the type contains more than just a slice of its
     /// [`SubType`](VarSized::SubType).
     const ALN: usize = Self::SubType::ALN;
+
+    #[::rustversion::since(1.61)]
+    /// A valid, [dangling](::core::ptr::dangling) pointer for this layout's alignment.
+    ///
+    /// Note that this only exists on Rust versions 1.61 and above.
+    ///
+    /// # Safety
+    ///
+    /// This pointer is non-null and correctly aligned for this type, but should not be
+    /// dereferenced.
+    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
+    const DANGLING_PTR: NonNull<Self> =
+        varsized_nonnull_from_parts(<Self::SubType as SizedProps>::DANGLING_PTR.cast(), 0);
 }
 
 #[cfg(feature = "metadata")]
@@ -263,6 +344,19 @@ pub unsafe trait VarSized: ::core::ptr::Pointee<Metadata = usize> {
     /// Override this if the type contains more than just a slice of its
     /// [`SubType`](VarSized::SubType).
     const ALN: usize = Self::SubType::ALN;
+
+    #[::rustversion::since(1.61)]
+    /// A valid, [dangling](::core::ptr::dangling) pointer for this layout's alignment.
+    ///
+    /// Note that this only exists on Rust versions 1.61 and above.
+    ///
+    /// # Safety
+    ///
+    /// This pointer is non-null and correctly aligned for this type, but should not be
+    /// dereferenced.
+    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
+    const DANGLING_PTR: NonNull<Self> =
+        varsized_nonnull_from_parts(<Self::SubType as SizedProps>::DANGLING_PTR.cast(), 0);
 }
 
 // TODO: derive macro/other macros to help implement this would be very useful
@@ -408,4 +502,105 @@ unsafe impl<T: VarSizedStruct> VarSized for T {
     const ALN: usize = <T as VarSizedStruct>::ALN;
 }
 
-// anysized system didn't work well enough for me to actually keep it.
+/// Creates a <code>[NonNull]\<T\></code> from a pointer and a `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[::rustversion::attr(since(1.61), const)]
+#[must_use]
+#[inline]
+pub fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
+    p: NonNull<u8>,
+    meta: usize
+) -> NonNull<T> {
+    // SAFETY: `p` was already non-null, so it with different meta must also be nn.
+    unsafe { NonNull::new_unchecked(varsized_ptr_from_parts_mut(p.as_ptr(), meta)) }
+}
+
+#[::rustversion::since(1.83)]
+/// Creates a `*mut T` from a pointer and a `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[must_use]
+#[inline]
+pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
+    // SAFETY: VarSized trait requires T::Metadata == usize
+    unsafe {
+        *((&::core::ptr::slice_from_raw_parts_mut::<T::SubType>(p.cast(), meta)
+            as *const *mut [T::SubType])
+            .cast::<*mut T>())
+    }
+}
+#[::rustversion::before(1.83)]
+/// Creates a `*mut T` from a pointer and a `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[must_use]
+#[inline]
+#[::rustversion::attr(since(1.61), const)]
+pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
+    // SAFETY: VarSized trait requires T::Metadata == usize
+    unsafe { crate::helpers::union_transmute::<(*mut u8, usize), *mut T>((p, meta)) }
+}
+
+#[::rustversion::since(1.64)]
+/// Creates a `*mut T` from a pointer and a `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[must_use]
+#[inline]
+pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
+    // SAFETY: VarSized trait requires T::Metadata == usize
+    unsafe {
+        *((&::core::ptr::slice_from_raw_parts::<T::SubType>(p.cast(), meta)
+            as *const *const [T::SubType])
+            .cast::<*const T>())
+    }
+}
+#[::rustversion::before(1.64)]
+/// Creates a `*mut T` from a pointer and a `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[::rustversion::attr(since(1.61), const)]
+#[must_use]
+#[inline]
+pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
+    // SAFETY: VarSized trait requires T::Metadata == usize
+    unsafe { crate::helpers::union_transmute::<(*const u8, usize), *const T>((p, meta)) }
+}
+
+/// Splits a `*const T` where `T` has `usize` metadata into a `*const u8` and the `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[::rustversion::attr(since(1.61), const)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[must_use]
+#[inline]
+pub fn split_varsized_ptr<T: ?Sized + VarSized>(p: *const T) -> (*const u8, usize) {
+    // SAFETY: Varsized trait requirement requires T::Metadata == usize; as of the current rust
+    // version, *mut T where T has usize metadata equates to a (*mut (), usize).
+    unsafe { crate::helpers::union_transmute::<*const T, (*const u8, usize)>(p) }
+}
+
+/// Splits a `*mut T` where `T` has `usize` metadata into a `*mut u8` and the `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[::rustversion::attr(since(1.61), const)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[must_use]
+#[inline]
+pub fn split_varsized_ptr_mut<T: ?Sized + VarSized>(p: *mut T) -> (*mut u8, usize) {
+    // SAFETY: see split_varsized_ptr
+    unsafe { crate::helpers::union_transmute::<*mut T, (*mut u8, usize)>(p) }
+}
+
+/// Splits a <code>[NonNull]\<T\></code> where `T` has `usize` metadata into a
+/// <code>[NonNull]\<u8\></code> and the `usize` metadata.
+///
+/// Note that this is only `const` on Rust versions 1.61 and above.
+#[::rustversion::attr(since(1.61), const)]
+#[must_use]
+#[inline]
+pub fn split_varsized_nonnull<T: ?Sized + VarSized>(p: NonNull<T>) -> (NonNull<u8>, usize) {
+    // SAFETY: see split_varsized_ptr; NonNull<T> == *mut T internally
+    unsafe { crate::helpers::union_transmute::<NonNull<T>, (NonNull<u8>, usize)>(p) }
+}

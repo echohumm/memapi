@@ -6,14 +6,16 @@ extern crate memapi2;
 use {
     core::{
         hint::black_box,
-        ptr::{dangling_mut, null_mut}
+        ptr::{NonNull, dangling_mut, null_mut}
     },
     criterion::Criterion,
     memapi2::{
         error::ArithOp,
         helpers::{checked_op, null_q, null_q_dyn, null_q_dyn_zsl_check},
-        layout::Layout
-    }
+        layout::Layout,
+        traits::data::type_props::PtrProps
+    },
+    std::{rc::Rc, sync::Arc}
 };
 
 fn checked_ops(c: &mut Criterion) {
@@ -235,15 +237,76 @@ fn null_q_variants(c: &mut Criterion) {
     });
 }
 
+fn ptr_props(c: &mut Criterion) {
+    macro_rules! benches {
+        ($($v:ident),*) => {
+            $(
+                let mut group = c.benchmark_group(concat!("ptr_props/", stringify!($v)));
+                group.bench_function("sz", |b| {
+                    b.iter(|| {
+                        let _ = black_box(unsafe { $v.sz() });
+                    });
+                });
+                group.bench_function("aln", |b| {
+                    b.iter(|| {
+                        let _ = black_box(unsafe { $v.aln() });
+                    });
+                });
+                group.bench_function("layout", |b| {
+                    b.iter(|| {
+                        let _ = black_box(unsafe { $v.layout() });
+                    });
+                });
+                group.bench_function("is_zst", |b| {
+                    b.iter(|| {
+                        let _ = black_box(unsafe { $v.is_zero_sized() });
+                    });
+                });
+                group.bench_function("max_slice_len", |b| {
+                    b.iter(|| {
+                        let _ = black_box(unsafe { $v.max_slice_len() });
+                    });
+                });
+                #[cfg(feature = "metadata")]
+                group.bench_function("metadata", |b| {
+                    b.iter(|| {
+                        let _ = black_box(unsafe { $v.metadata() });
+                    });
+                });
+                group.bench_function("varsized_metadata", |b| {
+                    b.iter(|| {
+                        let _ = black_box($v.varsized_metadata());
+                    });
+                });
+                group.finish();
+            )*
+        };
+    }
+    let dummy = "string".to_string();
+
+    let r = dummy.as_str();
+    let p = r as *const str;
+    let mp = p as *mut str;
+    let nn = NonNull::new(mp).unwrap();
+
+    let boxed_dummy: Box<str> = Box::from(dummy.as_str());
+    let arc_dummy: Arc<str> = Arc::from(dummy.as_str());
+    let rc_dummy: Rc<str> = Rc::from(dummy.as_str());
+
+    benches! { r, p, mp, nn, boxed_dummy, arc_dummy, rc_dummy }
+}
+
 fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
         .nresamples(200_000)
+        .noise_threshold(0.005)
         .confidence_level(0.99)
         .configure_from_args();
 
     checked_ops(&mut c);
     null_q_variants(&mut c);
+    ptr_props(&mut c);
 
     c.final_summary();
 }

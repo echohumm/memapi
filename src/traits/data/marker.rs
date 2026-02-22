@@ -24,7 +24,7 @@ unsafe impl UnsizedCopy for ::std::ffi::OsStr {}
 // SAFETY: `Path == OsStr == [u8]`
 unsafe impl UnsizedCopy for ::std::path::Path {}
 
-#[cfg(all(not(feature = "metadata"), not(feature = "sized_hierarchy")))]
+#[cfg(not(feature = "metadata"))]
 /// Trait indicating that a type has no metadata.
 ///
 /// This usually means `Self: Sized` or `Self` is `extern`.
@@ -44,7 +44,7 @@ unsafe impl UnsizedCopy for ::std::path::Path {}
 /// ```
 pub unsafe trait Thin {}
 
-#[cfg(all(feature = "metadata", not(feature = "sized_hierarchy")))]
+#[cfg(feature = "metadata")]
 /// Trait indicating that a type has no metadata.
 ///
 /// This usually means `Self: Sized` or `Self` is `extern`.
@@ -52,8 +52,8 @@ pub unsafe trait Thin {}
 /// # Safety
 ///
 /// This is safe to implement in this configuration; however, because the actually unsafe
-/// version exists when both `metadata` and `sized_hierarchy` are disabled, this trait
-/// must still be marked `unsafe` for consistency across configurations.
+/// version exists when `metadata` is disabled, this trait must still be marked `unsafe` for
+/// consistency across configurations.
 ///
 /// # Example
 ///
@@ -66,114 +66,6 @@ pub unsafe trait Thin {}
 /// ```
 pub unsafe trait Thin: ::core::ptr::Pointee<Metadata = ()> {}
 
-#[cfg(all(feature = "metadata", feature = "sized_hierarchy"))]
-/// Trait indicating that a type has no metadata and may or may not have a size.
-///
-/// # Safety
-///
-/// This is safe to implement in this configuration; however, because the actually unsafe
-/// version exists when both `metadata` and `sized_hierarchy` are disabled, this trait
-/// must still be marked `unsafe` for consistency across configurations.
-///
-/// # Example
-///
-/// ```
-/// # use memapi2::{traits::data::{type_props::SizedProps, marker::{SizeMeta, Thin}}};
-///
-/// fn never_panics<T: Thin>() {
-///     assert_eq!(<&T>::SZ, usize::SZ)
-/// }
-/// ```
-pub unsafe trait Thin:
-    ::core::ptr::Pointee<Metadata = ()> + ::core::marker::PointeeSized
-{
-}
-
-#[cfg(all(not(feature = "metadata"), not(feature = "sized_hierarchy")))]
-/// Trait indicating that a type has `usize` metadata.
-///
-/// # Safety
-///
-/// The implementor must ensure this type has `usize` metadata (`<Self as Pointee>::Metadata =
-/// usize`).
-///
-/// # Example
-///
-/// ```
-/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
-///
-/// fn never_panics<T: SizeMeta>() {
-///    assert_eq!(<&T>::SZ, usize::SZ * 2)
-/// }
-/// ```
-pub unsafe trait SizeMeta {}
-
-#[cfg(all(not(feature = "metadata"), feature = "sized_hierarchy"))]
-/// Trait indicating that a type has `usize` metadata.
-///
-/// # Safety
-///
-/// The implementor must ensure this type has `usize` metadata (`<Self as Pointee>::Metadata =
-/// usize`).
-///
-/// # Example
-///
-/// ```
-/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
-///
-/// fn never_panics<T: SizeMeta>() {
-///    assert_eq!(<&T>::SZ, usize::SZ * 2)
-/// }
-/// ```
-pub unsafe trait SizeMeta: ::core::marker::MetaSized {}
-
-#[cfg(all(feature = "metadata", not(feature = "sized_hierarchy")))]
-/// Trait indicating that a type has `usize` metadata.
-///
-/// # Safety
-///
-/// This is safe to implement in this configuration; however, because the actually unsafe version
-/// exists when `metadata` is disabled, this trait must still be marked `unsafe` for consistency
-/// across configurations.
-///
-/// # Example
-///
-/// ```
-/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
-///
-/// fn never_panics<T: SizeMeta>() {
-///    assert_eq!(<&T>::SZ, usize::SZ * 2)
-/// }
-/// ```
-pub unsafe trait SizeMeta: ::core::ptr::Pointee<Metadata = usize> {}
-
-#[cfg(all(feature = "metadata", feature = "sized_hierarchy"))]
-/// Trait indicating that a type has `usize` metadata.
-///
-/// # Safety
-///
-/// This is safe to implement in this configuration; however, because the actually unsafe version
-/// exists when `metadata` is disabled, this trait must still be marked `unsafe` for consistency
-/// across configurations.
-///
-/// # Example
-///
-/// ```
-/// # use memapi2::{traits::data::{type_props::SizedProps, marker::SizeMeta}};
-///
-/// fn never_panics<T: SizeMeta>() {
-///     assert_eq!(<&T>::SZ, usize::SZ * 2)
-/// }
-/// ```
-pub unsafe trait SizeMeta:
-    ::core::ptr::Pointee<Metadata = usize> + ::core::marker::MetaSized
-{
-}
-
 #[cfg(feature = "metadata")]
 // SAFETY: `P: Pointee<Metadata = ()>`
 unsafe impl<P: ::core::ptr::Pointee<Metadata = ()> + ?::core::marker::Sized> Thin for P {}
-
-#[cfg(feature = "metadata")]
-// SAFETY: `P: Pointee<Metadata = usize>`
-unsafe impl<P: ::core::ptr::Pointee<Metadata = usize> + ?::core::marker::Sized> SizeMeta for P {}

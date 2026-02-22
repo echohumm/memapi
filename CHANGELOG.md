@@ -14,11 +14,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `Error::ReallocSmallerAlign` for when attempting to reallocate with a smaller new alignment
 * `Layout::try_posix_memalign_compatible_from_size_align` to only allow layout creation if the
   provided size and alignment are compatible with `posix_memalign`
+* `PtrProps::varsized_metadata` for getting the size of `VarSized` types
+
+### Changed
+
+* `Dealloc::try_dealloc` on a zero-sized layout or dangling pointer is now a no-op, not an error
+* Renamed `Layout::is_zero_sized` to `Layout::is_zsl`
+* Moved `VarSized` pointer creation functions from `helpers` to `traits::data::type_props`
 
 ### Fixed
 
 * Reallocation that requests a smaller alignment is now treated as an error
   (`Error::ReallocSmallerAlign`) instead of allowing potential undefined behavior
+* Build spuriously failing on MSRV
+
+### Removed
+
+* Useless `sized_hierarchy` feature
+* `Error::DanglingDeallocation` error; attempting to deallocate a dangling pointer is now a no-op.
+* `helpers::align_up_checked`
+* `helpers::dangling_nonnull`; replaced by `SizedProps::DANGLING_PTR` and `Layout::dangling`
+* `Layout::is_nonzero_sized`
+* `traits::data::marker::{Thin,SizeMeta}`
 
 ---
 

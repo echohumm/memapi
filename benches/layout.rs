@@ -223,6 +223,7 @@ fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
         .nresamples(200_000)
+        .noise_threshold(0.005)
         .confidence_level(0.99)
         .configure_from_args();
 

@@ -1,14 +1,7 @@
 use {
     crate::{
         error::{ArithOp, Error, LayoutErr},
-        helpers::{
-            USIZE_HIGH_BIT,
-            USIZE_MAX_NO_HIGH_BIT,
-            align_up,
-            checked_op,
-            dangling_nonnull,
-            is_multiple_of
-        },
+        helpers::{USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT, align_up, checked_op, is_multiple_of},
         traits::data::type_props::{PtrProps, SizedProps}
     },
     ::core::{
@@ -24,21 +17,25 @@ use {
 /// A type alias for [`alloc::alloc::Layout`](::stdalloc::alloc::Layout).
 pub type StdLayout = ::stdalloc::alloc::Layout;
 
-const fn align_up_checked(val: usize, align: usize, on_size: bool) -> Result<usize, Error> {
-    tri!(do check_lay(val, align, on_size));
-
-    Ok(align_up(val, align))
-}
-
-const fn check_lay(size: usize, align: usize, full: bool) -> Result<(), Error> {
+#[inline]
+const fn align_up_checks(val: usize, align: usize) -> Result<(), Error> {
     if align == 0 {
-        return Err(Error::InvalidLayout(size, align, LayoutErr::ZeroAlign));
+        return Err(Error::InvalidLayout(val, align, LayoutErr::ZeroAlign));
     } else if !align.is_power_of_two() {
-        return Err(Error::InvalidLayout(size, align, LayoutErr::NonPowerOfTwoAlign));
-    } else if full && size > USIZE_HIGH_BIT - align {
-        return Err(Error::InvalidLayout(size, align, LayoutErr::ExceedsMax));
+        return Err(Error::InvalidLayout(val, align, LayoutErr::NonPowerOfTwoAlign));
+    } else if val > USIZE_HIGH_BIT - align {
+        return Err(Error::InvalidLayout(val, align, LayoutErr::ExceedsMax));
     }
     Ok(())
+}
+
+const fn align_up_checked(size: usize, align: usize) -> Result<usize, Error> {
+    tri!(do align_up_checks(size, align));
+
+    // SAFETY: check_lay validates that `align != 0` so no underflow can occur, and `size + align`
+    // won't exceed either `USIZE_HIGH_BIT` or `usize::MAX` so no overflow can occur, as well as
+    // that `align` is a power of 2 so the alignment trick used by `align_up` works.
+    Ok(unsafe { align_up(size, align) })
 }
 
 /// The layout of a block of memory in the form of its size and alignment in bytes.
@@ -83,7 +80,7 @@ impl Layout {
     #[must_use]
     pub const fn new<T>() -> Layout {
         // SAFETY: the size and alignment of a sized type cannot be invalid for a layout
-        unsafe { Layout::from_size_align_unchecked(Self::SZ, Self::ALN) }
+        unsafe { Layout::from_size_align_unchecked(T::SZ, T::ALN) }
     }
 
     // could be deduped with repeat*, but stdlib doesn't, and it's logically meaningfully faster, so
@@ -144,7 +141,7 @@ impl Layout {
 
         // compute the offset where `b` would start when placed after `a`, aligned for `b`.
         // SAFETY: `Layout::align()` is always non-zero and a power of two.
-        let offset = tri!(do align_up_checked(a_sz, b_aln, true));
+        let offset = tri!(do align_up_checked(a_sz, b_aln));
 
         // i love how max, possibly the simplest function in existence (aside from accessors), is
         // not const.
@@ -161,7 +158,7 @@ impl Layout {
         }
     }
 
-    /// Returns a valid, [`dangling`](::core::ptr::dangling) pointer for this layout's alignment.
+    /// Returns a valid, [dangling](::core::ptr::dangling) pointer for this layout's alignment.
     ///
     /// The returned pointer is non-null and correctly aligned for types that use this layout's
     /// alignment but should not be dereferenced.
@@ -169,14 +166,14 @@ impl Layout {
     #[inline]
     pub const fn dangling(&self) -> NonNull<u8> {
         // SAFETY: we validate dangling_nonnull's requirements at construction.
-        unsafe { dangling_nonnull(self.align()) }
+        unsafe { NonNull::new_unchecked(self.align() as *mut u8) }
     }
 
     /// Creates a layout for the value behind the given reference
     #[inline(always)]
     pub fn for_value<T: ?Sized>(val: &T) -> Layout {
         // SAFETY: references are always valid for sz()/aln()
-        unsafe { Layout::for_value_raw(val) }
+        unsafe { val.layout() }
     }
 
     /// Creates a layout for the value behind the given reference
@@ -189,13 +186,8 @@ impl Layout {
     /// - aligned
     #[inline(always)]
     pub unsafe fn for_value_raw<T: ?Sized>(val: *const T) -> Layout {
-        // SAFETY: caller guarantee
-        let sz = unsafe { val.sz() };
-        // SAFETY: caller guarantee
-        let aln = unsafe { val.aln() };
-        // SAFETY: the size and alignment for a value behind a pointer cannot be invalid for a
-        // layout
-        unsafe { Layout::from_size_align_unchecked(sz, aln) }
+        // SAFETY: caller guarantees
+        unsafe { val.layout() }
     }
 
     /// Creates a layout with the given size and alignment.
@@ -210,7 +202,7 @@ impl Layout {
     ///   rounded up to the nearest multiple of `align` would exceed [`USIZE_MAX_NO_HIGH_BIT`].
     #[inline]
     pub const fn from_size_align(size: usize, align: usize) -> Result<Layout, Error> {
-        tri!(do check_lay(size, align, true));
+        tri!(do align_up_checks(size, align));
 
         // SAFETY: we just validated the parameters
         Ok(unsafe { Layout::from_size_align_unchecked(size, align) })
@@ -252,10 +244,9 @@ impl Layout {
         size: usize,
         align: usize
     ) -> Result<Layout, Error> {
-        if align == 0 {
-            return Err(Error::InvalidLayout(size, align, LayoutErr::ZeroAlign));
-        }
-        let align_rounded = align_up(align, usize::SZ);
+        tri!(do align_up_checks(align, usize::SZ));
+        // SAFETY: see `align_up_checked`.
+        let align_rounded = unsafe { align_up(align, usize::SZ) };
         match Layout::from_size_align(size, align_rounded) {
             Ok(l) => Ok(l),
             Err(_) => Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp))
@@ -288,7 +279,7 @@ impl Layout {
     /// assert!(l.size() >= 10);
     /// // on 64-bit systems, l == Layout(size = 10, align = 8).
     /// // 32-bit, l == Layout(size = 10, align = 4)
-    /// Attempts to create
+    /// ```
     pub const fn try_posix_memalign_compatible_from_size_align(
         size: usize,
         align: usize
@@ -332,15 +323,8 @@ impl Layout {
     /// Returns `true` if <code>[self.size()](Layout::size) == 0</code>.
     #[must_use]
     #[inline]
-    pub const fn is_zero_sized(&self) -> bool {
+    pub const fn is_zsl(&self) -> bool {
         self.size == 0
-    }
-
-    /// Returns `true` if <code>[self.size()](Layout::size) != 0</code>.
-    #[must_use]
-    #[inline]
-    pub const fn is_nonzero_sized(&self) -> bool {
-        self.size != 0
     }
 
     /// Returns the amount of padding necessary after `self` to ensure that the following address
@@ -365,7 +349,7 @@ impl Layout {
     #[inline]
     pub const fn padding_needed_for(&self, align: usize) -> Result<usize, Error> {
         let sz = self.size();
-        match align_up_checked(sz, align, true) {
+        match align_up_checked(sz, align) {
             // align_up_checked guarantees its return value will be >= the input, so new - sz cannot
             // underflow
             Ok(new) => Ok(new - sz),
@@ -381,8 +365,9 @@ impl Layout {
     #[must_use]
     #[inline]
     pub const fn pad_to_align(&self) -> Layout {
-        // SAFETY: constructors require that the size and alignment are valid for this operation.
-        let aligned_sz = align_up(self.size(), self.align());
+        // SAFETY: constructors require that the size and alignment are valid for this operation;
+        // see `align_up_checked`.
+        let aligned_sz = unsafe { align_up(self.size(), self.align()) };
         // SAFETY: above.
         unsafe { Layout::from_size_align_unchecked(aligned_sz, self.align()) }
     }
@@ -496,7 +481,9 @@ impl Layout {
         if is_multiple_of(cur_align, align) {
             Ok(*self)
         } else {
-            Layout::from_size_align(self.size(), tri!(do align_up_checked(cur_align, align, false)))
+            tri!(do align_up_checks(cur_align, align));
+            // SAFETY: see `align_up_checked`.
+            Layout::from_size_align(self.size(), unsafe { align_up(cur_align, align) })
         }
     }
 

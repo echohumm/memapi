@@ -3,19 +3,15 @@ use {
         error::Error,
         layout::Layout,
         traits::{
-            AllocError,
             alloc::{Alloc, Dealloc, Grow, Realloc, Shrink},
-            helpers::{
-                Bytes,
-                alloc_mut::{grow_mut, ralloc_mut, shrink_unchecked_mut},
-                default_dealloc_panic
-            }
+            helpers::{default_dealloc_panic, ralloc_mut},
+            AllocError
         }
     },
     ::core::{
-        cmp::{Ord, Ordering},
         convert::From,
         marker::Sized,
+        option::Option::{None, Some},
         ptr::{self, NonNull},
         result::Result::{self, Err}
     }
@@ -77,7 +73,7 @@ pub trait DeallocMut: AllocMut {
     /// Deallocates a previously allocated block.
     ///
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-    /// [`dangling`](ptr::dangling).
+    /// [dangling](ptr::dangling).
     ///
     /// The default implementation simply calls [`try_dealloc_mut`](DeallocMut::try_dealloc_mut) and
     /// panics if it returns an error.
@@ -90,10 +86,10 @@ pub trait DeallocMut: AllocMut {
     ///
     /// # Panics
     ///
-    /// This function may panic if the [`try_dealloc_mut`](DeallocMut::try_dealloc_mut)
+    /// This method may panic if the [`try_dealloc_mut`](DeallocMut::try_dealloc_mut)
     /// implementation returns an error, or the implementation chooses to panic for any other
-    /// reason. It will not panic if `ptr` is [`dangling`](ptr::dangling) or
-    /// <code>layout.[size](Layout::size)() == 0</code>.
+    /// reason. It will not panic if `ptr` is [dangling](ptr::dangling) or
+    /// if <code>layout.[size](Layout::size)() == 0</code>.
     #[track_caller]
     #[inline]
     unsafe fn dealloc_mut(&mut self, ptr: NonNull<u8>, layout: Layout) {
@@ -103,6 +99,9 @@ pub trait DeallocMut: AllocMut {
     /// Attempts to deallocate a previously allocated block. If this allocator is backed by an
     /// allocation library which does not provide fallible deallocation operations, this may panic,
     /// abort, or incorrectly return `Ok(())`.
+    ///
+    /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
+    /// [dangling](ptr::dangling).
     ///
     /// # Safety
     ///
@@ -115,12 +114,11 @@ pub trait DeallocMut: AllocMut {
     /// Errors are implementation-defined, refer to [`AllocError::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
-    ///   0</code>.
-    /// - <code>Err([Error::DanglingDeallocation])</code> if <code>ptr ==
-    ///   [layout.dangling](Layout::dangling)</code>.
-    /// - <code>Err([Error::Unsupported]))</code> if deallocation is unsupported. In this case,
-    ///   reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
+    /// <code>Err([Error::Unsupported])</code> if deallocation is unsupported. In this case,
+    /// reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
+    ///
+    /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+    /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
     unsafe fn try_dealloc_mut(
         &mut self,
         ptr: NonNull<u8>,
@@ -129,16 +127,22 @@ pub trait DeallocMut: AllocMut {
 
     /// Attempts to deallocate a previously allocated block after performing validity checks.
     ///
+    /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
+    /// [dangling](ptr::dangling).
+    ///
     /// This method must return an error rather than silently accepting the deallocation and
     /// potentially causing UB.
+    ///
+    /// Note that the default for this method simply returns <code>Err([Error::Unsupported])</code>.
     ///
     /// # Errors
     ///
     /// Implementations commonly return:
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if `layout.size() == 0`.
-    /// - <code>Err([Error::DanglingDeallocation])</code> if `ptr == layout.dangling()`.
     /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures.
+    ///
+    /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+    /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
     fn checked_dealloc_mut(
         &mut self,
         _ptr: NonNull<u8>,
@@ -191,7 +195,15 @@ pub trait GrowMut: AllocMut + DeallocMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        grow_mut(self, ptr, old_layout, new_layout, Bytes::Uninitialized)
+        ralloc_mut(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            AllocMut::alloc_mut,
+            Some(Error::GrowSmallerNewLayout),
+            None
+        )
     }
 
     /// Grows the given block to a new, larger layout, with extra bytes being zeroed.
@@ -232,7 +244,15 @@ pub trait GrowMut: AllocMut + DeallocMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        grow_mut(self, ptr, old_layout, new_layout, Bytes::Zeroed)
+        ralloc_mut(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            AllocMut::zalloc_mut,
+            Some(Error::GrowSmallerNewLayout),
+            None
+        )
     }
 }
 
@@ -278,7 +298,15 @@ pub trait ShrinkMut: AllocMut + DeallocMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        default_shrink!(self::shrink_unchecked_mut, ptr, old_layout, new_layout)
+        ralloc_mut(
+            self,
+            ptr,
+            old_layout,
+            new_layout,
+            AllocMut::alloc_mut,
+            None,
+            Some(Error::ShrinkLargerNewLayout)
+        )
     }
 }
 
@@ -326,7 +354,7 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        ralloc_mut(self, ptr, old_layout, new_layout, Bytes::Uninitialized)
+        ralloc_mut(self, ptr, old_layout, new_layout, AllocMut::alloc_mut, None, None)
     }
 
     /// Reallocates a block, growing or shrinking as needed, with extra bytes being zeroed.
@@ -367,7 +395,7 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocError>::Error> {
-        ralloc_mut(self, ptr, old_layout, new_layout, Bytes::Zeroed)
+        ralloc_mut(self, ptr, old_layout, new_layout, AllocMut::alloc_mut, None, None)
     }
 }
 

@@ -21,6 +21,7 @@ use {
 
 /// A memory allocation interface.
 pub trait Alloc: AllocError + AllocMut {
+    // TODO: maybe make return NonNull<T>
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
     /// # Errors
@@ -67,7 +68,7 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// Deallocates a previously allocated block.
     ///
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-    /// [`dangling`](ptr::dangling).
+    /// [dangling](ptr::dangling).
     ///
     /// The default implementation simply calls [`try_dealloc`](Dealloc::try_dealloc) and panics if
     /// it returns an error.
@@ -80,9 +81,9 @@ pub trait Dealloc: Alloc + DeallocMut {
     ///
     /// # Panics
     ///
-    /// This function may panic if the [`try_dealloc`](Dealloc::try_dealloc) implementation returns
+    /// This method may panic if the [`try_dealloc`](Dealloc::try_dealloc) implementation returns
     /// an error, or the implementation chooses to panic for any other reason. It will not panic if
-    /// `ptr` is [`dangling`](ptr::dangling) or <code>layout.[size](Layout::size)() == 0</code>.
+    /// `ptr` is [dangling](ptr::dangling) or if <code>layout.[size](Layout::size)() == 0</code>.
     #[track_caller]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
@@ -92,6 +93,9 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// Attempts to deallocate a previously allocated block. If this allocator is backed by an
     /// allocation library which does not provide fallible deallocation operations, this may panic,
     /// abort, or incorrectly return `Ok(())`.
+    ///
+    /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
+    /// [dangling](ptr::dangling).
     ///
     /// # Safety
     ///
@@ -104,17 +108,16 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// Errors are implementation-defined, refer to [`AllocError::Error`] and [`Error`].
     ///
     /// The standard implementations may return:
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
-    ///   0</code>.
-    /// - <code>Err([Error::DanglingDeallocation])</code> if <code>ptr ==
-    ///   [layout.dangling](Layout::dangling)</code>.
-    /// - <code>Err([Error::Unsupported])</code> if deallocation is unsupported. In this case,
-    ///   reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
+    /// <code>Err([Error::Unsupported])</code> if deallocation is unsupported. In this case,
+    /// reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
     ///
     /// However, if the `alloc_mut` feature is enabled, and using this method on a synchronization
     /// primitive wrapping a type which implements [`AllocMut`], an
     /// [`Error::Other`] wrapping a generic error message will be returned if locking the primitive
     /// fails.
+    ///
+    /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+    /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
     unsafe fn try_dealloc(
         &self,
         ptr: NonNull<u8>,
@@ -123,19 +126,25 @@ pub trait Dealloc: Alloc + DeallocMut {
 
     /// Attempts to deallocate a previously allocated block after performing validity checks.
     ///
+    /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
+    /// [dangling](ptr::dangling).
+    ///
     /// This method must return an error rather than silently accepting the deallocation and
     /// potentially causing UB.
+    ///
+    /// Note that the default for this method simply returns <code>Err([Error::Unsupported])</code>.
     ///
     /// # Errors
     ///
     /// Implementations commonly return:
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if `layout.size() == 0`.
-    /// - <code>Err([Error::DanglingDeallocation])</code> if `ptr == layout.dangling()`.
     /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If the
     ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
     ///   wrapping a type which implements [`AllocMut`], a generic error message will also be
     ///   returned if locking the primitive fails.
+    ///
+    /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+    /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
     fn checked_dealloc(
         &self,
         _ptr: NonNull<u8>,
@@ -190,10 +199,7 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
             old_layout,
             new_layout,
             Alloc::alloc,
-            Some(<Self as AllocError>::Error::from(Error::GrowSmallerNewLayout(
-                old_layout.size(),
-                new_layout.size()
-            ))),
+            Some(Error::GrowSmallerNewLayout),
             None
         )
     }
@@ -241,10 +247,7 @@ pub trait Grow: Alloc + Dealloc + GrowMut {
             old_layout,
             new_layout,
             Alloc::zalloc,
-            Some(<Self as AllocError>::Error::from(Error::GrowSmallerNewLayout(
-                old_layout.size(),
-                new_layout.size()
-            ))),
+            Some(Error::GrowSmallerNewLayout),
             None
         )
     }
@@ -295,10 +298,7 @@ pub trait Shrink: Alloc + Dealloc + ShrinkMut {
             new_layout,
             Alloc::alloc,
             None,
-            Some(<Self as AllocError>::Error::from(Error::ShrinkLargerNewLayout(
-                old_layout.size(),
-                new_layout.size()
-            )))
+            Some(Error::ShrinkLargerNewLayout)
         )
     }
 }
@@ -546,15 +546,15 @@ impl Alloc for ::std::alloc::System {
 }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Dealloc for ::std::alloc::System {
-    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        if layout.is_zero_sized() {
-            Err(Error::ZeroSizedLayout)
-        } else if ptr == layout.dangling() {
-            Err(Error::DanglingDeallocation)
-        } else {
+    unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
+        if !layout.is_zsl() && ptr != layout.dangling() {
             ::stdalloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
-            ::core::result::Result::Ok(())
         }
+    }
+
+    unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
+        self.dealloc(ptr, layout);
+        ::core::result::Result::Ok(())
     }
 }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]

@@ -27,12 +27,11 @@
 //!   [`ArithErr`](error::ArithErr), [`ArithOp`](error::ArithOp)
 //!
 //! # Data and type utilities
-//! - [`traits::data::type_props`][]: [`SizedProps`](traits::data::type_props::SizedProps),
+//! - [`traits::data::type_props`]\: [`SizedProps`](traits::data::type_props::SizedProps),
 //!   [`PtrProps`](traits::data::type_props::PtrProps),
 //!   [`VarSized`](traits::data::type_props::VarSized),
 //!   [`VarSizedStruct`](traits::data::type_props::VarSizedStruct)
-//! - [`traits::data::marker`][]: [`UnsizedCopy`](traits::data::marker::UnsizedCopy),
-//!   [`Thin`](traits::data::marker::Thin), [`SizeMeta`](traits::data::marker::SizeMeta)
+//! - [`traits::data::marker`]\: [`UnsizedCopy`](traits::data::marker::UnsizedCopy)
 //! - [`helpers`]: alignment, checked arithmetic, and pointer helpers
 //!
 //! # Allocator implementations
@@ -51,7 +50,6 @@
 //! - `stack_alloc`: `alloca`-based allocator ([`allocs::stack_alloc`])
 //! - `c_str`: enables `CStr`-specific data traits in `no_std` (MSRV: 1.64)
 //! - `metadata`: enables [`core::ptr::Pointee`] metadata support on nightly
-//! - `sized_hierarchy`: enables [`core::marker::MetaSized`] support on nightly
 //! - `full`, `full_nightly`: convenience bundles
 
 #![allow(unknown_lints)]
@@ -80,7 +78,6 @@
 // nightly is set by the build.rs
 #![cfg_attr(nightly, feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
-#![cfg_attr(feature = "sized_hierarchy", feature(sized_hierarchy))]
 
 // TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
 // TODO: consider behavior of all allocation methods in all possible cases for all allocators and
@@ -117,8 +114,10 @@ pub mod prelude {
                 ReallocMut,
                 ShrinkMut
             },
-            data::type_props::{PtrProps, SizedProps},
-            data::marker::{SizeMeta, Thin, UnsizedCopy}
+            data::{
+                type_props::{PtrProps, SizedProps},
+                marker::UnsizedCopy
+            }
         }
     };
 
@@ -173,28 +172,10 @@ macro_rules! zalloc {
 
 macro_rules! default_dealloc {
     ($self:ident.$de:ident, $ptr:ident, $l:ident) => {
-        if $l.is_nonzero_sized() && $ptr != $l.dangling() {
+        if !$l.is_zsl() && $ptr != $l.dangling() {
             if let ::core::result::Result::Err(e) = $self.$de($ptr, $l) {
                 default_dealloc_panic($ptr, $l, e)
             }
-        }
-    };
-}
-
-macro_rules! default_shrink {
-    ($self:ident::$unchecked:ident, $ptr:ident, $old:ident, $new:ident) => {
-        match $new.size().cmp(&$old.size()) {
-            Ordering::Greater => ::core::result::Result::Err(<Self as AllocError>::Error::from(
-                Error::ShrinkLargerNewLayout($old.size(), $new.size())
-            )),
-            Ordering::Equal => {
-                if $new.align() > $old.align() {
-                    $unchecked($self, $ptr, $old, $new)
-                } else {
-                    ::core::result::Result::Ok($ptr)
-                }
-            }
-            Ordering::Less => $unchecked($self, $ptr, $old, $new)
         }
     };
 }
@@ -267,7 +248,7 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             unsafe fn dealloc(&self, ptr: ::core::ptr::NonNull<u8>, layout: crate::layout::Layout) {
-                if layout.is_nonzero_sized() && ptr != layout.dangling() {
+                if !layout.is_zsl() && ptr != layout.dangling() {
                     ::stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
             }
@@ -279,14 +260,8 @@ macro_rules! default_alloc_impl {
                 ptr: ::core::ptr::NonNull<u8>,
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<(), crate::error::Error> {
-                if layout.is_zero_sized() {
-                    ::core::result::Result::Err(crate::error::Error::ZeroSizedLayout)
-                } else if ptr == layout.dangling() {
-                    ::core::result::Result::Err(crate::error::Error::DanglingDeallocation)
-                } else {
-                    ::stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
-                    ::core::result::Result::Ok(())
-                }
+                self.dealloc(ptr, layout);
+                ::core::result::Result::Ok(())
             }
         }
         impl crate::traits::alloc::Grow for $ty {}

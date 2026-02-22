@@ -1,10 +1,15 @@
 use {
     crate::{
-        error::{ArithErr, ArithOp, Cause, Error, LayoutErr},
+        error::{ArithErr, ArithOp, Cause, Error},
         layout::Layout,
         traits::{
             alloc::BasicAlloc,
-            data::type_props::{PtrProps, SizedProps, VarSized}
+            data::type_props::{
+                PtrProps,
+                varsized_nonnull_from_parts,
+                varsized_ptr_from_parts,
+                varsized_ptr_from_parts_mut
+            }
         }
     },
     ::core::{
@@ -116,43 +121,9 @@ pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
 /// - `v + (align - 1)` exceeds [`usize::MAX`]
 #[must_use]
 #[inline]
-pub const fn align_up(v: usize, align: usize) -> usize {
+pub const unsafe fn align_up(v: usize, align: usize) -> usize {
     let m1 = align - 1;
     (v + m1) & !m1
-}
-
-/// Attempts to align the given value `v` up to the next multiple of `align`.
-///
-/// # Errors
-///
-/// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
-/// - <code>Err([Error::InvalidLayout]\(v, align, [LayoutErr::NonPowerOfTwoAlign]\))</code> if
-///   `align` is not a power of two.
-/// - <code>Err([Error::ArithmeticError]\([ArithErr]\(v, [ArithOp::Add], align - 1\)\)</code> if
-///   <code>v + (align - 1)</code> would overflow.
-#[::rustversion::attr(since(1.47), const)]
-pub fn align_up_checked(v: usize, align: usize) -> Result<usize, Error> {
-    if align == 0 {
-        return Err(Error::InvalidLayout(v, align, LayoutErr::ZeroAlign));
-    } else if !align.is_power_of_two() {
-        return Err(Error::InvalidLayout(v, align, LayoutErr::NonPowerOfTwoAlign));
-    }
-
-    // align isn't 0, so align - 1 can't underflow
-    let m1 = align - 1;
-    Ok(tri!(::ArithmeticError checked_op(v, ArithOp::Add, m1)) & !m1)
-}
-
-/// Returns a [`NonNull`] which has the given alignment as its address.
-///
-/// # Safety
-///
-/// The caller must ensure `align` is non-zero. For proper use, `align` should also be a power of
-/// two.
-#[must_use]
-#[inline]
-pub const unsafe fn dangling_nonnull(align: usize) -> NonNull<u8> {
-    NonNull::new_unchecked(align as *mut u8)
 }
 
 /// Returns the maximum alignment satisfied by a non-null pointer.
@@ -211,94 +182,6 @@ pub unsafe fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
     (&*(ptr.as_ptr() as *const [T])).len()
 }
 
-/// Creates a [`dangling`](ptr::dangling), zero-length, [`NonNull`] pointer with the proper
-/// alignment.
-///
-/// Note that this is only `const` on Rust versions 1.61 and above
-#[::rustversion::attr(since(1.61), const)]
-#[must_use]
-pub fn varsized_dangling_nonnull<T: ?Sized + VarSized>() -> NonNull<T> {
-    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-    varsized_nonnull_from_parts(unsafe { dangling_nonnull(T::ALN) }, 0)
-}
-
-/// Creates a [`dangling`](ptr::dangling), zero-length [`NonNull`] pointer with the proper
-/// alignment.
-///
-/// Note that this is only `const` on Rust versions 1.61 and above
-#[::rustversion::attr(since(1.61), const)]
-#[must_use]
-pub fn varsized_dangling_ptr<T: ?Sized + VarSized>() -> *mut T {
-    // SAFETY: the implementor of VarSized guarantees the ALN is valid.
-    varsized_ptr_from_parts_mut(unsafe { dangling_nonnull(T::ALN).as_ptr() }, 0)
-}
-
-/// Creates a <code>[NonNull]\<T\></code> from a pointer and a `usize` size metadata.
-///
-/// Note that this is only `const` on Rust versions 1.61 and above
-#[::rustversion::attr(since(1.61), const)]
-#[must_use]
-#[inline]
-pub fn varsized_nonnull_from_parts<T: ?Sized + VarSized>(
-    p: NonNull<u8>,
-    meta: usize
-) -> NonNull<T> {
-    // SAFETY: `p` was already non-null, so it with different meta must also be nn.
-    unsafe { NonNull::new_unchecked(varsized_ptr_from_parts_mut(p.as_ptr(), meta)) }
-}
-
-#[::rustversion::since(1.83)]
-/// Creates a `*mut T` from a pointer and a `usize` size metadata.
-///
-/// Note that this is only `const` on Rust versions 1.61 and above
-#[must_use]
-#[inline]
-pub const fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
-    // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe {
-        *((&ptr::slice_from_raw_parts_mut::<T::SubType>(p.cast(), meta)
-            as *const *mut [T::SubType])
-            .cast::<*mut T>())
-    }
-}
-#[::rustversion::before(1.83)]
-/// Creates a `*mut T` from a pointer and a `usize` size metadata.
-///
-/// Note that this is only `const` on Rust versions 1.61 and above
-#[must_use]
-#[inline]
-#[::rustversion::attr(since(1.61), const)]
-pub fn varsized_ptr_from_parts_mut<T: ?Sized + VarSized>(p: *mut u8, meta: usize) -> *mut T {
-    // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe { crate::helpers::union_transmute::<(*mut u8, usize), *mut T>((p, meta)) }
-}
-
-#[::rustversion::since(1.64)]
-/// Creates a `*mut T` from a pointer and a `usize` size metadata.
-///
-/// Note that this is only `const` on Rust versions 1.61 and above
-#[must_use]
-#[inline]
-pub const fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
-    // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe {
-        *((&ptr::slice_from_raw_parts::<T::SubType>(p.cast(), meta)
-            as *const *const [T::SubType])
-            .cast::<*const T>())
-    }
-}
-#[::rustversion::before(1.64)]
-/// Creates a `*mut T` from a pointer and a `usize` size metadata.
-///
-/// Note that this is only `const` on Rust versions 1.61 and above
-#[::rustversion::attr(since(1.61), const)]
-#[must_use]
-#[inline]
-pub fn varsized_ptr_from_parts<T: ?Sized + VarSized>(p: *const u8, meta: usize) -> *const T {
-    // SAFETY: VarSized trait requires T::Metadata == usize
-    unsafe { crate::helpers::union_transmute::<(*const u8, usize), *const T>((p, meta)) }
-}
-
 // for some reason, making these non-generic to take a *mut u8 instead causes up to a +590% perf
 // loss soooo.. not doing that, i guess.
 /// Converts a possibly null pointer into a [`NonNull`] result.
@@ -333,11 +216,7 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
             // unfortunately we have to convert oserr -> i32 -> oserr because io::Error is not
             // Copy, and other traits which Cause is.
             Cause::OSErr(unsafe {
-                #[allow(clippy::option_if_let_else)]
-                match ::std::io::Error::last_os_error().raw_os_error() {
-                    Some(e) => e,
-                    None => ::core::hint::unreachable_unchecked()
-                }
+                ::std::io::Error::last_os_error().raw_os_error().unwrap_or_else(|| ::core::hint::unreachable_unchecked())
             })
         ))
     } else {
@@ -359,7 +238,7 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
     null_q(ptr, layout)
 }
 
-/// Checks layout for being zero-sized, returning a [`dangling`](ptr::dangling) pointer if it is,
+/// Checks layout for being zero-sized, returning a [dangling](ptr::dangling) pointer if it is,
 /// otherwise attempting allocation using `f(layout)`.
 ///
 /// # Errors
@@ -372,11 +251,12 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
 ///
 /// [last_os_error]: ::std::io::Error::last_os_error
 /// [raw_os_error]: ::std::io::Error::raw_os_error
+#[inline]
 pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
     layout: Layout,
     f: F
 ) -> Result<NonNull<u8>, Error> {
-    if layout.is_zero_sized() { Err(Error::ZeroSizedLayout) } else { null_q_dyn(f(layout), layout) }
+    if layout.is_zsl() { Err(Error::ZeroSizedLayout) } else { null_q_dyn(f(layout), layout) }
 }
 // TODO: lower const msrv and generally improve these. will require some testing regarding effects
 //  of current and alternative implementations on provenance
@@ -456,8 +336,9 @@ pub unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
 ///
 /// # Safety
 ///
-/// The caller must ensure that <code>[Src::SZ](SizedProps::SZ) >= [Dst::SZ](SizedProps::SZ)</code>
-/// and that `src` is a valid `Dst`.
+/// The caller must ensure that <code>[Src::SZ](crate::traits::data::type_props::SizedProps::SZ) >=
+/// [Dst::SZ](crate::traits::data::type_props::SizedProps::SZ)</code> and that `src` is a valid
+/// `Dst`.
 #[::rustversion::attr(since(1.56), const)]
 pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
     use ::core::mem::ManuallyDrop;
@@ -630,7 +511,7 @@ impl<T: ?Sized, A: BasicAlloc + ?Sized> Deref for AllocGuard<'_, T, A> {
 ///
 /// let mut guard = unsafe {
 ///     SliceAllocGuard::new(
-///         alloc.alloc(unsafe { Layout::from_size_align_unchecked(u32::SZ * len, u32::ALN) })
+///         alloc.alloc(unsafe { Layout::array_unchecked::<u32>(len) })
 ///             .unwrap().cast(),
 ///         &alloc,
 ///         len
@@ -945,7 +826,7 @@ impl<T, A: BasicAlloc + ?Sized> Drop for SliceAllocGuard<'_, T, A> {
         }
         // SAFETY: this memory was already allocated with this layout, so its size and align must be
         // valid.
-        let layout = unsafe { Layout::from_size_align_unchecked(T::SZ * self.full, T::ALN) };
+        let layout = unsafe { Layout::array_unchecked::<T>(self.full) };
         // SAFETY: new() requires that the pointer was allocated using the provided allocator.
         unsafe {
             self.alloc.dealloc(self.ptr.cast(), layout);

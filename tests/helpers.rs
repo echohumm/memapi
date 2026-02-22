@@ -5,21 +5,22 @@ use {
     ::core::ptr::{self, NonNull},
     memapi2::{
         DefaultAlloc,
-        error::{ArithErr, ArithOp, Error, LayoutErr},
+        error::{ArithErr, ArithOp, Error},
         helpers::{
             align_up,
-            align_up_checked,
             byte_sub,
             checked_op,
             is_multiple_of,
             nonnull_slice_from_parts,
             nonnull_slice_len,
             null_q_dyn_zsl_check,
-            slice_ptr_from_parts_mut,
-            varsized_ptr_from_parts_mut
+            slice_ptr_from_parts_mut
         },
         layout::Layout,
-        traits::alloc::{Alloc, Dealloc}
+        traits::{
+            alloc::{Alloc, Dealloc},
+            data::type_props::varsized_ptr_from_parts_mut
+        }
     }
 };
 
@@ -102,9 +103,11 @@ fn checked_op_basic_and_errors() {
 }
 
 #[test]
-fn align_up_and_unchecked() {
-    assert_eq!(align_up(7, 8), 8);
+fn align_up_basic() {
+    assert_eq!(unsafe { align_up(7, 8) }, 8);
 }
+
+// TODO: more align_up tests
 
 #[test]
 fn dangling_nonnull_for_alignment() {
@@ -112,24 +115,6 @@ fn dangling_nonnull_for_alignment() {
     let p = l.dangling();
     let addr = p.as_ptr() as usize;
     assert_eq!(addr % 16, 0);
-}
-
-#[test]
-fn align_up_checked_errors() {
-    assert_eq!(
-        align_up_checked(7, 0).unwrap_err(),
-        Error::InvalidLayout(7, 0, LayoutErr::ZeroAlign)
-    );
-    assert_eq!(
-        align_up_checked(7, 3).unwrap_err(),
-        Error::InvalidLayout(7, 3, LayoutErr::NonPowerOfTwoAlign)
-    );
-}
-
-#[test]
-fn align_up_checked_overflow() {
-    let err = align_up_checked(usize::MAX, 8).unwrap_err();
-    assert_eq!(err, Error::ArithmeticError(ArithErr(usize::MAX, ArithOp::Add, 7)));
 }
 
 #[test]
@@ -141,8 +126,10 @@ fn is_multiple_of_zero_rhs() {
 #[test]
 fn null_q_dyn_zsl_check_zero_layout() {
     let layout = Layout::new::<()>();
-    let ptr =
-        null_q_dyn_zsl_check(layout, |_| -> *mut u8 { panic!("unexpected alloc") }).unwrap_err();
+    let ptr = null_q_dyn_zsl_check(layout, |l| -> *mut u8 {
+        panic!("unexpected alloc with layout: {:#?}", l)
+    })
+    .unwrap_err();
     assert_eq!(ptr, Error::ZeroSizedLayout);
 }
 

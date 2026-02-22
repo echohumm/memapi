@@ -46,8 +46,7 @@ no_nightly = []
 ## allows disabling the usage of the alloc crate
 no_alloc = []
 metadata = []
-sized_hierarchy = []
-all_nightly = ["metadata", "sized_hierarchy"]
+all_nightly = ["metadata"]
 
 # std support
 std = []
@@ -81,25 +80,28 @@ cty = { version = "=0.2.2", optional = true }
 rustversion = "=1.0.22"
 cc = { version = "=1.0.83", optional = true }
 
+[patch.crates-io]
+libc = { git = "https://github.com/rust-lang/libc", tag = "0.2.163" }
 
 
-#[dev-dependencies]
-#criterion = "0.8.1"
-#
-#[[bench]]
-#name = "lyt"
-#path = "benches/layout.rs"
-#harness = false
-#
-#[[bench]]
-#name = "alc"
-#path = "benches/alloc.rs"
-#harness = false
-#
-#[[bench]]
-#name = "hlp"
-#path = "benches/helpers.rs"
-#harness = false
+
+[dev-dependencies]
+criterion = "0.8.1"
+
+[[bench]]
+name = "lyt"
+path = "benches/layout.rs"
+harness = false
+
+[[bench]]
+name = "alc"
+path = "benches/alloc.rs"
+harness = false
+
+[[bench]]
+name = "hlp"
+path = "benches/helpers.rs"
+harness = false
 
 
 
