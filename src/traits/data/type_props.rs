@@ -39,7 +39,6 @@ impl<T> SizedProps for T {}
 
 /// A trait providing methods for pointers to provide the properties of their pointees.
 pub trait PtrProps<T: ?Sized> {
-    // TODO: should be must_use
     /// Gets the size of the value.
     ///
     /// # Safety
@@ -50,6 +49,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[must_use]
     unsafe fn sz(&self) -> usize;
     /// Gets the alignment of the value.
     ///
@@ -61,6 +61,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[must_use]
     unsafe fn aln(&self) -> usize;
     /// Gets the memory layout for the value.
     ///
@@ -72,6 +73,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[must_use]
     #[inline]
     unsafe fn layout(&self) -> Layout {
         // SAFETY: caller guarantees
@@ -93,12 +95,14 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[must_use]
     unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata;
 
     #[cfg(feature = "metadata")]
     /// <placeholder>
     ///
     /// # Safety
+    #[must_use]
     fn varsized_metadata(&self) -> usize
     where
         T: VarSized
@@ -111,6 +115,7 @@ pub trait PtrProps<T: ?Sized> {
     /// <placeholder>
     ///
     /// # Safety
+    #[must_use]
     fn varsized_metadata(&self) -> usize
     where
         T: VarSized;
@@ -125,6 +130,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[must_use]
     #[inline]
     unsafe fn is_zero_sized(&self) -> bool {
         self.sz() == 0
@@ -140,6 +146,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[must_use]
     unsafe fn max_slice_len(&self) -> usize {
         match self.sz() {
             0 => usize::MAX,
