@@ -122,6 +122,8 @@ pub const MIN_ALIGN: usize = 1;
 
 const NULL: *mut c_void = null_mut();
 
+// TODO: maybe inline or just replace the singular calls to these functions with them
+
 /// Allocates `size` bytes with at least `align` alignment.
 ///
 /// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc).
@@ -237,7 +239,11 @@ pub unsafe fn c_zalloc(align: usize, size: usize) -> (*mut c_void, c_int) {
 /// - `ptr` points to the start of a valid allocation returned by an allocation function listed
 ///   above, or is `NULL`.
 /// - `ptr` has not yet been deallocated.
-pub unsafe fn c_dealloc(ptr: *mut c_void, _size: usize, _align: usize) {
+// ok time to vent finding this bug. _align and _size were swapped here, causing heap corruption in
+// the windows branch because it would call the wrong free.
+// AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
+// AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH THIS TOOK ME WAY TOO LONG
+pub unsafe fn c_dealloc(ptr: *mut c_void, _align: usize, _size: usize) {
     #[cfg(windows)]
     {
         #[allow(clippy::used_underscore_binding)]
