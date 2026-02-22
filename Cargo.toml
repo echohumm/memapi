@@ -85,23 +85,23 @@ libc = { git = "https://github.com/rust-lang/libc", tag = "0.2.163" }
 
 
 
-[dev-dependencies]
-criterion = "0.8.1"
+#[dev-dependencies]
+#criterion = "0.8.1"
 
-[[bench]]
-name = "lyt"
-path = "benches/layout.rs"
-harness = false
+#[[bench]]
+#name = "lyt"
+#path = "benches/layout.rs"
+#harness = false
 
-[[bench]]
-name = "alc"
-path = "benches/alloc.rs"
-harness = false
+#[[bench]]
+#name = "alc"
+#path = "benches/alloc.rs"
+#harness = false
 
-[[bench]]
-name = "hlp"
-path = "benches/helpers.rs"
-harness = false
+#[[bench]]
+#name = "hlp"
+#path = "benches/helpers.rs"
+#harness = false
 
 
 
