@@ -28,8 +28,6 @@ fn null_q_dyn_zsl_check_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
     } else {
         let (ptr, status) = f(layout);
         match status {
-            // SAFETY: errcode of -1 means it's already been checked and is guaranteed success
-            -1 => Ok(unsafe { NonNull::new_unchecked(ptr.cast()) }),
             0 => null_q_dyn(ptr, layout),
             code => {
                 #[cfg(feature = "os_err_reporting")]

@@ -168,7 +168,7 @@ unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
     let mut out = NULL;
     // SAFETY: requirements are passed onto the caller
     let ret = unsafe { posix_memalign(&mut out as *mut *mut c_void, align, size) };
-    (out, if ret == 0 { -1 } else { ret })
+    (out, ret)
 }
 #[cfg(windows)]
 #[inline(always)]
