@@ -79,9 +79,7 @@ cty = { version = "=0.2.2", optional = true }
 [build-dependencies]
 rustversion = "=1.0.22"
 cc = { version = "=1.0.83", optional = true }
-
-[patch.crates-io]
-libc = { git = "https://github.com/rust-lang/libc", tag = "0.2.163" }
+libc = { version = "=0.2.163", default-features = false }
 
 
 
