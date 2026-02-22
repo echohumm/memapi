@@ -485,7 +485,8 @@ unsafe impl VarSized for str {
     type SubType = u8;
 }
 
-#[cfg(all(feature = "c_str", not(feature = "std")))]
+#[::rustversion::since(1.64)]
+#[cfg(not(feature = "std"))]
 // SAFETY: `CStr = [u8]`
 unsafe impl VarSized for ::core::ffi::CStr {
     type SubType = u8;

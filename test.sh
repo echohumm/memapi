@@ -11,10 +11,10 @@ cargo +nightly clippy --features "full_nightly" -- -D unused_unsafe -D warnings 
 
 # msrv
 echo "test: 1.46"
-cargo +1.46.0 test --features "full_msrv" > /dev/null
+cargo +1.46.0 test --features "full" > /dev/null
 # random versions ive noticed problems with
 echo "test: 1.56"
-cargo +1.56.0 test --features "full_msrv,dev" > /dev/null
+cargo +1.56.0 test --features "full,dev" > /dev/null
 echo "test: 1.64"
 cargo +1.64.0 test --features "full,dev" > /dev/null
 echo "test: 1.81"

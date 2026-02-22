@@ -14,9 +14,13 @@ unsafe impl<T: Copy> UnsizedCopy for T {}
 unsafe impl<T: Copy> UnsizedCopy for [T] {}
 // SAFETY: `str == [u8]` and `u8: Copy`, so, above.
 unsafe impl UnsizedCopy for str {}
-#[cfg(feature = "c_str")]
+#[::rustversion::since(1.64)]
+#[cfg(not(feature = "std"))]
 // SAFETY: `CStr == [u8]`
 unsafe impl UnsizedCopy for ::core::ffi::CStr {}
+#[cfg(feature = "std")]
+// SAFETY: `CStr == [u8]`
+unsafe impl UnsizedCopy for ::std::ffi::CStr {}
 #[cfg(feature = "std")]
 // SAFETY: `OsStr == [u8]`
 unsafe impl UnsizedCopy for ::std::ffi::OsStr {}

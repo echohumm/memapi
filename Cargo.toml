@@ -36,17 +36,12 @@ default = []
 # internal features
 dev = []
 
-# msrv-changing features
-## that make small changes
-c_str = []
-
 # nightly support
 ## allows disabling allocator_api on nightly
 no_nightly = []
 ## allows disabling the usage of the alloc crate
 no_alloc = []
 metadata = []
-all_nightly = ["metadata"]
 
 # std support
 std = []
@@ -66,9 +61,8 @@ os_err_reporting = ["std"]
 catch_unwind = ["stack_alloc", "std"]
 
 # feature bundles
-full_msrv = ["c_alloc", "catch_unwind", "os_err_reporting"]
-full = ["c_str", "full_msrv"]
-full_nightly = ["all_nightly", "full"]
+full = ["c_alloc", "catch_unwind", "os_err_reporting"]
+full_nightly = ["metadata", "full"]
 
 
 
@@ -83,23 +77,23 @@ libc = { version = "=0.2.163", default-features = false }
 
 
 
-#[dev-dependencies]
-#criterion = "0.8.1"
-#
-#[[bench]]
-#name = "lyt"
-#path = "benches/layout.rs"
-#harness = false
-#
-#[[bench]]
-#name = "alc"
-#path = "benches/alloc.rs"
-#harness = false
-#
-#[[bench]]
-#name = "hlp"
-#path = "benches/helpers.rs"
-#harness = false
+[dev-dependencies]
+criterion = "0.8.1"
+
+[[bench]]
+name = "lyt"
+path = "benches/layout.rs"
+harness = false
+
+[[bench]]
+name = "alc"
+path = "benches/alloc.rs"
+harness = false
+
+[[bench]]
+name = "hlp"
+path = "benches/helpers.rs"
+harness = false
 
 
 

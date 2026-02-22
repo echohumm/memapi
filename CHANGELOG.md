@@ -6,7 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
-
 ## [Unreleased]
 
 ### Added
@@ -31,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 
 * Useless `sized_hierarchy` feature
+* Useless `full_nightly` feature bundle with only one item
+* `c_str` feature in favor of auto-detecting a compatible compiler version
+* `full_msrv` feature made usless by removing `c_str`
 * `Error::DanglingDeallocation` error; attempting to deallocate a dangling pointer is now a no-op.
 * `helpers::align_up_checked`
 * `helpers::dangling_nonnull`; replaced by `SizedProps::DANGLING_PTR` and `Layout::dangling`

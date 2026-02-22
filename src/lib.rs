@@ -48,7 +48,6 @@
 //! - `alloc_temp_trait`: scoped/temporary allocation trait
 //! - `c_alloc`: C `posix_memalign`-style allocator ([`allocs::c_alloc`])
 //! - `stack_alloc`: `alloca`-based allocator ([`allocs::stack_alloc`])
-//! - `c_str`: enables `CStr`-specific data traits in `no_std` (MSRV: 1.64)
 //! - `metadata`: enables [`core::ptr::Pointee`] metadata support on nightly
 //! - `full`, `full_nightly`: convenience bundles
 
