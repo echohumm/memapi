@@ -20,7 +20,7 @@ jobs:
         rust: [stable, nightly, 1.46.0, 1.56.0, 1.64]
         include:
           - rust: 1.46.0
-            features: full_msrv, dev
+            features: full_msrv
           - rust: 1.56.0
             features: full_msrv, dev
           - rust: 1.64
@@ -40,6 +40,16 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           components: ${{ matrix.rust == 'nightly' && 'miri' || '' }}
+
+      - name: Clean
+        if: steps.install_rust.outcome == 'success'
+        continue-on-error: true
+        run: cargo +${{ matrix.rust }} clean
+
+      - name: Miri Clean
+        if: matrix.rust == 'nightly' && steps.install_rust.outcome == 'success'
+        continue-on-error: true
+        run: cargo +${{ matrix.rust }} miri clean
 
       - name: Run all tests
         if: steps.install_rust.outcome == 'success'
