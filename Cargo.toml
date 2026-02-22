@@ -77,23 +77,23 @@ libc = { version = "=0.2.163", default-features = false }
 
 
 
-[dev-dependencies]
-criterion = "0.8.1"
-
-[[bench]]
-name = "lyt"
-path = "benches/layout.rs"
-harness = false
-
-[[bench]]
-name = "alc"
-path = "benches/alloc.rs"
-harness = false
-
-[[bench]]
-name = "hlp"
-path = "benches/helpers.rs"
-harness = false
+#[dev-dependencies]
+#criterion = "0.8.1"
+#
+#[[bench]]
+#name = "lyt"
+#path = "benches/layout.rs"
+#harness = false
+#
+#[[bench]]
+#name = "alc"
+#path = "benches/alloc.rs"
+#harness = false
+#
+#[[bench]]
+#name = "hlp"
+#path = "benches/helpers.rs"
+#harness = false
 
 
 
