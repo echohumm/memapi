@@ -20,9 +20,9 @@ jobs:
         rust: [stable, nightly, 1.46.0, 1.56.0, 1.64]
         include:
           - rust: 1.46.0
-            features: full_msrv
+            features: full
           - rust: 1.56.0
-            features: full_msrv, dev
+            features: full, dev
           - rust: 1.64
             features: full, dev
           - rust: stable
