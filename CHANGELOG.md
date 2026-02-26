@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 ## [Unreleased]
 
-[//]: # (TODO: update after)
+[//]: # (TODO: update after e01b523d3c8a7fd61a098171032ca3df8a881cde)
 
 ### Added
 
