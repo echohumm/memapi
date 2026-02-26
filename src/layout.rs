@@ -10,7 +10,8 @@ use {
         marker::Sized,
         ptr::NonNull,
         result::Result::{self, Err, Ok}
-    }
+    },
+    ::libc::uintptr_t
 };
 
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
@@ -23,7 +24,7 @@ const fn align_up_checks(val: usize, align: usize) -> Result<(), Error> {
         return Err(Error::InvalidLayout(val, align, LayoutErr::ZeroAlign));
     } else if !align.is_power_of_two() {
         return Err(Error::InvalidLayout(val, align, LayoutErr::NonPowerOfTwoAlign));
-    } else if val > USIZE_HIGH_BIT - align {
+    } else if val > USIZE_HIGH_BIT - (align - 1) {
         return Err(Error::InvalidLayout(val, align, LayoutErr::ExceedsMax));
     }
     Ok(())
@@ -114,6 +115,14 @@ impl Layout {
     #[must_use]
     #[inline]
     pub const unsafe fn array_unchecked<T>(n: usize) -> Layout {
+        // god im bad at basic logic, i spent like 20 minutes trying to get this right because i
+        // didn't want to write a test and just do trial and error. luckily now i think i have the
+        // mental circuits for de morgan's laws down
+        assert_unsafe_precondition!(
+            "`Layout::array_unchecked` requires that `T::SZ * n` rounded up to `T::ALN` will not \
+             exceed `USIZE_MAX_NO_HIGH_BIT`.",
+            <T>(n: usize = n) => T::SZ == 0 || n <= (USIZE_HIGH_BIT - T::ALN) / T::SZ
+        );
         Layout::from_size_align_unchecked(T::SZ * n, T::ALN)
     }
 
@@ -153,8 +162,8 @@ impl Layout {
                 // SAFETY: we validated alignment and size constraints above.
                 Ok((unsafe { Layout::from_size_align_unchecked(total, new_align) }, offset))
             }
-            Err(e) => Err(Error::InvalidLayout(offset, new_align, LayoutErr::ArithErr(e))),
-            _ => Err(Error::InvalidLayout(offset, new_align, LayoutErr::ExceedsMax))
+            Ok(_) => Err(Error::InvalidLayout(offset, new_align, LayoutErr::ExceedsMax)),
+            Err(e) => Err(Error::InvalidLayout(offset, new_align, LayoutErr::ArithErr(e)))
         }
     }
 
@@ -171,9 +180,9 @@ impl Layout {
 
     /// Creates a layout for the value behind the given reference
     #[inline(always)]
-    pub fn for_value<T: ?Sized>(val: &T) -> Layout {
-        // SAFETY: references are always valid for sz()/aln()
-        unsafe { val.layout() }
+    pub fn for_value<T: ?Sized>(refer: &T) -> Layout {
+        // SAFETY: references are always valid for `sz()`/`aln()`
+        unsafe { refer.layout() }
     }
 
     /// Creates a layout for the value behind the given reference
@@ -185,9 +194,16 @@ impl Layout {
     /// - non-dangling
     /// - aligned
     #[inline(always)]
-    pub unsafe fn for_value_raw<T: ?Sized>(val: *const T) -> Layout {
-        // SAFETY: caller guarantees
-        unsafe { val.layout() }
+    pub unsafe fn for_value_raw<T: ?Sized>(ptr: *const T) -> Layout {
+        // no good way to check if a pointer is dangling/aligned without intrinsics/language
+        // features we cant use, but we can at least check its non-null
+        assert_unsafe_precondition!(
+            noconst,
+            "`Layout::for_value_raw` requires that `ptr` is non-null.",
+            <T: [?Sized]>(ptr: *const T = ptr) => !ptr.is_null()
+        );
+        // SAFETY: caller guarantees that `ptr` meets the safety constraints of `layout()`.
+        unsafe { ptr.layout() }
     }
 
     /// Creates a layout with the given size and alignment.
@@ -235,7 +251,7 @@ impl Layout {
     /// # use memapi2::prelude::{Layout, SizedProps};
     /// let l = Layout::posix_memalign_compatible_from_size_align(10, 1).unwrap();
     ///
-    /// assert!(l.align() >= usize::SZ);
+    /// assert!(l.align() >= usize::SZ); // or libc::uintptr_t::SZ if available
     /// assert!(l.size() >= 10);
     /// // on 64-bit systems, l == Layout(size = 10, align = 8).
     /// // 32-bit, l == Layout(size = 10, align = 4)
@@ -244,9 +260,9 @@ impl Layout {
         size: usize,
         align: usize
     ) -> Result<Layout, Error> {
-        tri!(do align_up_checks(align, usize::SZ));
+        tri!(do align_up_checks(align, uintptr_t::SZ));
         // SAFETY: see `align_up_checked`.
-        let align_rounded = unsafe { align_up(align, usize::SZ) };
+        let align_rounded = unsafe { align_up(align, uintptr_t::SZ) };
         match Layout::from_size_align(size, align_rounded) {
             Ok(l) => Ok(l),
             Err(_) => Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp))
@@ -275,7 +291,7 @@ impl Layout {
     /// # use memapi2::prelude::{Layout, SizedProps};
     /// let l = Layout::posix_memalign_compatible_from_size_align(10, 1).unwrap();
     ///
-    /// assert!(l.align() >= usize::SZ);
+    /// assert!(l.align() >= usize::SZ); // or libc::uintptr_t::SZ if available
     /// assert!(l.size() >= 10);
     /// // on 64-bit systems, l == Layout(size = 10, align = 8).
     /// // 32-bit, l == Layout(size = 10, align = 4)
@@ -284,7 +300,7 @@ impl Layout {
         size: usize,
         align: usize
     ) -> Result<Layout, Error> {
-        if !is_multiple_of(align, usize::SZ) {
+        if !is_multiple_of(align, uintptr_t::SZ) {
             return Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp));
         }
 
@@ -303,6 +319,11 @@ impl Layout {
     #[must_use]
     #[inline]
     pub const unsafe fn from_size_align_unchecked(size: usize, align: usize) -> Layout {
+        assert_unsafe_precondition!(
+            "`Layout::from_size_align_unchecked` requires that `align` is a non-zero power of two \
+             and `size` rounded up to `align` does not exceed `USIZE_MAX_NO_HIGH_BIT`.",
+            <>(size: usize = size, align: usize = align) => ::core::matches!(align_up_checks(size, align), Ok(()))
+        );
         Layout { size, align }
     }
 
@@ -513,7 +534,7 @@ impl Layout {
     /// let l = Layout::from_size_align(10, 1).unwrap();
     /// let compatible = l.to_posix_memalign_compatible().unwrap();
     ///
-    /// assert!(compatible.align() >= usize::SZ);
+    /// assert!(compatible.align() >= usize::SZ); // or libc::uintptr_t::SZ if available
     /// assert!(compatible.size() >= 10);
     /// // on 64-bit systems, compatible == Layout(size = 10, align = 8).
     /// // 32-bit, compatible == Layout(size = 10, align = 4)
@@ -521,7 +542,7 @@ impl Layout {
     #[inline]
     pub const fn to_posix_memalign_compatible(&self) -> Result<Layout, Error> {
         // make the alignment a multiple of `size_of::<*mut c_void>()`.
-        match self.align_to_multiple_of(usize::SZ) {
+        match self.align_to_multiple_of(uintptr_t::SZ) {
             Ok(l) => Ok(l),
             Err(_) => Err(Error::InvalidLayout(self.size(), self.align(), LayoutErr::CRoundUp))
         }

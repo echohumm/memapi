@@ -1,12 +1,14 @@
 #![allow(unknown_lints)]
 #![allow(unexpected_cfgs)]
 #![warn(unknown_lints)]
+
 use {
+    crate::{helpers::is_multiple_of, traits::data::type_props::SizedProps},
     ::core::{
         ffi::c_void,
         ptr::{self, null_mut}
     },
-    ::cty::c_int
+    ::libc::{c_int, uintptr_t}
 };
 
 #[cfg(any(
@@ -146,6 +148,7 @@ const NULL: *mut c_void = null_mut();
 #[must_use = "this function allocates memory on success, and dropping the returned pointer will \
               leak memory"]
 pub unsafe fn c_alloc(align: usize, size: usize) -> (*mut c_void, c_int) {
+    assert_unsafe_precondition!(noconst, "`c_alloc` requires that `align` is a power of two and a multiple of `size_of::<*mut c_void>()`, and `size` is non-zero", (align: usize = align, size: usize = size) => size > 0 && align.is_power_of_two() && is_multiple_of(align, uintptr_t::SZ));
     if size_align_check(size, align) {
         // SAFETY: requirements are passed on to caller
         unsafe { c_alloc_spec(align, size) }
@@ -211,6 +214,7 @@ const fn size_align_check(size: usize, align: usize) -> bool {
 #[must_use = "this function allocates memory on success, and dropping the returned pointer will \
               leak memory"]
 pub unsafe fn c_zalloc(align: usize, size: usize) -> (*mut c_void, c_int) {
+    assert_unsafe_precondition!(noconst, "`c_alloc` requires that `align` is a power of two and a multiple of `size_of::<*mut c_void>()`, and `size` is non-zero", (align: usize = align, size: usize = size) => size > 0 && align.is_power_of_two() && is_multiple_of(align, uintptr_t::SZ));
     if size_align_check(size, align) {
         // SAFETY: requirements are passed on to caller
         let (ptr, status) = unsafe { c_alloc_spec(align, size) };

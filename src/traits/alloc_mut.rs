@@ -3,9 +3,9 @@ use {
         error::Error,
         layout::Layout,
         traits::{
+            AllocError,
             alloc::{Alloc, Dealloc, Grow, Realloc, Shrink},
-            helpers::{default_dealloc_panic, ralloc_mut},
-            AllocError
+            helpers::{default_dealloc_panic, ralloc_mut}
         }
     },
     ::core::{

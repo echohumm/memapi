@@ -37,6 +37,7 @@ pub trait SizedProps: Sized {
 
 impl<T> SizedProps for T {}
 
+// TODO: assert_unsafe_precondition
 /// A trait providing methods for pointers to provide the properties of their pointees.
 pub trait PtrProps<T: ?Sized> {
     /// Gets the size of the value.
@@ -99,9 +100,7 @@ pub trait PtrProps<T: ?Sized> {
     unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata;
 
     #[cfg(feature = "metadata")]
-    /// <placeholder>
-    ///
-    /// # Safety
+    /// Gets the metadata of a [`VarSized`] value.
     #[must_use]
     fn varsized_metadata(&self) -> usize
     where
@@ -112,9 +111,7 @@ pub trait PtrProps<T: ?Sized> {
     }
 
     #[cfg(not(feature = "metadata"))]
-    /// <placeholder>
-    ///
-    /// # Safety
+    /// Gets the metadata of a [`VarSized`] value.
     #[must_use]
     fn varsized_metadata(&self) -> usize
     where
@@ -263,9 +260,11 @@ impl<T: ::core::clone::Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
     where
         T: VarSized
     {
-        #[allow(unused_imports)] use ::core::panic;
-
-        ::core::unreachable!("`Cow<T>` can never be unsized as it requires `T: Clone`")
+        // SAFETY: as `T: Sized`, it cannot be `VarSized` unless an implementor breaks `VarSized`'s
+        // safety contract
+        unsafe {
+            ::core::hint::unreachable_unchecked();
+        }
     }
 }
 

@@ -3,7 +3,8 @@ use {
     ::core::{
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         write
-    }
+    },
+    ::libc::uintptr_t
 };
 
 /// Helper macro to implement the Error trait based on its availability. Uses [`std::error::Error`]
@@ -175,7 +176,7 @@ impl Display for LayoutErr {
             LayoutErr::ExceedsMax => write!(f, "size would overflow when rounded up to alignment"),
             LayoutErr::ArithErr(overflow) => write!(f, "layout err: {}", overflow),
             LayoutErr::CRoundUp => {
-                write!(f, "failed to round layout alignment up to a multiple of {}", usize::SZ)
+                write!(f, "failed to round layout alignment up to a multiple of {}", uintptr_t::SZ)
             }
         }
     }
@@ -198,7 +199,6 @@ impl Display for ArithErr {
 
 impl_error! { ArithErr }
 
-// TODO: divceil
 /// An arithmetic operation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[repr(u8)]
@@ -213,6 +213,8 @@ pub enum ArithOp {
     Div,
     /// Modulo. (%)
     Rem,
+    /// Integer division, rounding up instead of down.
+    DivCeil,
     /// Exponentiation. (**)
     Pow
 }
@@ -224,6 +226,8 @@ impl Display for ArithOp {
             ArithOp::Sub => write!(f, "-"),
             ArithOp::Mul => write!(f, "*"),
             ArithOp::Div => write!(f, "/"),
+            // TODO: better display
+            ArithOp::DivCeil => write!(f, "div_ceil"),
             ArithOp::Rem => write!(f, "%"),
             ArithOp::Pow => write!(f, "**")
         }

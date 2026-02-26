@@ -41,6 +41,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     layout: Layout,
     f: F
 ) -> Result<R, Error> {
+    // TODO: assert_unsafe_precondition
     if layout.size() == 0 {
         return Err(Error::ZeroSizedLayout);
     }

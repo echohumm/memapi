@@ -85,7 +85,7 @@
 extern crate core;
 extern crate rustversion;
 
-#[cfg(feature = "c_alloc")] extern crate cty;
+extern crate libc;
 
 #[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 #[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;
@@ -127,87 +127,6 @@ pub mod prelude {
     #[cfg(feature = "c_alloc")] pub use crate::allocs::c_alloc::CAlloc;
     #[cfg(feature = "stack_alloc")] pub use crate::allocs::stack_alloc::StackAlloc;
 }
-
-/// This macro is theoretically faster than `<fallible>?`.
-macro_rules! tri {
-    (::$err:ident $($fallible:expr)+) => {
-        match $($fallible)+ {
-            ::core::result::Result::Ok(x) => x,
-            ::core::result::Result::Err(e) => return ::core::result::Result::Err(Error::$err(e)),
-        }
-    };
-    (opt $($fallible:expr)+) => {
-        match $($fallible)+ {
-            Some(x) => x,
-            None => return None,
-        }
-    };
-    (do $($fallible:expr)+) => {
-        match $($fallible)+ {
-            ::core::result::Result::Ok(s) => s,
-            ::core::result::Result::Err(e) => return ::core::result::Result::Err(e),
-        }
-    };
-    (cmap($err:expr) from $e:ty, $($fallible:expr)+) => {
-        match $($fallible)+ {
-            ::core::result::Result::Ok(s) => s,
-            ::core::result::Result::Err(_) => return ::core::result::Result::Err(<$e>::from($err)),
-        }
-    };
-}
-
-macro_rules! zalloc {
-    ($self:ident, $alloc:ident, $layout:ident) => {{
-        let res = $self.$alloc($layout);
-        if let ::core::result::Result::Ok(p) = res {
-            // SAFETY: alloc returns at least layout.size() allocated bytes
-            unsafe {
-                ptr::write_bytes(p.as_ptr(), 0, $layout.size());
-            }
-        }
-        res
-    }};
-}
-
-macro_rules! default_dealloc {
-    ($self:ident.$de:ident, $ptr:ident, $l:ident) => {
-        if !$l.is_zsl() && $ptr != $l.dangling() {
-            if let ::core::result::Result::Err(e) = $self.$de($ptr, $l) {
-                default_dealloc_panic($ptr, $l, e)
-            }
-        }
-    };
-}
-
-/// All traits provided by this crate.
-pub mod traits;
-
-/// Helpers that tend to be useful in other libraries as well.
-pub mod helpers;
-
-/// Errors that can occur during allocation.
-pub mod error;
-
-/// A custom layout type to get around some strange Rust stdlib limitations.
-pub mod layout;
-
-#[cfg(any(feature = "c_alloc", feature = "stack_alloc"))]
-/// Additional allocators which this crate supports.
-pub mod allocs;
-
-#[cfg(any(feature = "c_alloc", feature = "stack_alloc"))]
-/// FFI backing any extra enabled allocators.
-pub mod ffi;
-
-/// Default allocator, delegating to the global allocator.
-///
-/// # Note
-///
-/// This must _not_ be set as the global allocator (via `#[global_allocator]`). Doing so will lead
-/// to infinite recursion, as the allocation functions this calls (in
-/// [`alloc::alloc`](::stdalloc::alloc)) delegate to the global allocator.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct DefaultAlloc;
 
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 macro_rules! default_alloc_impl {
@@ -268,6 +187,136 @@ macro_rules! default_alloc_impl {
         impl crate::traits::alloc::Realloc for $ty {}
     };
 }
+
+/// This macro is theoretically faster than `<fallible>?`.
+macro_rules! tri {
+    (::$err:ident $($fallible:expr)+) => {
+        match $($fallible)+ {
+            ::core::result::Result::Ok(x) => x,
+            ::core::result::Result::Err(e) => return ::core::result::Result::Err(Error::$err(e)),
+        }
+    };
+    (opt $($fallible:expr)+) => {
+        match $($fallible)+ {
+            Some(x) => x,
+            None => return None,
+        }
+    };
+    (opt cmap($err:expr), $($fallible:expr)+) => {
+        match $($fallible)+ {
+            Some(x) => Ok(x),
+            None => Err($err)
+        }
+    };
+    (do $($fallible:expr)+) => {
+        match $($fallible)+ {
+            ::core::result::Result::Ok(s) => s,
+            ::core::result::Result::Err(e) => return ::core::result::Result::Err(e),
+        }
+    };
+    (cmap($err:expr) from $e:ty, $($fallible:expr)+) => {
+        match $($fallible)+ {
+            ::core::result::Result::Ok(s) => s,
+            ::core::result::Result::Err(_) => return ::core::result::Result::Err(<$e>::from($err)),
+        }
+    };
+    (from $e:ty, $($fallible:expr)+) => {
+        match $($fallible)+ {
+            ::core::result::Result::Ok(s) => s,
+            ::core::result::Result::Err(e) => return ::core::result::Result::Err(<$e as ::core::convert::From<Error>>::from(e)),
+        }
+    }
+}
+
+macro_rules! zalloc {
+    ($self:ident, $alloc:ident, $layout:ident) => {{
+        let res = $self.$alloc($layout);
+        if let ::core::result::Result::Ok(p) = res {
+            // SAFETY: alloc returns at least layout.size() allocated bytes
+            unsafe {
+                ptr::write_bytes(p.as_ptr(), 0, $layout.size());
+            }
+        }
+        res
+    }};
+}
+
+macro_rules! default_dealloc {
+    ($self:ident.$de:ident, $ptr:ident, $l:ident) => {
+        if !$l.is_zsl() && $ptr != $l.dangling() {
+            if let ::core::result::Result::Err(e) = $self.$de($ptr, $l) {
+                default_dealloc_panic($ptr, $l, e)
+            }
+        }
+    };
+}
+
+// WIP
+macro_rules! assert_unsafe_precondition {
+    (noconst, $message:expr, $(<$($gen:ident $(: [$($req:tt)+])?),*>)?($($name:ident : $ty:ty = $arg:expr),* $(,)?) => $($e:tt)+) => {
+        #[cfg(debug_assertions)]
+        {
+            #[track_caller]
+            fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
+                if !($($e)+) {
+                    ::core::panic!(concat!("unsafe precondition(s) violated: ", $message));
+                }
+            }
+
+            precondition_check$(::<$($gen),*>)?($($arg,)*);
+        }
+    };
+    ($message:expr, $(<$($gen:ident $(: [$($req:tt)+])?),*>)?($($name:ident : $ty:ty = $arg:expr),* $(,)?) => $($e:tt)+) => {
+        #[cfg(debug_assertions)]
+        {
+            #[::rustversion::since(1.57)]
+            #[track_caller]
+            const fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
+                if !($($e)+) {
+                    ::core::panic!(concat!("unsafe precondition(s) violated: ", $message));
+                }
+            }
+
+            #[::rustversion::before(1.57)]
+            const fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
+                // cannot panic in const fn prior to 1.57, do nothing.
+                let _ = ($($arg,)*);
+            }
+
+            precondition_check$(::<$($gen),*>)?($($arg,)*);
+        }
+    };
+}
+
+/// All traits provided by this crate.
+pub mod traits;
+
+/// Helpers that tend to be useful in other libraries as well.
+pub mod helpers;
+
+/// Errors that can occur during allocation.
+pub mod error;
+
+/// A custom layout type to get around some strange Rust stdlib limitations.
+pub mod layout;
+
+#[cfg(any(feature = "c_alloc", feature = "stack_alloc"))]
+/// Additional allocators which this crate supports.
+pub mod allocs;
+
+#[cfg(any(feature = "c_alloc", feature = "stack_alloc"))]
+/// FFI backing any extra enabled allocators.
+pub mod ffi;
+
+/// Default allocator, delegating to the global allocator.
+///
+/// # Note
+///
+/// This must _not_ be set as the global allocator (via `#[global_allocator]`). Doing so will lead
+/// to infinite recursion, as the allocation functions this calls (in
+/// [`alloc::alloc`](::stdalloc::alloc)) delegate to the global allocator.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct DefaultAlloc;
 
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 // SAFETY: DefaultAlloc doesn't unwind, and all layout operations are correct

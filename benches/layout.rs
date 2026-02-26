@@ -10,7 +10,8 @@ use {
         helpers::USIZE_MAX_NO_HIGH_BIT,
         layout::Layout,
         traits::data::type_props::SizedProps
-    }
+    },
+    std::time::Duration
 };
 
 fn to_posix_memalign_compatible(c: &mut Criterion) {
@@ -222,9 +223,11 @@ fn from_size_align(c: &mut Criterion) {
 fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
+        .measurement_time(Duration::from_secs(8))
         .nresamples(200_000)
         .noise_threshold(0.005)
         .confidence_level(0.99)
+        .significance_level(0.1)
         .configure_from_args();
 
     to_posix_memalign_compatible(&mut c);

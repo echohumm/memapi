@@ -10,7 +10,8 @@ use {
         DefaultAlloc,
         layout::Layout,
         traits::alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
-    }
+    },
+    std::time::Duration
 };
 
 fn bench_allocs<A>(c: &mut Criterion, name: &str, alloc: A)
@@ -282,9 +283,11 @@ where
 fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
+        .measurement_time(Duration::from_secs(8))
         .nresamples(200_000)
         .noise_threshold(0.005)
         .confidence_level(0.99)
+        .significance_level(0.1)
         .configure_from_args();
 
     bench_allocs(&mut c, "default_alloc", DefaultAlloc);

@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 ## [Unreleased]
 
+[//]: # (TODO: update after)
+
 ### Added
 
 * `Error::ReallocSmallerAlign` for when attempting to reallocate with a smaller new alignment

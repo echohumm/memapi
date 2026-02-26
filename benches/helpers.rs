@@ -15,7 +15,7 @@ use {
         layout::Layout,
         traits::data::type_props::PtrProps
     },
-    std::{rc::Rc, sync::Arc}
+    std::{rc::Rc, sync::Arc, time::Duration}
 };
 
 fn checked_ops(c: &mut Criterion) {
@@ -93,6 +93,35 @@ fn checked_ops(c: &mut Criterion) {
     group.bench_function("invalid", |b| {
         b.iter(|| {
             let _ = black_box(checked_op(black_box(2), ArithOp::Div, black_box(0)));
+        });
+    });
+
+    group.finish();
+
+    let mut group = c.benchmark_group("checked_ops/div_ceil");
+
+    group.bench_function("valid", |b| {
+        b.iter(|| {
+            let _ = black_box(checked_op(black_box(2), ArithOp::DivCeil, black_box(2)));
+        });
+    });
+
+    group.bench_function("valid_rem", |b| {
+        b.iter(|| {
+            // has a remainder of 1
+            let _ = black_box(checked_op(black_box(3), ArithOp::DivCeil, black_box(2)));
+        });
+    });
+
+    group.bench_function("valid_toolarge", |b| {
+        b.iter(|| {
+            let _ = black_box(checked_op(black_box(2), ArithOp::DivCeil, black_box(3)));
+        });
+    });
+
+    group.bench_function("invalid", |b| {
+        b.iter(|| {
+            let _ = black_box(checked_op(black_box(2), ArithOp::DivCeil, black_box(0)));
         });
     });
 
@@ -299,9 +328,11 @@ fn ptr_props(c: &mut Criterion) {
 fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
+        .measurement_time(Duration::from_secs(8))
         .nresamples(200_000)
         .noise_threshold(0.005)
         .confidence_level(0.99)
+        .significance_level(0.1)
         .configure_from_args();
 
     checked_ops(&mut c);

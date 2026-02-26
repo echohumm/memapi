@@ -16,7 +16,7 @@ use {
         ptr::NonNull,
         result::Result::{self, Err, Ok}
     },
-    ::cty::c_int
+    ::libc::c_int
 };
 
 fn null_q_dyn_zsl_check_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
@@ -26,7 +26,7 @@ fn null_q_dyn_zsl_check_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
     if layout.is_zsl() {
         Err(Error::ZeroSizedLayout)
     } else {
-        let (ptr, status) = f(layout);
+        let (ptr, status) = f(tri!(do layout.to_posix_memalign_compatible()));
         match status {
             0 => null_q_dyn(ptr, layout),
             code => {

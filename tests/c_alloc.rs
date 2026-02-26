@@ -147,7 +147,7 @@ fn test_alloc_dealloc_var_alignments() {
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
     for &align in &aligns {
-        let size = cmp::max(1, align * 2);
+        let size = align * 2;
         let layout = Layout::from_size_align(size, align).unwrap();
         let ptr = a.alloc(layout).expect("alloc failed");
         unsafe {
@@ -182,7 +182,7 @@ fn test_grow_var_alignments_combinations() {
     for &old_align in &aligns {
         for &new_align in &aligns {
             // pick sizes such that new_size > old_size to exercise grow/zgrow
-            let old_size = cmp::max(1, old_align * 2);
+            let old_size = old_align * 2;
             let new_size = cmp::max(old_size + 1, new_align * 4);
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();
@@ -247,7 +247,7 @@ fn test_zgrow_var_alignments_combinations() {
     for &old_align in &aligns {
         for &new_align in &aligns {
             // pick sizes such that new_size > old_size to exercise grow/zgrow
-            let old_size = cmp::max(1, old_align * 2);
+            let old_size = old_align * 2;
             let new_size = cmp::max(old_size + 1, new_align * 4);
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();
