@@ -1,10 +1,12 @@
 use {
     crate::{
         error::{Cause, Error},
+        ffi::c_alloc::{c_alloc_spec, calloc, free, malloc, size_align_check},
         helpers::null_q_dyn,
         layout::Layout,
         traits::{
             AllocDescriptor,
+            AllocFeatures,
             alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
         }
     },
@@ -153,7 +155,3 @@ impl Shrink for CAlloc {}
 impl Realloc for CAlloc {}
 
 pub use crate::ffi::c_alloc as ffi;
-use crate::{
-    ffi::c_alloc::{c_alloc_spec, calloc, free, malloc, size_align_check},
-    traits::AllocFeatures
-};

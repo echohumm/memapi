@@ -82,12 +82,14 @@
 // TODO: consider behavior of all allocation methods in all possible cases for all allocators and
 //  make sure they match and make sense
 
-#[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 extern crate bitflags;
-extern crate core;
 extern crate libc;
 extern crate rustversion;
+
+extern crate core;
+
 #[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;
+#[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 
 /// A relatively minimal prelude containing the most common, important things from this crate.
 // unfortunately we need this cfg_attr, or it thinks rustfmt is a module and can't find it
