@@ -322,7 +322,8 @@ impl Layout {
         assert_unsafe_precondition!(
             "`Layout::from_size_align_unchecked` requires that `align` is a non-zero power of two \
              and `size` rounded up to `align` does not exceed `USIZE_MAX_NO_HIGH_BIT`.",
-            <>(size: usize = size, align: usize = align) => ::core::matches!(align_up_checks(size, align), Ok(()))
+            (size: usize = size, align: usize = align) 
+                => ::core::matches!(align_up_checks(size, align), Ok(()))
         );
         Layout { size, align }
     }

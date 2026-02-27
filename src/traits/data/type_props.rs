@@ -37,7 +37,6 @@ pub trait SizedProps: Sized {
 
 impl<T> SizedProps for T {}
 
-// TODO: assert_unsafe_precondition
 /// A trait providing methods for pointers to provide the properties of their pointees.
 pub trait PtrProps<T: ?Sized> {
     /// Gets the size of the value.
@@ -159,20 +158,62 @@ macro_rules! impl_ptr_props_raw {
             impl<T: ?Sized> PtrProps<T> for $name {
                 #[inline]
                 unsafe fn sz(&self) -> usize {
+                    assert_unsafe_precondition!(
+                        noconst,
+                        concat!(
+                            "`<",
+                            stringify!($name),
+                            " as PtrProps>::sz` requires that `self` is non-null, non-dangling, \
+                            and aligned"
+                        ),
+                        <T: [?Sized]>(ptr: $name = *self) => !ptr.is_null()
+                    );
                     size_of_val::<T>(&**self)
                 }
                 #[inline]
                 unsafe fn aln(&self) -> usize {
+                    assert_unsafe_precondition!(
+                        noconst,
+                       concat!(
+                            "`<",
+                            stringify!($name),
+                            " as PtrProps>::aln` requires that `self` is non-null, non-dangling, \
+                            and aligned"
+                        ),
+                        <T: [?Sized]>(ptr: $name = *self) => !ptr.is_null()
+                    );
                     align_of_val::<T>(&**self)
                 }
                 #[cfg(feature = "metadata")]
                 #[inline]
                 unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
-                    ::core::ptr::metadata(&*(*self))
+                    assert_unsafe_precondition!(
+                        noconst,
+                        concat!(
+                            "`<",
+                            stringify!($name),
+                            " as PtrProps>::metadata` requires that `self` is non-null, \
+                            non-dangling, and aligned"
+                        ),
+                        <T: [?Sized]>(ptr: $name = *self) => !ptr.is_null()
+                    );
+                    ::core::ptr::metadata(&**self)
                 }
                 #[cfg(not(feature = "metadata"))]
                 #[inline]
                 fn varsized_metadata(&self) -> usize where T: VarSized {
+                    assert_unsafe_precondition!(
+                        noconst,
+                        concat!(
+                            "`<",
+                            stringify!($name),
+                            " as PtrProps>::varsized_metadata` requires that `self` is non-null, \
+                            non-dangling, and aligned, as well as that pointers to `T` have \
+                            `usize` metadata."
+                        ),
+                        <T: [?Sized]>(ptr: $name = *self)
+                            => !ptr.is_null() && <$name>::SZ == usize::SZ * 2
+                    );
                     split_varsized_ptr(*self).1
                 }
             }
@@ -200,6 +241,19 @@ macro_rules! impl_ptr_props_identity {
                 #[cfg(not(feature = "metadata"))]
                 #[inline]
                 fn varsized_metadata(&self) -> usize where T: VarSized {
+                    assert_unsafe_precondition!(
+                        noconst,
+                       concat!(
+                            "`<",
+                            stringify!($name),
+                            " as PtrProps>::varsized_metadata` requires that `self` is non-null, \
+                            non-dangling, and aligned, as well as that pointers to `T` have \
+                            `usize` metadata."
+                        ),
+                        <T: [?Sized]>()
+                            // no need for null check as this is for a reference
+                            => <$name>::SZ == usize::SZ * 2
+                    );
                     split_varsized_ptr(*self).1
                 }
             }
@@ -228,6 +282,19 @@ macro_rules! impl_ptr_props_deref {
                 #[cfg(not(feature = "metadata"))]
                 #[inline]
                 fn varsized_metadata(&self) -> usize where T: VarSized {
+                    assert_unsafe_precondition!(
+                        noconst,
+                       concat!(
+                            "`<",
+                            stringify!($name),
+                            " as PtrProps>::varsized_metadata` requires that `self` is non-null, \
+                            non-dangling, and aligned, as well as that pointers to `T` have \
+                            `usize` metadata."
+                        ),
+                        <T: [?Sized]>()
+                            // no need for null check as this is for a deref'd smart pointer
+                            => <$name>::SZ == usize::SZ * 2
+                    );
                     split_varsized_ptr(&**self).1
                 }
             }
@@ -260,6 +327,13 @@ impl<T: ::core::clone::Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
     where
         T: VarSized
     {
+        assert_unsafe_precondition!(
+            noconst,
+            concat!(
+                "`<Cow<'_, T> as PtrProps>::varsized_metadata` should not be called.",
+            ),
+            () => false
+        );
         // SAFETY: as `T: Sized`, it cannot be `VarSized` unless an implementor breaks `VarSized`'s
         // safety contract
         unsafe {
@@ -290,6 +364,7 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
     where
         T: VarSized
     {
+        // ptr's impl handles ub check
         self.as_ptr().varsized_metadata()
     }
 }

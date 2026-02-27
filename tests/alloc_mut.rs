@@ -8,18 +8,21 @@ use {
         error::Error,
         layout::Layout,
         traits::{
-            AllocError,
+            AllocDescriptor,
             alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut}
         }
     }
 };
+use memapi2::traits::AllocFeatures;
 
 /// Test allocator that only implements AllocMut and DeallocMut.
 #[derive(Debug, Clone, Copy, Default)]
 struct MutOnlyAlloc;
 
-impl AllocError for MutOnlyAlloc {
+impl AllocDescriptor for MutOnlyAlloc {
     type Error = Error;
+
+    const FEATURES: AllocFeatures = AllocFeatures::DEALLOC;
 }
 
 impl AllocMut for MutOnlyAlloc {

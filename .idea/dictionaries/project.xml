@@ -18,6 +18,7 @@
       <w>stdalloc</w>
       <w>sysalloc</w>
       <w>taac</w>
+      <w>udouble</w>
       <w>varsized</w>
       <w>verdef</w>
       <w>zalloc</w>

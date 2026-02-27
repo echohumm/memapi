@@ -30,6 +30,20 @@ pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
 /// [usize::BITS] - 1</code>, or <code>[USIZE_MAX_NO_HIGH_BIT] + 1</code>
 pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (USIZE_MAX_NO_HIGH_BIT);
 
+// TODO: better docs
+#[cfg(target_pointer_width = "64")]
+/// An alias for whatever type is double the size of a `usize`.
+#[allow(non_camel_case_types)]
+pub type udouble = u128;
+#[cfg(target_pointer_width = "32")]
+/// An alias for whatever type is double the size of a `usize`.
+#[allow(non_camel_case_types)]
+pub type udouble = u64;
+#[cfg(target_pointer_width = "16")]
+/// An alias for whatever type is double the size of a `usize`.
+#[allow(non_camel_case_types)]
+pub type udouble = u32;
+
 /// Performs a checked arithmetic operation on two `usize`s.
 ///
 /// Note that this is only `const` on Rust versions 1.47 and above.
@@ -132,7 +146,12 @@ pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
 #[must_use]
 #[inline]
 pub const unsafe fn align_up(v: usize, align: usize) -> usize {
-    assert_unsafe_precondition!("`align_up` requires that `align` is a non-zero power of two and that `v + (align - 1)` does not overflow.", (align: usize = align, v: usize = v) => align.is_power_of_two() && v <= usize::MAX - (align - 1));
+    assert_unsafe_precondition!(
+        "`align_up` requires that `align` is a non-zero power of two and that `v + (align - 1)` \
+        does not overflow.",
+        (align: usize = align, v: usize = v)
+            => align.is_power_of_two() && v <= usize::MAX - (align - 1)
+    );
     let m1 = align - 1;
     (v + m1) & !m1
 }
@@ -361,7 +380,10 @@ pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
         dst: ManuallyDrop<Dst>
     }
 
-    assert_unsafe_precondition!("`union_transmute` requires that `Src::SZ >= Dst::SZ`", <Src, Dst>() => Src::SZ >= Dst::SZ);
+    assert_unsafe_precondition!(
+        "`union_transmute` requires that `Src::SZ >= Dst::SZ`",
+        <Src, Dst>() => Src::SZ >= Dst::SZ
+    );
 
     ManuallyDrop::into_inner(Either { src: ManuallyDrop::new(src) }.dst)
 }
@@ -382,7 +404,12 @@ pub unsafe fn union_transmute<Src: ::core::marker::Copy, Dst: ::core::marker::Co
         dst: Dst
     }
 
-    assert_unsafe_precondition!(noconst, "`union_transmute` requires that `Src::SZ >= Dst::SZ`", <Src, Dst>() => Src::SZ >= Dst::SZ);
+    assert_unsafe_precondition!(
+        noconst,
+        "`union_transmute` requires that `Src::SZ >= Dst::SZ`",
+        <Src, Dst>()
+            => Src::SZ >= Dst::SZ
+    );
 
     Either { src }.dst
 }

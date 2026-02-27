@@ -3,12 +3,8 @@
 #![warn(unknown_lints)]
 
 use {
-    crate::{helpers::is_multiple_of, traits::data::type_props::SizedProps},
-    ::core::{
-        ffi::c_void,
-        ptr::{self, null_mut}
-    },
-    ::libc::{c_int, uintptr_t}
+    ::core::{ffi::c_void, ptr::null_mut},
+    ::libc::c_int
 };
 
 #[cfg(any(
@@ -122,45 +118,9 @@ compile_error!("this platform is missing a value for `MIN_ALIGN`");
 /// The minimum alignment returned by the platform's [`malloc`].
 pub const MIN_ALIGN: usize = 1;
 
-const NULL: *mut c_void = null_mut();
-
-// TODO: maybe inline or just replace the singular calls to these functions with them
-
-/// Allocates `size` bytes with at least `align` alignment.
-///
-/// The closest Rust equivalent is [`alloc`](::stdalloc::alloc::alloc).
-///
-/// On non-Windows platforms this forwards to `posix_memalign`, which requires `align` to be a
-/// power of two and a multiple of `size_of::<*mut c_void>()`, and `size` to be a multiple of
-/// `align`.
-///
-/// # Returns
-///
-/// - On success returns a nonnull pointer to the allocated memory.
-/// - On allocation failure returns `NULL`.
-///
-/// # Safety
-///
-/// The caller must ensure:
-/// - `align` is a power of two and a multiple of <code>[size_of](::core::mem::size_of)::<*mut
-///   [c_void]>()</code>.
-/// - `size` is non-zero.
-#[must_use = "this function allocates memory on success, and dropping the returned pointer will \
-              leak memory"]
-pub unsafe fn c_alloc(align: usize, size: usize) -> (*mut c_void, c_int) {
-    assert_unsafe_precondition!(noconst, "`c_alloc` requires that `align` is a power of two and a multiple of `size_of::<*mut c_void>()`, and `size` is non-zero", (align: usize = align, size: usize = size) => size > 0 && align.is_power_of_two() && is_multiple_of(align, uintptr_t::SZ));
-    if size_align_check(size, align) {
-        // SAFETY: requirements are passed on to caller
-        unsafe { c_alloc_spec(align, size) }
-    } else {
-        // SAFETY: requirements are passed on to caller
-        unsafe { (malloc(size), 0) }
-    }
-}
-
 #[cfg(all(not(any(target_os = "horizon", target_os = "vita")), not(windows)))]
 #[inline(always)]
-unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
+pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
     #[cfg(target_vendor = "apple")]
     {
         if align > (1 << 31) {
@@ -168,110 +128,33 @@ unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
             return (NULL, 22);
         }
     }
-    let mut out = NULL;
+    let mut out = null_mut();
     // SAFETY: requirements are passed onto the caller
     let ret = unsafe { posix_memalign(&mut out as *mut *mut c_void, align, size) };
     (out, ret)
 }
 #[cfg(windows)]
 #[inline(always)]
-unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
+pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
     // SAFETY: requirements are passed onto the caller
     (unsafe { _aligned_malloc(size, align) }, 0)
 }
 #[cfg(any(target_os = "horizon", target_os = "vita"))]
 #[inline(always)]
-unsafe fn c_alloc_spec(layout: &Layout) -> *mut c_void {
+pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> *mut c_void {
     // SAFETY: requirements are passed onto the caller
     (unsafe { memalign(layout.align(), layout.size()) }, 0)
 }
 
 #[cfg(windows)]
 #[inline(always)]
-const fn size_align_check(_: usize, align: usize) -> bool {
+pub(crate) const fn size_align_check(_: usize, align: usize) -> bool {
     align > MIN_ALIGN
 }
 #[cfg(not(windows))]
 #[inline(always)]
-const fn size_align_check(size: usize, align: usize) -> bool {
+pub(crate) const fn size_align_check(size: usize, align: usize) -> bool {
     align > MIN_ALIGN && size >= align
-}
-
-/// Allocates `size` bytes with at least `align` alignment and zeroes the allocation.
-///
-/// # Returns
-///
-/// - On success returns a nonnull pointer to `size` bytes of memory which are guaranteed to be
-///   zeroed.
-/// - On allocation failure returns `NULL`.
-///
-/// # Safety
-///
-/// The caller must ensure:
-/// - `align` is a power of two and a multiple of <code>[size_of](::core::mem::size_of)::<*mut
-///   [c_void]>()</code>.
-/// - `size` is non-zero.
-#[must_use = "this function allocates memory on success, and dropping the returned pointer will \
-              leak memory"]
-pub unsafe fn c_zalloc(align: usize, size: usize) -> (*mut c_void, c_int) {
-    assert_unsafe_precondition!(noconst, "`c_alloc` requires that `align` is a power of two and a multiple of `size_of::<*mut c_void>()`, and `size` is non-zero", (align: usize = align, size: usize = size) => size > 0 && align.is_power_of_two() && is_multiple_of(align, uintptr_t::SZ));
-    if size_align_check(size, align) {
-        // SAFETY: requirements are passed on to caller
-        let (ptr, status) = unsafe { c_alloc_spec(align, size) };
-        // zero memory if allocation was successful
-        if ptr != NULL {
-            // SAFETY: `ptr` is nonnull, and at least `size` bytes in length.
-            unsafe {
-                ptr::write_bytes(ptr, 0, size);
-            }
-        }
-        (ptr, status)
-    } else {
-        // SAFETY: requirements are passed on to caller
-        (unsafe { calloc(1, size) }, 0)
-    }
-}
-
-/// Frees memory previously returned by [`c_alloc`], [`c_zalloc`], [`malloc`], [`calloc`], or
-/// [`realloc`].
-///
-/// The closest Rust equivalent is [`dealloc`](::stdalloc::alloc::dealloc).
-///
-/// # Safety
-///
-/// The caller must ensure:
-/// - `ptr` points to the start of a valid allocation returned by an allocation function listed
-///   above, or is `NULL`.
-/// - `ptr` has not yet been deallocated.
-// ok time to vent finding this bug. _align and _size were swapped here, causing heap corruption in
-// the windows branch because it would call the wrong free.
-// AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH
-// AHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH THIS TOOK ME WAY TOO LONG
-pub unsafe fn c_dealloc(ptr: *mut c_void, _align: usize, _size: usize) {
-    #[cfg(windows)]
-    {
-        #[allow(clippy::used_underscore_binding)]
-        if size_align_check(_size, _align) {
-            // SAFETY: requirements are passed onto the caller; as align > MIN_ALIGN,
-            // _aligned_{malloc,realloc} was used so _aligned_free works.
-            unsafe {
-                _aligned_free(ptr);
-            }
-        } else {
-            // SAFETY: requirements are passed onto the caller; as align <= MIN_ALIGN,
-            // {malloc,calloc} was used so free works.
-            unsafe {
-                free(ptr);
-            }
-        }
-    }
-    #[cfg(not(windows))]
-    {
-        // SAFETY: requirements are passed on to the caller; free works for all allocation methods
-        unsafe {
-            free(ptr);
-        }
-    }
 }
 
 // public in case the user wants them for some reason

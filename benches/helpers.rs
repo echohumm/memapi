@@ -268,9 +268,9 @@ fn null_q_variants(c: &mut Criterion) {
 
 fn ptr_props(c: &mut Criterion) {
     macro_rules! benches {
-        ($($v:ident),*) => {
+        ($c:ident. $($v:ident),*) => {
             $(
-                let mut group = c.benchmark_group(concat!("ptr_props/", stringify!($v)));
+                let mut group = $c.benchmark_group(concat!("ptr_props/", stringify!($v)));
                 group.bench_function("sz", |b| {
                     b.iter(|| {
                         let _ = black_box(unsafe { $v.sz() });
@@ -322,7 +322,7 @@ fn ptr_props(c: &mut Criterion) {
     let arc_dummy: Arc<str> = Arc::from(dummy.as_str());
     let rc_dummy: Rc<str> = Rc::from(dummy.as_str());
 
-    benches! { r, p, mp, nn, boxed_dummy, arc_dummy, rc_dummy }
+    benches! { c.  r, p, mp, nn, boxed_dummy, arc_dummy, rc_dummy }
 }
 
 fn main() {

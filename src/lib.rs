@@ -82,12 +82,11 @@
 // TODO: consider behavior of all allocation methods in all possible cases for all allocators and
 //  make sure they match and make sense
 
-extern crate core;
-extern crate rustversion;
-
-extern crate libc;
-
 #[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
+extern crate bitflags;
+extern crate core;
+extern crate libc;
+extern crate rustversion;
 #[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;
 
 /// A relatively minimal prelude containing the most common, important things from this crate.
@@ -97,12 +96,9 @@ extern crate libc;
 pub mod prelude {
     pub use crate::{
         // default allocator and layout are necessary
-        DefaultAlloc,
         error::Error,
         layout::Layout,
-        // traits are useful as well
         traits::{
-            AllocError,
             alloc::{Alloc, BasicAlloc, Dealloc, FullAlloc, Grow, Realloc, Shrink},
             alloc_mut::{
                 AllocMut,
@@ -114,10 +110,13 @@ pub mod prelude {
                 ShrinkMut
             },
             data::{
-                type_props::{PtrProps, SizedProps},
-                marker::UnsizedCopy
-            }
-        }
+                marker::UnsizedCopy,
+                type_props::{PtrProps, SizedProps}
+            },
+            AllocDescriptor
+        },
+        // traits are useful as well
+        DefaultAlloc
     };
 
     // alloc_temp trait too if the feature is on
@@ -131,8 +130,10 @@ pub mod prelude {
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 macro_rules! default_alloc_impl {
     ($ty:ty) => {
-        impl crate::traits::AllocError for $ty {
+        impl crate::traits::AllocDescriptor for $ty {
             type Error = crate::error::Error;
+            
+            const FEATURES: crate::traits::AllocFeatures = crate::traits::AllocFeatures::DEALLOC;
         }
 
         impl crate::traits::alloc::Alloc for $ty {
@@ -223,7 +224,9 @@ macro_rules! tri {
     (from $e:ty, $($fallible:expr)+) => {
         match $($fallible)+ {
             ::core::result::Result::Ok(s) => s,
-            ::core::result::Result::Err(e) => return ::core::result::Result::Err(<$e as ::core::convert::From<Error>>::from(e)),
+            ::core::result::Result::Err(e) => { 
+                 return ::core::result::Result::Err(<$e as ::core::convert::From<Error>>::from(e))
+            }
         }
     }
 }
@@ -253,7 +256,13 @@ macro_rules! default_dealloc {
 
 // WIP
 macro_rules! assert_unsafe_precondition {
-    (noconst, $message:expr, $(<$($gen:ident $(: [$($req:tt)+])?),*>)?($($name:ident : $ty:ty = $arg:expr),* $(,)?) => $($e:tt)+) => {
+    (
+        noconst,
+        $message:expr,
+        $(<$($gen:ident $(: [$($req:tt)+])?),*>)?
+        ($($name:ident : $ty:ty = $arg:expr),* $(,)?)
+            => $($e:tt)+
+    ) => {
         #[cfg(debug_assertions)]
         {
             #[track_caller]
@@ -266,7 +275,12 @@ macro_rules! assert_unsafe_precondition {
             precondition_check$(::<$($gen),*>)?($($arg,)*);
         }
     };
-    ($message:expr, $(<$($gen:ident $(: [$($req:tt)+])?),*>)?($($name:ident : $ty:ty = $arg:expr),* $(,)?) => $($e:tt)+) => {
+    (
+        $message:expr,
+        $(<$($gen:ident $(: [$($req:tt)+])?),*>)?
+        ($($name:ident : $ty:ty = $arg:expr),* $(,)?)
+            => $($e:tt)+
+    ) => {
         #[cfg(debug_assertions)]
         {
             #[::rustversion::since(1.57)]
