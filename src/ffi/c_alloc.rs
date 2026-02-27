@@ -3,7 +3,7 @@
 #![warn(unknown_lints)]
 
 use {
-    ::core::{ffi::c_void, ptr::null_mut},
+    ::core::{ffi::c_void},
     ::libc::c_int
 };
 
@@ -125,10 +125,10 @@ pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_
     {
         if align > (1 << 31) {
             // 22 is the errno for EINVAL
-            return (null_mut(), 22);
+            return (::core::ptr::null_mut(), 22);
         }
     }
-    let mut out = null_mut();
+    let mut out = ::core::ptr::null_mut();
     // SAFETY: requirements are passed onto the caller
     let ret = unsafe { posix_memalign(&mut out as *mut *mut c_void, align, size) };
     (out, ret)

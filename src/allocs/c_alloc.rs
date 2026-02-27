@@ -128,7 +128,7 @@ impl Dealloc for CAlloc {
                     // SAFETY: requirements are passed onto the caller; as align > MIN_ALIGN,
                     // _aligned_{malloc,realloc} was used so _aligned_free works.
                     unsafe {
-                        _aligned_free(ptr);
+                        ffi::_aligned_free(ptr);
                     }
                 } else {
                     // SAFETY: requirements are passed onto the caller; as align <= MIN_ALIGN,
