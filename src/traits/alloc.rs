@@ -122,35 +122,6 @@ pub trait Dealloc: Alloc + DeallocMut {
         &self,
         ptr: NonNull<u8>,
         layout: Layout
-
-    /// Attempts to deallocate a previously allocated block after performing validity checks.
-    ///
-    /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-    /// [dangling](ptr::dangling).
-    ///
-    /// This method must return an error rather than silently accepting the deallocation and
-    /// potentially causing UB.
-    ///
-    /// Note that the default for this method simply returns <code>Err([Error::Unsupported])</code>.
-    ///
-    /// # Errors
-    ///
-    /// Implementations commonly return:
-    /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
-    /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If the
-    ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
-    ///   wrapping a type which implements [`AllocMut`], a generic error message will also be
-    ///   returned if locking the primitive fails.
-    ///
-    /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
-    /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
-    fn checked_dealloc(
-        &self,
-        _ptr: NonNull<u8>,
-        _layout: Layout
-    ) -> Result<(), <Self as AllocError>::Error> {
-        Err(<Self as AllocError>::Error::from(Error::Unsupported))
-    }
     ) -> Result<(), <Self as AllocDescriptor>::Error>;
 }
 

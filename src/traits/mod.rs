@@ -57,6 +57,8 @@ pub mod alloc;
 /// Due to this, they are also broader than the [`alloc`] traits.
 pub mod alloc_mut;
 
+#[cfg(feature = "checked_ops")] pub mod alloc_checked;
+
 #[cfg(feature = "alloc_temp_trait")]
 /// A trait for scoped allocation, like C's `alloca`.
 pub mod alloc_temp;
