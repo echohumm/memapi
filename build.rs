@@ -1,28 +1,37 @@
 #![allow(unknown_lints, clippy::undocumented_unsafe_blocks)]
 
+#[::rustversion::since(1.80)]
+fn rustc_cfg() {
+    println!("cargo:rustc-check-cfg=cfg(nightly)");
+}
+#[::rustversion::before(1.80)]
+fn rustc_cfg() {
+    // noop
+}
+
+#[::rustversion::nightly]
+#[allow(dead_code)]
+const fn is_nightly() -> bool {
+    true
+}
+#[::rustversion::not(nightly)]
+#[allow(dead_code)]
+const fn is_nightly() -> bool {
+    false
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-changed=src/ffi/c/calloca.c");
 
     let failures = run_checks();
     if failures.is_empty() {
-        println!("cargo:rustc-check-cfg=cfg(nightly)");
         // all success, now enable "nightly" if on the nightly toolchain
-        #[::rustversion::nightly]
-        #[allow(clippy::items_after_statements, dead_code)]
-        const fn is_nightly() -> bool {
-            true
-        }
-        #[::rustversion::not(nightly)]
-        #[allow(clippy::items_after_statements, dead_code)]
-        const fn is_nightly() -> bool {
-            false
-        }
+        rustc_cfg();
         #[cfg(not(feature = "no_nightly"))]
         if is_nightly() {
             println!("cargo:rustc-cfg=nightly");
         }
-
         #[cfg(feature = "stack_alloc")]
         {
             if let Err(e) = cc::Build::new().file("src/ffi/c/calloca.c").try_compile("calloca") {

@@ -97,6 +97,9 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
     /// [dangling](ptr::dangling).
     ///
+    /// Note that this function differs from checked deallocation in that it may still cause UB if
+    /// it receives invalid inputs.
+    ///
     /// # Safety
     ///
     /// The caller must ensure:
@@ -124,6 +127,8 @@ pub trait Dealloc: Alloc + DeallocMut {
         layout: Layout
     ) -> Result<(), <Self as AllocDescriptor>::Error>;
 }
+
+// TODO: we can probably dedup these like we did the ralloc helpers and checked traits
 
 /// A memory allocation interface which can also grow allocations.
 pub trait Grow: Alloc + Dealloc + GrowMut {

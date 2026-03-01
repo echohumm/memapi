@@ -166,7 +166,7 @@ macro_rules! impl_ptr_props_raw {
                             " as PtrProps>::sz` requires that `self` is non-null, non-dangling, \
                             and aligned"
                         ),
-                        <T: [?Sized]>(ptr: $name = *self) => !ptr.is_null()
+                        <T: [?Sized]>(ptr: $name = *self) => [!ptr.is_null()]
                     );
                     size_of_val::<T>(&**self)
                 }
@@ -180,7 +180,7 @@ macro_rules! impl_ptr_props_raw {
                             " as PtrProps>::aln` requires that `self` is non-null, non-dangling, \
                             and aligned"
                         ),
-                        <T: [?Sized]>(ptr: $name = *self) => !ptr.is_null()
+                        <T: [?Sized]>(ptr: $name = *self) => [!ptr.is_null()]
                     );
                     align_of_val::<T>(&**self)
                 }
@@ -195,7 +195,7 @@ macro_rules! impl_ptr_props_raw {
                             " as PtrProps>::metadata` requires that `self` is non-null, \
                             non-dangling, and aligned"
                         ),
-                        <T: [?Sized]>(ptr: $name = *self) => !ptr.is_null()
+                        <T: [?Sized]>(ptr: $name = *self) => [!ptr.is_null()]
                     );
                     ::core::ptr::metadata(&**self)
                 }
@@ -212,7 +212,7 @@ macro_rules! impl_ptr_props_raw {
                             `usize` metadata."
                         ),
                         <T: [?Sized]>(ptr: $name = *self)
-                            => !ptr.is_null() && <$name>::SZ == usize::SZ * 2
+                            => [!ptr.is_null() && <$name>::SZ == usize::SZ * 2]
                     );
                     split_varsized_ptr(*self).1
                 }
@@ -252,7 +252,7 @@ macro_rules! impl_ptr_props_identity {
                         ),
                         <T: [?Sized]>()
                             // no need for null check as this is for a reference
-                            => <$name>::SZ == usize::SZ * 2
+                            => [<$name>::SZ == usize::SZ * 2]
                     );
                     split_varsized_ptr(*self).1
                 }
@@ -293,7 +293,7 @@ macro_rules! impl_ptr_props_deref {
                         ),
                         <T: [?Sized]>()
                             // no need for null check as this is for a deref'd smart pointer
-                            => <$name>::SZ == usize::SZ * 2
+                            => [<$name>::SZ == usize::SZ * 2]
                     );
                     split_varsized_ptr(&**self).1
                 }
@@ -332,7 +332,7 @@ impl<T: ::core::clone::Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
             concat!(
                 "`<Cow<'_, T> as PtrProps>::varsized_metadata` should not be called.",
             ),
-            () => false
+            () => [false]
         );
         // SAFETY: as `T: Sized`, it cannot be `VarSized` unless an implementor breaks `VarSized`'s
         // safety contract

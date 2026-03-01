@@ -150,7 +150,7 @@ pub const unsafe fn align_up(v: usize, align: usize) -> usize {
         "`align_up` requires that `align` is a non-zero power of two and that `v + (align - 1)` \
         does not overflow.",
         (align: usize = align, v: usize = v)
-            => align.is_power_of_two() && v <= usize::MAX - (align - 1)
+            => [align.is_power_of_two() && v <= usize::MAX - (align - 1)]
     );
     let m1 = align - 1;
     (v + m1) & !m1
@@ -291,8 +291,7 @@ pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
 ) -> Result<NonNull<u8>, Error> {
     if layout.is_zsl() { Err(Error::ZeroSizedLayout) } else { null_q_dyn(f(layout), layout) }
 }
-// TODO: lower const msrv and generally improve these. will require some testing regarding effects
-//  of current and alternative implementations on provenance
+// TODO: lower const msrv and generally improve these
 #[::rustversion::since(1.75)]
 /// Subtracts `n` bytes from a pointer's address.
 ///
@@ -319,6 +318,7 @@ pub const unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
 /// - the resulting pointer will be within the same allocation as `p`
 /// - the resulting pointer's metadata remains valid for the new address
 pub unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
+    // a bit convoluted, but as we dont know the meta type of T, we can't do any better
     let mut p = p;
     let addr_ptr = (&mut p as *mut *const T).cast::<usize>();
     // SAFETY: the pointer is valid as it is from a &mut.
@@ -382,7 +382,7 @@ pub unsafe fn union_transmute<Src, Dst>(src: Src) -> Dst {
 
     assert_unsafe_precondition!(
         "`union_transmute` requires that `Src::SZ >= Dst::SZ`",
-        <Src, Dst>() => Src::SZ >= Dst::SZ
+        <Src, Dst>() => [Src::SZ >= Dst::SZ]
     );
 
     ManuallyDrop::into_inner(Either { src: ManuallyDrop::new(src) }.dst)
@@ -408,7 +408,7 @@ pub unsafe fn union_transmute<Src: ::core::marker::Copy, Dst: ::core::marker::Co
         noconst,
         "`union_transmute` requires that `Src::SZ >= Dst::SZ`",
         <Src, Dst>()
-            => Src::SZ >= Dst::SZ
+            => [Src::SZ >= Dst::SZ]
     );
 
     Either { src }.dst

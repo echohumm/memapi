@@ -141,7 +141,7 @@ pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_
 }
 #[cfg(any(target_os = "horizon", target_os = "vita"))]
 #[inline(always)]
-pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> *mut c_void {
+pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> (*mut c_void, c_int) {
     // SAFETY: requirements are passed onto the caller
     (unsafe { memalign(layout.align(), layout.size()) }, 0)
 }

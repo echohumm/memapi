@@ -64,6 +64,7 @@ fn stack_alloc() {
     }
 }
 
+#[cfg(not(feature = "catch_unwind"))]
 #[::rustversion::since(1.71)]
 #[test]
 #[should_panic = "no UB? yippee!"]
@@ -72,7 +73,23 @@ fn stack_alloc_unwind() {
         assert!(
             StackAlloc
                 .alloc_temp::<(), _>(Layout::from_size_align(8, 8).unwrap(), |ptr| {
-                    ptr.cast::<u64>().write(0xAAAAAAAAAAAAAAAA);
+                    core::ptr::write(ptr.as_ptr().cast::<u64>(), 0xAAAAAAAAAAAAAAAA);
+                    panic!("no UB? yippee!");
+                })
+                .is_ok()
+        );
+    }
+}
+
+#[cfg(feature = "catch_unwind")]
+#[test]
+#[should_panic = "no UB? yippee!"]
+fn stack_alloc_unwind() {
+    unsafe {
+        assert!(
+            StackAlloc
+                .alloc_temp::<(), _>(Layout::from_size_align(8, 8).unwrap(), |ptr| {
+                    core::ptr::write(ptr.as_ptr().cast::<u64>(), 0xAAAAAAAAAAAAAAAA);
                     panic!("no UB? yippee!");
                 })
                 .is_ok()

@@ -121,7 +121,7 @@ impl Layout {
         assert_unsafe_precondition!(
             "`Layout::array_unchecked` requires that `T::SZ * n` rounded up to `T::ALN` will not \
              exceed `USIZE_MAX_NO_HIGH_BIT`.",
-            <T>(n: usize = n) => T::SZ == 0 || n <= (USIZE_HIGH_BIT - T::ALN) / T::SZ
+            <T>(n: usize = n) => [T::SZ == 0 || n <= (USIZE_HIGH_BIT - T::ALN) / T::SZ]
         );
         Layout::from_size_align_unchecked(T::SZ * n, T::ALN)
     }
@@ -200,7 +200,7 @@ impl Layout {
         assert_unsafe_precondition!(
             noconst,
             "`Layout::for_value_raw` requires that `ptr` is non-null.",
-            <T: [?Sized]>(ptr: *const T = ptr) => !ptr.is_null()
+            <T: [?Sized]>(ptr: *const T = ptr) => [!ptr.is_null()]
         );
         // SAFETY: caller guarantees that `ptr` meets the safety constraints of `layout()`.
         unsafe { ptr.layout() }
@@ -323,7 +323,7 @@ impl Layout {
             "`Layout::from_size_align_unchecked` requires that `align` is a non-zero power of two \
              and `size` rounded up to `align` does not exceed `USIZE_MAX_NO_HIGH_BIT`.",
             (size: usize = size, align: usize = align) 
-                => ::core::matches!(align_up_checks(size, align), Ok(()))
+                => [::core::matches!(align_up_checks(size, align), Ok(()))]
         );
         Layout { size, align }
     }

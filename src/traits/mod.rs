@@ -57,7 +57,10 @@ pub mod alloc;
 /// Due to this, they are also broader than the [`alloc`] traits.
 pub mod alloc_mut;
 
-#[cfg(feature = "checked_ops")] pub mod alloc_checked;
+#[cfg(feature = "checked_ops")]
+/// Traits containing checked versions of unsafe allocation functions, which *must* return an error
+/// if passed an invalid argument instead of causing UB.
+pub mod alloc_checked;
 
 #[cfg(feature = "alloc_temp_trait")]
 /// A trait for scoped allocation, like C's `alloca`.

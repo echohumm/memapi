@@ -42,7 +42,7 @@
 //!
 //! # Feature flags
 //! - `no_alloc` disables usage of the rust `alloc` crate; `std` crate is used instead if the `std`
-//!   feature is enabled.
+//!   feature is enabled
 //! - `std`: enables `std` integration (including [`System`](::std::alloc::System))
 //! - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
 //! - `alloc_temp_trait`: scoped/temporary allocation trait
@@ -191,6 +191,7 @@ macro_rules! default_alloc_impl {
     };
 }
 
+// TODO: test actual speed and binsize difference of this vs. ?
 /// This macro is theoretically faster than `<fallible>?`.
 macro_rules! tri {
     (::$err:ident $($fallible:expr)+) => {
@@ -258,12 +259,41 @@ macro_rules! default_dealloc {
 
 // WIP
 macro_rules! assert_unsafe_precondition {
+        (
+        noconst,
+        $message:expr,
+        $(<$($gen:ident $(: [$($req:tt)+])?),*>)?
+        ($($name:ident : $ty:ty = $arg:expr),* $(,)?)
+            => [$($e:tt)+],
+        $msrv:expr => [$($msrv_e:tt)+]
+    ) => {
+        #[cfg(debug_assertions)]
+        {
+            #[track_caller]
+            fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
+                #[::rustversion::since($msrv)]
+                fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
+                    !($($msrv_e)+)
+                }
+                #[::rustversion::before($msrv)]
+                fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
+                    false
+                }
+
+                if !($($e)+) || extra_check$(::<$($gen),*>)?($($arg,)*) {
+                    ::core::panic!(concat!("unsafe precondition(s) violated: ", $message));
+                }
+            }
+
+            precondition_check$(::<$($gen),*>)?($($arg,)*);
+        }
+    };
     (
         noconst,
         $message:expr,
         $(<$($gen:ident $(: [$($req:tt)+])?),*>)?
         ($($name:ident : $ty:ty = $arg:expr),* $(,)?)
-            => $($e:tt)+
+            => [$($e:tt)+]
     ) => {
         #[cfg(debug_assertions)]
         {
@@ -281,7 +311,41 @@ macro_rules! assert_unsafe_precondition {
         $message:expr,
         $(<$($gen:ident $(: [$($req:tt)+])?),*>)?
         ($($name:ident : $ty:ty = $arg:expr),* $(,)?)
-            => $($e:tt)+
+            => [$($e:tt)+],
+        $msrv:expr => [$($msrv_e:tt)+]
+    ) => {
+        #[cfg(debug_assertions)]
+        {
+            #[::rustversion::since(1.57)]
+            #[track_caller]
+            const fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
+                #[::rustversion::since($msrv)]
+                fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
+                    !($($msrv_e)+)
+                }
+                #[::rustversion::before($msrv)]
+                fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
+                    false
+                }
+
+                if !($($e)+) || extra_check$(::<$($gen),*>)?($($arg,)*) {
+                    ::core::panic!(concat!("unsafe precondition(s) violated: ", $message));
+                }
+            }
+
+            #[::rustversion::before(1.57)]
+            const fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
+                let _ = ($($arg,)*);
+            }
+
+            precondition_check$(::<$($gen),*>)?($($arg,)*);
+        }
+    };
+    (
+        $message:expr,
+        $(<$($gen:ident $(: [$($req:tt)+])?),*>)?
+        ($($name:ident : $ty:ty = $arg:expr),* $(,)?)
+            => [$($e:tt)+]
     ) => {
         #[cfg(debug_assertions)]
         {
@@ -295,7 +359,6 @@ macro_rules! assert_unsafe_precondition {
 
             #[::rustversion::before(1.57)]
             const fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
-                // cannot panic in const fn prior to 1.57, do nothing.
                 let _ = ($($arg,)*);
             }
 
