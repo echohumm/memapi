@@ -193,7 +193,7 @@ pub struct ArithErr(pub usize, pub ArithOp, pub usize);
 
 impl Display for ArithErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "arithmetic operation would overflow: {} {} {}", self.0, self.1, self.2)
+        write!(f, "arithmetic operation would overflow: {}.{}({})", self.0, self.1, self.2)
     }
 }
 
@@ -222,14 +222,13 @@ pub enum ArithOp {
 impl Display for ArithOp {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            ArithOp::Add => write!(f, "+"),
-            ArithOp::Sub => write!(f, "-"),
-            ArithOp::Mul => write!(f, "*"),
-            ArithOp::Div => write!(f, "/"),
-            // TODO: better display
+            ArithOp::Add => write!(f, "add"),
+            ArithOp::Sub => write!(f, "sub"),
+            ArithOp::Mul => write!(f, "mul"),
+            ArithOp::Div => write!(f, "div"),
             ArithOp::DivCeil => write!(f, "div_ceil"),
-            ArithOp::Rem => write!(f, "%"),
-            ArithOp::Pow => write!(f, "**")
+            ArithOp::Rem => write!(f, "rem"),
+            ArithOp::Pow => write!(f, "pow")
         }
     }
 }

@@ -257,7 +257,6 @@ macro_rules! default_dealloc {
     };
 }
 
-// WIP
 macro_rules! assert_unsafe_precondition {
         (
         noconst,
