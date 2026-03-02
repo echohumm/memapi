@@ -66,18 +66,26 @@ jobs:
       if: matrix.build-mode == 'manual'
       shell: bash
       run: |
-        set -euo pipefail
-
+        set -euxo pipefail
+        
         # make sure the system C toolchain is available
-        apt-get update
-        apt-get install -y build-essential pkg-config
+        sudo apt-get update
+        sudo apt-get install -y build-essential pkg-config
 
         # show some debug info
-        gcc --version || true
-        ls -l src/ffi || true
-        ls -l src/ffi/c || true
+        which gcc
+        gcc --version
+        echo "repo tree (src/ffi):"
+        ls -la src/ffi || true
+        ls -la src/ffi/c || true
 
-        # build the Rust project so build.rs builds calloca.c
+        # compile
+        mkdir -p build
+        if [ -f src/ffi/c/calloca.c ]; then
+          gcc -c -fPIC -I. -o build/calloca.o src/ffi/c/calloca.c
+        fi
+
+        # also build with the build.rs
         cargo build --locked --verbose --features stack_alloc
 
     - name: Perform CodeQL Analysis
