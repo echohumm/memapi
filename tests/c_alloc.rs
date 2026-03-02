@@ -146,8 +146,8 @@ fn test_alloc_dealloc_var_alignments() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for size in aligns {
-        for align in aligns {
+    for &size in &aligns {
+        for &align in &aligns {
             println!("sz: {}, align: {}", size, align);
             let layout = Layout::from_size_align(size, align).unwrap();
             let ptr = a.alloc(layout).expect("alloc failed");
@@ -181,8 +181,8 @@ fn test_grow_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for old_align in aligns {
-        for new_align in aligns {
+    for &old_align in &aligns {
+        for &new_align in &aligns {
             // pick sizes such that new_size > old_size to exercise grow/zgrow
             let old_size = old_align;
             let new_size = cmp::max(old_size + 1, new_align * 2);
@@ -246,8 +246,8 @@ fn test_zgrow_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for old_align in aligns {
-        for new_align in aligns {
+    for &old_align in &aligns {
+        for &new_align in &aligns {
             // pick sizes such that new_size > old_size to exercise grow/zgrow
             let old_size = old_align;
             let new_size = cmp::max(old_size + 1, new_align * 4);
@@ -320,8 +320,8 @@ fn test_shrink_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for old_align in aligns {
-        for new_align in aligns {
+    for &old_align in &aligns {
+        for &new_align in &aligns {
             // pick sizes such that old_size > new_size to exercise shrink
             let new_size = new_align;
             let old_size = cmp::max(new_size + 1, old_align * 4);
