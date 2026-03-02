@@ -86,7 +86,7 @@ jobs:
         fi
 
         # also build with the build.rs
-        cargo build --locked --verbose --features stack_alloc
+        cargo build --verbose --features stack_alloc
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v4
