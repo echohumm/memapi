@@ -1,7 +1,7 @@
 use {
     crate::{
         error::{Cause, Error},
-        ffi::c_alloc::{c_alloc_spec, calloc, free, malloc, size_align_check},
+        ffi::c_alloc::{MIN_ALIGN, c_alloc_spec, calloc, free, malloc, size_align_check},
         helpers::null_q_dyn,
         layout::Layout,
         traits::{
@@ -27,7 +27,14 @@ fn null_q_dyn_zsl_check_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
     if layout.is_zsl() {
         Err(Error::ZeroSizedLayout)
     } else {
-        let (ptr, status) = f(tri!(do layout.to_posix_memalign_compatible()));
+        let layout = tri!(do layout.to_posix_memalign_compatible());
+
+        assert_unsafe_precondition!(
+            noconst, "",
+            (layout: Layout = layout) => [layout.align().is_power_of_two()]
+        );
+
+        let (ptr, status) = f(layout);
         match status {
             0 => null_q_dyn(ptr, layout),
             code => {

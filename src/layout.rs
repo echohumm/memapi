@@ -30,6 +30,7 @@ const fn align_up_checks(val: usize, align: usize) -> Result<(), Error> {
     Ok(())
 }
 
+#[cfg_attr(any(miri, debug_assertions), track_caller)]
 const fn align_up_checked(size: usize, align: usize) -> Result<usize, Error> {
     tri!(do align_up_checks(size, align));
 
@@ -64,12 +65,14 @@ impl PartialEq<Layout> for StdLayout {
 }
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 impl From<StdLayout> for Layout {
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     fn from(layout: StdLayout) -> Layout {
         Layout::from_stdlib(layout)
     }
 }
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 impl From<Layout> for StdLayout {
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     fn from(layout: Layout) -> StdLayout {
         layout.to_stdlib()
     }
@@ -112,6 +115,7 @@ impl Layout {
     ///
     /// Additionally, the return value may be unexpected if <code>[T::SZ](SizedProps::SZ) * n</code>
     /// overflows.
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[must_use]
     #[inline]
     pub const unsafe fn array_unchecked<T>(n: usize) -> Layout {
@@ -193,6 +197,7 @@ impl Layout {
     /// - non-null
     /// - non-dangling
     /// - aligned
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[inline(always)]
     pub unsafe fn for_value_raw<T: ?Sized>(ptr: *const T) -> Layout {
         // no good way to check if a pointer is dangling/aligned without intrinsics/language
@@ -316,6 +321,7 @@ impl Layout {
     /// The caller must ensure:
     /// - `align` is a non-zero power of two.
     /// - `size` rounded up to `align` does not exceed [`USIZE_MAX_NO_HIGH_BIT`].
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[must_use]
     #[inline]
     pub const unsafe fn from_size_align_unchecked(size: usize, align: usize) -> Layout {

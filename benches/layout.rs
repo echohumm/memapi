@@ -122,7 +122,7 @@ fn array(c: &mut Criterion) {
 }
 
 fn repeat(c: &mut Criterion) {
-    let mut group = c.benchmark_group("array");
+    let mut group = c.benchmark_group("repeat");
 
     let u8 = u8::LAYOUT;
     let u32 = u32::LAYOUT;
@@ -150,7 +150,7 @@ fn repeat(c: &mut Criterion) {
 }
 
 fn repeat_packed(c: &mut Criterion) {
-    let mut group = c.benchmark_group("array");
+    let mut group = c.benchmark_group("repeat_packed");
 
     let u8 = u8::LAYOUT;
     let u32 = u32::LAYOUT;

@@ -313,16 +313,16 @@ fn ptr_props(c: &mut Criterion) {
     }
     let dummy = "string".to_string();
 
-    let r = dummy.as_str();
-    let p = r as *const str;
-    let mp = p as *mut str;
-    let nn = NonNull::new(mp).unwrap();
+    let refer = dummy.as_str();
+    let immut_ptr = refer as *const str;
+    let mut_ptr = immut_ptr as *mut str;
+    let nonnull = NonNull::new(mut_ptr).unwrap();
 
-    let boxed_dummy: Box<str> = Box::from(dummy.as_str());
-    let arc_dummy: Arc<str> = Arc::from(dummy.as_str());
-    let rc_dummy: Rc<str> = Rc::from(dummy.as_str());
+    let boxed: Box<str> = Box::from(dummy.as_str());
+    let arc: Arc<str> = Arc::from(dummy.as_str());
+    let rc: Rc<str> = Rc::from(dummy.as_str());
 
-    benches! { c.  r, p, mp, nn, boxed_dummy, arc_dummy, rc_dummy }
+    benches! { c. refer, immut_ptr, mut_ptr, nonnull, boxed, arc, rc }
 }
 
 fn main() {

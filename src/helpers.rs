@@ -143,6 +143,7 @@ pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
 /// of two. An overflow or underflow may also occur if:
 /// - `align == 0`
 /// - `v + (align - 1)` exceeds [`usize::MAX`]
+#[cfg_attr(any(miri, debug_assertions), track_caller)]
 #[must_use]
 #[inline]
 pub const unsafe fn align_up(v: usize, align: usize) -> usize {

@@ -76,6 +76,7 @@ mod checks {
     pub mod sp_frp {
         use {crate::Failure, ::core::ptr::NonNull};
 
+        #[cfg_attr(miri, track_caller)]
         pub fn check() -> Vec<Failure> {
             let mut failures = Vec::<Failure>::new();
             let i = 4;
@@ -149,21 +150,25 @@ mod checks {
         }
 
         // from the crate
+        #[cfg_attr(miri, track_caller)]
         #[must_use]
         fn nonnull_slice_len<T>(ptr: NonNull<[T]>) -> usize {
             unsafe { (&*ptr.as_ptr()).len() }
         }
 
+        #[cfg_attr(miri, track_caller)]
         #[must_use]
         fn nonnull_slice_from_parts<T>(p: NonNull<T>, len: usize) -> NonNull<[T]> {
             unsafe { NonNull::new_unchecked(slice_ptr_from_parts(p.as_ptr(), len)) }
         }
 
+        #[cfg_attr(miri, track_caller)]
         #[must_use]
         fn slice_ptr_from_parts<T>(p: *mut T, len: usize) -> *mut [T] {
             unsafe { union_transmute((p, len)) }
         }
 
+        #[cfg_attr(miri, track_caller)]
         unsafe fn union_transmute<Src: Copy, Dst: Copy>(src: Src) -> Dst {
             union Either<Src: Copy, Dst: Copy> {
                 src: Src,

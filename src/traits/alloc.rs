@@ -261,6 +261,7 @@ pub trait Shrink: Alloc + Dealloc + ShrinkMut {
     /// [last_os_error]: ::std::io::Error::last_os_error
     /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn shrink(
         &self,
         ptr: NonNull<u8>,
@@ -415,6 +416,8 @@ macro_rules! impl_alloc_ref {
                 (**self).dealloc(ptr, layout);
             }
 
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
             unsafe fn try_dealloc(
                 &self,
                 ptr: NonNull<u8>,
@@ -525,12 +528,16 @@ impl Alloc for ::std::alloc::System {
 }
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Dealloc for ::std::alloc::System {
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
         if !layout.is_zsl() && ptr != layout.dangling() {
             ::stdalloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
         }
     }
 
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
         self.dealloc(ptr, layout);
         ::core::result::Result::Ok(())

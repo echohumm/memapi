@@ -146,30 +146,32 @@ fn test_alloc_dealloc_var_alignments() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for &align in &aligns {
-        let size = align * 2;
-        let layout = Layout::from_size_align(size, align).unwrap();
-        let ptr = a.alloc(layout).expect("alloc failed");
-        unsafe {
-            // fill with a distinctive pattern per alignment
-            let pat = (align as u8).wrapping_mul(3).wrapping_add(1);
-            ptr::write_bytes(ptr.as_ptr(), pat, layout.size());
+    for size in aligns {
+        for align in aligns {
+            println!("sz: {}, align: {}", size, align);
+            let layout = Layout::from_size_align(size, align).unwrap();
+            let ptr = a.alloc(layout).expect("alloc failed");
+            unsafe {
+                // fill with a distinctive pattern per alignment
+                let pat = (align as u8).wrapping_mul(3).wrapping_add(1);
+                ptr::write_bytes(ptr.as_ptr(), pat, layout.size());
 
-            for i in 0..layout.size() {
-                assert_eq!(*ptr.as_ptr().add(i), pat, "mismatch at align {} byte {}", align, i);
+                for i in 0..layout.size() {
+                    assert_eq!(*ptr.as_ptr().add(i), pat, "mismatch at align {} byte {}", align, i);
+                }
+
+                // pointer must satisfy alignment
+                let p_usize = ptr.as_ptr() as usize;
+                assert_eq!(
+                    p_usize % align,
+                    0,
+                    "returned pointer {:p} not aligned to {}",
+                    ptr.as_ptr(),
+                    align
+                );
+
+                a.dealloc(ptr, layout);
             }
-
-            // pointer must satisfy alignment
-            let p_usize = ptr.as_ptr() as usize;
-            assert_eq!(
-                p_usize % align,
-                0,
-                "returned pointer {:p} not aligned to {}",
-                ptr.as_ptr(),
-                align
-            );
-
-            a.dealloc(ptr, layout);
         }
     }
 }
@@ -179,11 +181,11 @@ fn test_grow_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for &old_align in &aligns {
-        for &new_align in &aligns {
+    for old_align in aligns {
+        for new_align in aligns {
             // pick sizes such that new_size > old_size to exercise grow/zgrow
-            let old_size = old_align * 2;
-            let new_size = cmp::max(old_size + 1, new_align * 4);
+            let old_size = old_align;
+            let new_size = cmp::max(old_size + 1, new_align * 2);
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();
 
@@ -244,10 +246,10 @@ fn test_zgrow_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for &old_align in &aligns {
-        for &new_align in &aligns {
+    for old_align in aligns {
+        for new_align in aligns {
             // pick sizes such that new_size > old_size to exercise grow/zgrow
-            let old_size = old_align * 2;
+            let old_size = old_align;
             let new_size = cmp::max(old_size + 1, new_align * 4);
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();
@@ -318,10 +320,10 @@ fn test_shrink_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
-    for &old_align in &aligns {
-        for &new_align in &aligns {
+    for old_align in aligns {
+        for new_align in aligns {
             // pick sizes such that old_size > new_size to exercise shrink
-            let new_size = cmp::max(1, new_align * 2);
+            let new_size = new_align;
             let old_size = cmp::max(new_size + 1, old_align * 4);
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();

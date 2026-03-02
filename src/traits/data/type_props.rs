@@ -73,6 +73,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[must_use]
     #[inline]
     unsafe fn layout(&self) -> Layout {
@@ -100,6 +101,7 @@ pub trait PtrProps<T: ?Sized> {
 
     #[cfg(feature = "metadata")]
     /// Gets the metadata of a [`VarSized`] value.
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[must_use]
     fn varsized_metadata(&self) -> usize
     where
@@ -126,6 +128,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[must_use]
     #[inline]
     unsafe fn is_zero_sized(&self) -> bool {
@@ -142,6 +145,7 @@ pub trait PtrProps<T: ?Sized> {
     /// - aligned
     ///
     /// References are always valid.
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[must_use]
     unsafe fn max_slice_len(&self) -> usize {
         match self.sz() {
@@ -156,6 +160,7 @@ macro_rules! impl_ptr_props_raw {
     ($($name:ty),* $(,)?) => {
         $(
             impl<T: ?Sized> PtrProps<T> for $name {
+                #[cfg_attr(any(miri, debug_assertions), track_caller)]
                 #[inline]
                 unsafe fn sz(&self) -> usize {
                     assert_unsafe_precondition!(
@@ -170,6 +175,7 @@ macro_rules! impl_ptr_props_raw {
                     );
                     size_of_val::<T>(&**self)
                 }
+                #[cfg_attr(any(miri, debug_assertions), track_caller)]
                 #[inline]
                 unsafe fn aln(&self) -> usize {
                     assert_unsafe_precondition!(
@@ -185,6 +191,7 @@ macro_rules! impl_ptr_props_raw {
                     align_of_val::<T>(&**self)
                 }
                 #[cfg(feature = "metadata")]
+                #[cfg_attr(any(miri, debug_assertions), track_caller)]
                 #[inline]
                 unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
                     assert_unsafe_precondition!(
@@ -200,6 +207,7 @@ macro_rules! impl_ptr_props_raw {
                     ::core::ptr::metadata(&**self)
                 }
                 #[cfg(not(feature = "metadata"))]
+                #[cfg_attr(any(miri, debug_assertions), track_caller)]
                 #[inline]
                 fn varsized_metadata(&self) -> usize where T: VarSized {
                     assert_unsafe_precondition!(
@@ -239,6 +247,7 @@ macro_rules! impl_ptr_props_identity {
                     ::core::ptr::metadata(*self)
                 }
                 #[cfg(not(feature = "metadata"))]
+                #[cfg_attr(any(miri, debug_assertions), track_caller)]
                 #[inline]
                 fn varsized_metadata(&self) -> usize where T: VarSized {
                     assert_unsafe_precondition!(
@@ -280,6 +289,7 @@ macro_rules! impl_ptr_props_deref {
                     ::core::ptr::metadata(&**self)
                 }
                 #[cfg(not(feature = "metadata"))]
+                #[cfg_attr(any(miri, debug_assertions), track_caller)]
                 #[inline]
                 fn varsized_metadata(&self) -> usize where T: VarSized {
                     assert_unsafe_precondition!(
@@ -323,6 +333,7 @@ impl<T: ::core::clone::Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
     #[cfg(feature = "metadata")]
     unsafe fn metadata(&self) {}
     #[cfg(not(feature = "metadata"))]
+    #[cfg_attr(any(miri, debug_assertions), track_caller)]
     fn varsized_metadata(&self) -> usize
     where
         T: VarSized
@@ -343,22 +354,26 @@ impl<T: ::core::clone::Clone> PtrProps<T> for ::stdalloc::borrow::Cow<'_, T> {
 }
 
 impl<T: ?Sized> PtrProps<T> for NonNull<T> {
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn sz(&self) -> usize {
         size_of_val::<T>(&(*self.as_ptr()))
     }
 
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn aln(&self) -> usize {
         align_of_val::<T>(&(*self.as_ptr()))
     }
 
     #[cfg(feature = "metadata")]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn metadata(&self) -> <T as ::core::ptr::Pointee>::Metadata {
         ::core::ptr::metadata(self.as_ptr())
     }
     #[cfg(not(feature = "metadata"))]
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     fn varsized_metadata(&self) -> usize
     where

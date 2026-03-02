@@ -61,7 +61,6 @@ pub trait AllocMut: AllocDescriptor {
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
     /// [raw_os_error]: ::std::io::Error::raw_os_error
-    #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc_mut(
         &mut self,
@@ -276,6 +275,7 @@ pub trait ShrinkMut: AllocMut + DeallocMut {
     /// [last_os_error]: ::std::io::Error::last_os_error
     /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
+    #[inline]
     unsafe fn shrink_mut(
         &mut self,
         ptr: NonNull<u8>,
@@ -379,7 +379,7 @@ pub trait ReallocMut: GrowMut + ShrinkMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
-        ralloc_mut(self, ptr, old_layout, new_layout, AllocMut::alloc_mut, None, None)
+        ralloc_mut(self, ptr, old_layout, new_layout, AllocMut::zalloc_mut, None, None)
     }
 }
 
@@ -399,13 +399,11 @@ impl<A: AllocMut + DeallocMut> BasicAllocMut for A {}
 impl<A: ReallocMut + GrowMut + ShrinkMut + AllocMut + DeallocMut> FullAllocMut for A {}
 
 impl<A: Alloc + ?Sized> AllocMut for A {
-    #[cfg_attr(miri, track_caller)]
     #[inline(always)]
     fn alloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, <A as AllocDescriptor>::Error> {
         (*self).alloc(layout)
     }
 
-    #[cfg_attr(miri, track_caller)]
     #[inline(always)]
     fn zalloc_mut(&mut self, layout: Layout) -> Result<NonNull<u8>, <A as AllocDescriptor>::Error> {
         (*self).zalloc(layout)
@@ -505,8 +503,6 @@ macro_rules! impl_alloc_for_sync_mutalloc {
         }
 
         impl<A: AllocMut + ?Sized> Alloc for $t {
-            #[cfg_attr(miri, track_caller)]
-            #[inline]
             fn alloc(
                 &self,
                 layout: Layout
@@ -514,9 +510,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 tri!(cmap(LOCK_ERR) from <Self as AllocDescriptor>::Error, self.$borrow_call())
                     .alloc_mut(layout)
             }
-
-            #[cfg_attr(miri, track_caller)]
-            #[inline]
+            
             fn zalloc(
                 &self,
                 layout: Layout
@@ -528,7 +522,6 @@ macro_rules! impl_alloc_for_sync_mutalloc {
 
         impl<A: DeallocMut + ?Sized> Dealloc for $t {
             #[cfg_attr(miri, track_caller)]
-            #[inline]
             unsafe fn try_dealloc(
                 &self,
                 ptr: NonNull<u8>,

@@ -54,7 +54,8 @@ sudo sysctl -w vm.drop_caches=3
 #    - ionice reduces IO interference.
 #    - export RUSTFLAGS so the bench run and benchmarks use target-cpu; allow override.
 export RUSTFLAGS="${BENCH_RUSTFLAGS}"
-cmd=(sudo nice -n -20 ionice -c1 -n0 taskset -c "${BENCH_CPUS}" sudo -u $USER cargo bench $@)
+export CARGO_TARGET_DIR="target/nightly"
+cmd=(sudo nice -n -20 ionice -c1 -n0 taskset -c "${BENCH_CPUS}" sudo -u $USER cargo +nightly bench $@)
 
 # Run and capture exit code (so trap runs).
 "${cmd[@]}"; exit_code=$?

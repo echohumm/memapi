@@ -5,7 +5,7 @@ export MIRIFLAGS=-Zmiri-permissive-provenance
 export RUSTDOCFLAGS="-D warnings"
 
 echo "clippy: stable"
-CARGO_TARGET_DIR="target/stable" cargo +stable clippy --features "full" -- -D unused_unsafe -D warnings 
+CARGO_TARGET_DIR="target/stable" cargo +stable clippy --features "full" -- -D unused_unsafe -D warnings
 echo "clippy: nightly"
 CARGO_TARGET_DIR="target/nightly" cargo +nightly clippy --features "full_nightly" -- -D unused_unsafe -D warnings
 

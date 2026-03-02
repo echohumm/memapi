@@ -78,18 +78,15 @@
 #![cfg_attr(nightly, feature(allocator_api))]
 #![cfg_attr(feature = "metadata", feature(ptr_metadata))]
 
-// TODO: add any missing cfg_attr(miri, track_caller) attributes, remove unnecessary ones
 // TODO: consider behavior of all allocation methods in all possible cases for all allocators and
 //  make sure they match and make sense
 
+#[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 extern crate bitflags;
+extern crate core;
 extern crate libc;
 extern crate rustversion;
-
-extern crate core;
-
 #[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;
-#[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
 
 /// A relatively minimal prelude containing the most common, important things from this crate.
 // unfortunately we need this cfg_attr, or it thinks rustfmt is a module and can't find it
@@ -134,7 +131,7 @@ macro_rules! default_alloc_impl {
     ($ty:ty) => {
         impl crate::traits::AllocDescriptor for $ty {
             type Error = crate::error::Error;
-            
+
             const FEATURES: crate::traits::AllocFeatures = crate::traits::AllocFeatures::DEALLOC;
         }
 
@@ -191,7 +188,6 @@ macro_rules! default_alloc_impl {
     };
 }
 
-// TODO: test actual speed and binsize difference of this vs. ?
 /// This macro is theoretically faster than `<fallible>?`.
 macro_rules! tri {
     (::$err:ident $($fallible:expr)+) => {
@@ -227,7 +223,7 @@ macro_rules! tri {
     (from $e:ty, $($fallible:expr)+) => {
         match $($fallible)+ {
             ::core::result::Result::Ok(s) => s,
-            ::core::result::Result::Err(e) => { 
+            ::core::result::Result::Err(e) => {
                  return ::core::result::Result::Err(<$e as ::core::convert::From<Error>>::from(e))
             }
         }
@@ -444,7 +440,6 @@ pub(crate) mod nightly {
     //  called. as a ZST allocator, copying/cloning it doesn't change behavior or invalidate
     //  allocations.
     unsafe impl Allocator for crate::DefaultAlloc {
-        #[cfg_attr(miri, track_caller)]
         #[inline]
         fn allocate(
             &self,
@@ -455,56 +450,11 @@ pub(crate) mod nightly {
 
         #[cfg_attr(miri, track_caller)]
         #[inline]
-        fn allocate_zeroed(
-            &self,
-            layout: crate::layout::StdLayout
-        ) -> ::core::result::Result<NonNull<[u8]>, AllocError> {
-            Allocator::allocate_zeroed(&Global, layout)
-        }
-
-        #[cfg_attr(miri, track_caller)]
-        #[inline]
         unsafe fn deallocate(&self, ptr: NonNull<u8>, layout: crate::layout::StdLayout) {
             Allocator::deallocate(&Global, ptr.cast(), layout);
-        }
-
-        #[cfg_attr(miri, track_caller)]
-        #[inline]
-        unsafe fn grow(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: crate::layout::StdLayout,
-            new: crate::layout::StdLayout
-        ) -> ::core::result::Result<NonNull<[u8]>, AllocError> {
-            Allocator::grow(&Global, ptr.cast(), old_layout, new)
-        }
-
-        #[cfg_attr(miri, track_caller)]
-        #[inline]
-        unsafe fn grow_zeroed(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: crate::layout::StdLayout,
-            new: crate::layout::StdLayout
-        ) -> ::core::result::Result<NonNull<[u8]>, AllocError> {
-            Allocator::grow_zeroed(&Global, ptr.cast(), old_layout, new)
-        }
-
-        #[cfg_attr(miri, track_caller)]
-        #[inline]
-        unsafe fn shrink(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: crate::layout::StdLayout,
-            new: crate::layout::StdLayout
-        ) -> ::core::result::Result<NonNull<[u8]>, AllocError> {
-            Allocator::shrink(&Global, ptr.cast(), old_layout, new)
         }
     }
 
     #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
     default_alloc_impl!(Global);
-
-    // TODO: either Allocator for A: Alloc or vice versa, not sure which. i think i removed that at
-    //  some point but i can't remember why.
 }

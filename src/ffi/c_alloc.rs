@@ -118,7 +118,9 @@ compile_error!("this platform is missing a value for `MIN_ALIGN`");
 /// The minimum alignment returned by the platform's [`malloc`].
 pub const MIN_ALIGN: usize = 1;
 
+// TODO: test diff. inlines
 #[cfg(all(not(any(target_os = "horizon", target_os = "vita")), not(windows)))]
+#[cfg_attr(miri, track_caller)]
 #[inline(always)]
 pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
     #[cfg(target_vendor = "apple")]
@@ -134,12 +136,14 @@ pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_
     (out, ret)
 }
 #[cfg(windows)]
+#[cfg_attr(miri, track_caller)]
 #[inline(always)]
 pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
     // SAFETY: requirements are passed onto the caller
     (unsafe { _aligned_malloc(size, align) }, 0)
 }
 #[cfg(any(target_os = "horizon", target_os = "vita"))]
+#[cfg_attr(miri, track_caller)]
 #[inline(always)]
 pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> (*mut c_void, c_int) {
     // SAFETY: requirements are passed onto the caller
@@ -154,7 +158,8 @@ pub(crate) const fn size_align_check(_: usize, align: usize) -> bool {
 #[cfg(not(windows))]
 #[inline(always)]
 pub(crate) const fn size_align_check(size: usize, align: usize) -> bool {
-    align > MIN_ALIGN && size >= align
+    // im stupid, good thing i expanded my testset
+    align > MIN_ALIGN || size >= align
 }
 
 // public in case the user wants them for some reason
@@ -220,6 +225,7 @@ extern "C" {
     /// If successful, the returned pointer should be freed with [`free`].
     #[must_use = "this function allocates memory on success; dropping the returned pointer will \
                   leak memory"]
+    #[cfg_attr(miri, track_caller)]
     pub fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 
     #[cfg(all(not(windows), not(any(target_os = "horizon", target_os = "vita"))))]
@@ -267,6 +273,7 @@ extern "C" {
     /// `ptr` must be either `NULL` or a pointer previously returned by [`malloc`], [`calloc`],
     /// [`realloc`], [`posix_memalign`], or another compatible allocator for the platform, and not
     /// yet freed.
+    #[cfg_attr(miri, track_caller)]
     pub fn free(ptr: *mut c_void);
 
     #[cfg(windows)]
