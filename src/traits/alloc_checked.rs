@@ -27,7 +27,7 @@ macro_rules! trait_decl {
 
 macro_rules! impl_checked_realloc_group {
     (
-        $impl_trait:ident : $bound:ident 
+        $impl_trait:ident : $bound:ident
             { $($([$self_ex:tt])? $method:ident => $call:ident),+ $(,)? }
     ) => {
         impl<A: $bound + AllocOwned + ?Sized> $impl_trait for A {
@@ -40,7 +40,7 @@ macro_rules! impl_checked_realloc_group {
             ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
                 tri!(do self.owns(ptr, old_layout));
 
-                // SAFETY: `owns` returned Ok(()), so the implementor guarantees calling this is 
+                // SAFETY: `owns` returned Ok(()), so the implementor guarantees calling this is
                 //  fine.
                 unsafe { self.$call(ptr, old_layout, new_layout) }
             }

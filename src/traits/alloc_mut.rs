@@ -510,7 +510,7 @@ macro_rules! impl_alloc_for_sync_mutalloc {
                 tri!(cmap(LOCK_ERR) from <Self as AllocDescriptor>::Error, self.$borrow_call())
                     .alloc_mut(layout)
             }
-            
+
             fn zalloc(
                 &self,
                 layout: Layout

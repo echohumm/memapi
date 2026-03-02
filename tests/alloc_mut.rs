@@ -9,11 +9,11 @@ use {
         layout::Layout,
         traits::{
             AllocDescriptor,
+            AllocFeatures,
             alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut}
         }
     }
 };
-use memapi2::traits::AllocFeatures;
 
 /// Test allocator that only implements AllocMut and DeallocMut.
 #[derive(Debug, Clone, Copy, Default)]

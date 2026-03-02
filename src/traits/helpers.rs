@@ -74,4 +74,3 @@ ralloc! {
     (ralloc, Dealloc, try_dealloc),
     (ralloc_mut, DeallocMut, try_dealloc_mut, mut)
 }
-

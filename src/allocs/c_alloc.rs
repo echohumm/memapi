@@ -1,7 +1,7 @@
 use {
     crate::{
         error::{Cause, Error},
-        ffi::c_alloc::{MIN_ALIGN, c_alloc_spec, calloc, free, malloc, size_align_check},
+        ffi::c_alloc::{c_alloc_spec, calloc, free, malloc, size_align_check},
         helpers::null_q_dyn,
         layout::Layout,
         traits::{

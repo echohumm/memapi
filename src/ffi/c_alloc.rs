@@ -2,10 +2,7 @@
 #![allow(unexpected_cfgs)]
 #![warn(unknown_lints)]
 
-use {
-    ::core::{ffi::c_void},
-    ::libc::c_int
-};
+use {::core::ffi::c_void, ::libc::c_int};
 
 #[cfg(any(
     all(target_arch = "riscv32", any(target_os = "espidf", target_os = "zkvm")),
