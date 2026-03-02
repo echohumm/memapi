@@ -222,7 +222,6 @@ extern "C" {
     /// If successful, the returned pointer should be freed with [`free`].
     #[must_use = "this function allocates memory on success; dropping the returned pointer will \
                   leak memory"]
-    #[cfg_attr(miri, track_caller)]
     pub fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;
 
     #[cfg(all(not(windows), not(any(target_os = "horizon", target_os = "vita"))))]
@@ -270,7 +269,6 @@ extern "C" {
     /// `ptr` must be either `NULL` or a pointer previously returned by [`malloc`], [`calloc`],
     /// [`realloc`], [`posix_memalign`], or another compatible allocator for the platform, and not
     /// yet freed.
-    #[cfg_attr(miri, track_caller)]
     pub fn free(ptr: *mut c_void);
 
     #[cfg(windows)]
