@@ -126,7 +126,6 @@ pub enum Cause {
     OutOfMemory,
     /// Any other cause, in the form of a string.
     Other(&'static str),
-    #[cfg(feature = "os_err_reporting")]
     /// The cause is described in the contained OS error.
     ///
     /// The error may or may not be accurate depending on the environment.
@@ -139,8 +138,10 @@ impl Display for Cause {
             Cause::Unknown => write!(f, "unknown"),
             Cause::OutOfMemory => write!(f, "out of memory"),
             Cause::Other(other) => write!(f, "{}", other),
+            #[cfg(not(feature = "os_err_reporting"))]
+            Cause::OSErr(e) => write!(f, "os error code: {}", e),
             #[cfg(feature = "os_err_reporting")]
-            Cause::OSErr(e) => write!(f, "os error:\n\t{}", ::std::io::Error::from_raw_os_error(*e))
+            Cause::OSErr(e) => write!(f, "os error: {}", ::std::io::Error::from_raw_os_error(*e)),
         }
     }
 }

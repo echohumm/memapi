@@ -149,14 +149,14 @@ pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> (*mut c_void, c_int) {
 
 #[cfg(windows)]
 #[inline(always)]
-pub(crate) const fn size_align_check(_: usize, align: usize) -> bool {
-    align > MIN_ALIGN
+pub(crate) const fn rely_on_min_align(_: usize, align: usize) -> bool {
+    align <= MIN_ALIGN
 }
 #[cfg(not(windows))]
 #[inline(always)]
-pub(crate) const fn size_align_check(size: usize, align: usize) -> bool {
+pub(crate) const fn rely_on_min_align(size: usize, align: usize) -> bool {
     // im stupid, good thing i expanded my testset
-    align > MIN_ALIGN || size >= align
+    align <= MIN_ALIGN && size >= align
 }
 
 // public in case the user wants them for some reason

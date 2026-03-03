@@ -8,6 +8,7 @@
       <w>calloca</w>
       <w>echohumm</w>
       <w>mimalloc</w>
+      <w>miriflags</w>
       <w>msrv</w>
       <w>mutalloc</w>
       <w>nonpow</w>
@@ -15,6 +16,7 @@
       <w>ralloc</w>
       <w>recalloc</w>
       <w>rezalloc</w>
+      <w>rustdocflags</w>
       <w>stdalloc</w>
       <w>sysalloc</w>
       <w>taac</w>

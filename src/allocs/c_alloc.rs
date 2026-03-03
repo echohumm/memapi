@@ -1,7 +1,7 @@
 use {
     crate::{
         error::{Cause, Error},
-        ffi::c_alloc::{c_alloc_spec, calloc, free, malloc, size_align_check},
+        ffi::c_alloc::{c_alloc_spec, calloc, free, malloc, rely_on_min_align},
         helpers::null_q_dyn,
         layout::Layout,
         traits::{
@@ -37,16 +37,7 @@ fn null_q_dyn_zsl_check_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
         let (ptr, status) = f(layout);
         match status {
             0 => null_q_dyn(ptr, layout),
-            code => {
-                #[cfg(feature = "os_err_reporting")]
-                {
-                    Err(Error::AllocFailed(layout, Cause::OSErr(code as c_int)))
-                }
-                #[cfg(not(feature = "os_err_reporting"))]
-                {
-                    Err(Error::AllocFailed(layout, Cause::Unknown))
-                }
-            }
+            code => Err(Error::AllocFailed(layout, Cause::OSErr(code as c_int)))
         }
     }
 }
@@ -78,12 +69,12 @@ impl Alloc for CAlloc {
                 let size = l.size();
                 let align = l.align();
 
-                if ffi::size_align_check(size, align) {
-                    // SAFETY: requirements are passed on to caller
-                    unsafe { ffi::c_alloc_spec(align, size) }
-                } else {
+                if ffi::rely_on_min_align(size, align) {
                     // SAFETY: requirements are passed on to caller
                     unsafe { (malloc(size), 0) }
+                } else {
+                    // SAFETY: requirements are passed on to caller
+                    unsafe { ffi::c_alloc_spec(align, size) }
                 }
             }
         )
@@ -99,7 +90,10 @@ impl Alloc for CAlloc {
                 let size = l.size();
                 let align = l.align();
 
-                if size_align_check(size, align) {
+                if rely_on_min_align(size, align) {
+                    // SAFETY: requirements are passed on to caller
+                    (unsafe { calloc(1, size) }, 0)
+                } else {
                     // SAFETY: requirements are passed on to caller
                     let (ptr, status) = unsafe { c_alloc_spec(align, size) };
                     // zero memory if allocation was successful
@@ -110,9 +104,6 @@ impl Alloc for CAlloc {
                         }
                     }
                     (ptr, status)
-                } else {
-                    // SAFETY: requirements are passed on to caller
-                    (unsafe { calloc(1, size) }, 0)
                 }
             }
         )
@@ -131,17 +122,17 @@ impl Dealloc for CAlloc {
             #[cfg(windows)]
             {
                 #[allow(clippy::used_underscore_binding)]
-                if size_align_check(_size, _align) {
-                    // SAFETY: requirements are passed onto the caller; as align > MIN_ALIGN,
-                    // _aligned_{malloc,realloc} was used so _aligned_free works.
-                    unsafe {
-                        ffi::_aligned_free(ptr);
-                    }
-                } else {
+                if rely_on_min_align(_size, _align) {
                     // SAFETY: requirements are passed onto the caller; as align <= MIN_ALIGN,
                     // {malloc,calloc} was used so free works.
                     unsafe {
                         free(ptr);
+                    }
+                } else {
+                    // SAFETY: requirements are passed onto the caller; as align > MIN_ALIGN,
+                    // _aligned_malloc was used so _aligned_free works.
+                    unsafe {
+                        ffi::_aligned_free(ptr);
                     }
                 }
             }

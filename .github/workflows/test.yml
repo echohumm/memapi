@@ -5,9 +5,9 @@ permissions:
 
 on:
   push:
-    branches: ["master"]
+    branches: [ "master" ]
   pull_request:
-    branches: ["master"]
+    branches: [ "master" ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -34,7 +34,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install Rust
         id: install_rust
         uses: dtolnay/rust-toolchain@master
@@ -64,3 +64,15 @@ jobs:
         env:
           MIRIFLAGS: -Zmiri-permissive-provenance
         run: cargo +${{ matrix.rust }} miri test --verbose --features ${{ matrix.features }}
+
+      - name: Run Clippy
+        # other rust versions had weird clippy things, might check and try to fix them someday if
+        #  they are real issues
+        if: matrix.rust == 'nightly' || matrix.rust == 'stable'
+        continue-on-error: false
+        run: cargo +${{ matrix.rust }} clippy --features ${{ matrix.features }} -- -D unused_unsafe -D warnings
+
+      - name: Run doc
+        if: matrix.rust == 'nightly' || matrix.rust == 'stable'
+        continue-on-error: false
+        run: cargo +${{ matrix.rust }} doc --features ${{ matrix.features }}
