@@ -212,7 +212,7 @@ extern "C" {
     /// - Returns a pointer suitably aligned for any object type with fundamental alignment
     ///   (`max_align_t`, at least [`MIN_ALIGN`]).
     /// - If `ptr` is non-null, it must have been returned by [`malloc`], [`calloc`],
-    ///   [`posix_memalign`], or a previous [`realloc`] and must not have been freed.
+    ///   `posix_memalign`, or a previous [`realloc`] and must not have been freed.
     /// - If the call fails, it returns `NULL` and the original `ptr` remains valid.
     /// - If `size == 0`, the result is implementation-defined and may be `NULL` or a unique pointer
     ///   that must not be dereferenced but should be freed to avoid memory leaks.
@@ -267,12 +267,12 @@ extern "C" {
     /// # Safety
     ///
     /// `ptr` must be either `NULL` or a pointer previously returned by [`malloc`], [`calloc`],
-    /// [`realloc`], [`posix_memalign`], or another compatible allocator for the platform, and not
+    /// [`realloc`], `posix_memalign`, or another compatible allocator for the platform, and not
     /// yet freed.
     pub fn free(ptr: *mut c_void);
 
     #[cfg(windows)]
-    /// Microsoft version of `aligned_alloc`/[`posix_memalign`]. Allocates `size` bytes aligned to
+    /// Microsoft version of `aligned_alloc`/`posix_memalign`. Allocates `size` bytes aligned to
     /// `align`.
     ///
     /// Microsoft documentation:
