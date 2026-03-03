@@ -18,19 +18,45 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        rust: [stable, nightly, 1.46.0, 1.56.0, 1.64]
+        os: [ ubuntu-latest, windows-latest, macos-latest ]
+        rust: [ stable, nightly, 1.46.0, 1.47.0, 1.49.0, 1.50.0, 1.52.0, 1.56.0, 1.57.0, 1.58.0, 1.61.0, 1.64.0, 1.71.0, 1.73.0, 1.75.0, 1.81.0, 1.83.0, 1.89.0 ]
         include:
           - rust: 1.46.0
-            features: full
+            features: "full"
+          - rust: 1.47.0
+            features: "full"
+          - rust: 1.49.0
+            features: "full"
+          - rust: 1.50.0
+            features: "full"
+          - rust: 1.52.0
+            features: "full, dev"
           - rust: 1.56.0
-            features: full, dev
-          - rust: 1.64
-            features: full, dev
+            features: "full, dev"
+          - rust: 1.57.0
+            features: "full, dev"
+          - rust: 1.58.0
+            features: "full, dev"
+          - rust: 1.61.0
+            features: "full, dev"
+          - rust: 1.64.0
+            features: "full, dev"
+          - rust: 1.71.0
+            features: "full, dev"
+          - rust: 1.73.0
+            features: "full, dev"
+          - rust: 1.75.0
+            features: "full, dev"
+          - rust: 1.81.0
+            features: "full, dev"
+          - rust: 1.83.0
+            features: "full, dev"
+          - rust: 1.89.0
+            features: "full, dev"
           - rust: stable
-            features: full, dev
+            features: "full, dev"
           - rust: nightly
-            features: full_nightly, dev
+            features: "full_nightly, dev"
 
     steps:
       - uses: actions/checkout@v4
