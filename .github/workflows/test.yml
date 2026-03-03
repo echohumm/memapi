@@ -67,7 +67,7 @@ jobs:
         continue-on-error: true
         with:
           toolchain: ${{ matrix.rust }}
-          components: ${{ matrix.rust == 'nightly' && 'miri' || 'clippy' }}
+          components: ${{ matrix.rust == 'nightly' && 'clippy,miri' || 'clippy' }}
 
       - name: Clean
         if: steps.install_rust.outcome == 'success'
