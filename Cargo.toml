@@ -33,8 +33,8 @@ maintenance = { status = "actively-developed" }
 [features]
 default = []
 
-# internal features
-dev = []
+# internal features for testing
+__dev = []
 
 # nightly support
 ## allows disabling allocator_api on nightly

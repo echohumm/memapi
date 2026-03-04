@@ -27,7 +27,7 @@ const fn align_up_checks(sz: usize, aln: usize) -> Result<(), LayoutErr> {
     } else if !aln.is_power_of_two() {
         return Err(LayoutErr::NonPowerOfTwoAlign(aln));
     } else if sz > USIZE_MAX_NO_HIGH_BIT - (aln - 1) {
-        return Err(LayoutErr::ExceedsMax(sz, aln));
+        return Err(LayoutErr::ExceedsMax(sz, aln, 1));
     }
 
     Ok(())
@@ -101,7 +101,7 @@ impl Layout {
     /// exceed [`USIZE_MAX_NO_HIGH_BIT`].
     pub const fn array<T>(n: usize) -> Result<Layout, LayoutErr> {
         if T::SZ != 0 && n > (USIZE_HIGH_BIT - T::ALN) / T::SZ {
-            return Err(LayoutErr::ArrayExceedsMax(T::SZ, n, T::ALN));
+            return Err(LayoutErr::ExceedsMax(T::SZ, T::ALN, n));
         }
 
         // SAFETY: we just validated that a layout with a size of `T::SZ * n` and alignment of
@@ -162,14 +162,14 @@ impl Layout {
         // i love how max, possibly the simplest function in existence (aside from accessors), is
         // not const.
         let new_align = if a_aln > b_aln { a_aln } else { b_aln };
-
+        
         // check the total size fits within limits and doesn't overflow.
         match checked_op(a_sz, ArithOp::Add, offset) {
             Ok(total) if total <= USIZE_MAX_NO_HIGH_BIT => {
                 // SAFETY: we validated alignment and size constraints above.
                 Ok((unsafe { Layout::from_size_align_unchecked(total, new_align) }, offset))
             }
-            Ok(_) => Err(LayoutErr::ExceedsMax(offset, new_align)),
+            Ok(_) => Err(LayoutErr::ExceedsMax(offset, new_align, 1)),
             Err(e) => Err(LayoutErr::ArithmeticError(e))
         }
     }

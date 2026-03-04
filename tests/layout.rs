@@ -116,7 +116,7 @@ fn array_layout_basic_and_zst() {
 fn array_layout_exceeds_max() {
     let max = (USIZE_HIGH_BIT - align_of::<u8>()) / size_of::<u8>();
     let err = Layout::array::<u8>(max + 1).unwrap_err();
-    assert_eq!(err, LayoutErr::ArrayExceedsMax(1, max + 1, 1));
+    assert_eq!(err, LayoutErr::ExceedsMax(1, 1, max + 1));
 }
 
 #[test]

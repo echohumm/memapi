@@ -72,7 +72,7 @@
 )]
 #![warn(unknown_lints)]
 #![no_implicit_prelude]
-#![cfg_attr(feature = "dev", warn(rustdoc::broken_intra_doc_links))]
+#![cfg_attr(feature = "__dev", warn(rustdoc::broken_intra_doc_links))]
 #![cfg_attr(not(feature = "std"), no_std)]
 // nightly is set by the build.rs
 #![cfg_attr(nightly, feature(allocator_api))]

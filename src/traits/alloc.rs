@@ -19,6 +19,11 @@ use {
 
 #[allow(unused_imports)] use crate::error::Cause;
 
+// TODO: instead of Grow/Shrink requiring Dealloc, require nothing and have an AutoGrow + AutoShrink
+//  where if A: Auto* + Dealloc impl * for A? this is the only method which both allows for
+//  overriding grow/shrink impls and for them to not require Dealloc even if it's actually
+//  unsupported.
+
 /// A memory allocation interface.
 pub trait Alloc: AllocDescriptor + AllocMut {
     // TODO: maybe make return NonNull<T>

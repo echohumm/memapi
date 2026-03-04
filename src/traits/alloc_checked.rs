@@ -105,8 +105,8 @@ pub mod alloc {
         /// # Errors
         ///
         /// Implementations commonly return:
-        /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
-        // TODO: in this case ... like normal dealloc
+        /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported. In this
+        ///   case, reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
         /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
         ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
         ///   primitive wrapping a type which implements [`AllocMut`], a generic error message will

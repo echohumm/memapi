@@ -41,7 +41,7 @@ fn null_q_dyn_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
     }
 }
 
-#[cfg_attr(feature = "dev", allow(rustdoc::broken_intra_doc_links))]
+#[cfg_attr(feature = "__dev", allow(rustdoc::broken_intra_doc_links))]
 /// An allocator which uses C's allocation functions; [`posix_memalign`](ffi::posix_memalign) on
 /// unix and [`_aligned_malloc`](ffi::_aligned_malloc) on Windows.
 ///

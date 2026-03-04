@@ -76,7 +76,7 @@ pub const MIN_ALIGN: usize = 16;
         target_arch = "riscv64",
         target_arch = "wasm64",
     )),
-    any(feature = "dev", test)
+    any(feature = "__dev", test)
 ))]
 compile_error!("this platform is missing a value for `MIN_ALIGN`");
 
@@ -109,7 +109,7 @@ compile_error!("this platform is missing a value for `MIN_ALIGN`");
         target_arch = "riscv64",
         target_arch = "wasm64",
     )),
-    not(any(feature = "dev", test))
+    not(any(feature = "__dev", test))
 ))]
 // fallback to 1 if not testing
 /// The minimum alignment returned by the platform's [`malloc`].

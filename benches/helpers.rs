@@ -11,7 +11,7 @@ use {
     criterion::Criterion,
     memapi2::{
         error::ArithOp,
-        helpers::{checked_op, null_q, null_q_dyn, null_q_dyn_zsl_check},
+        helpers::{checked_op, null_q, null_q_dyn},
         layout::Layout,
         traits::data::type_props::PtrProps
     },
@@ -204,7 +204,6 @@ fn null_q_variants(c: &mut Criterion) {
     let valid_ptr: *mut u8 = dangling_mut();
 
     let layout = Layout::new::<usize>();
-    let zsl_layout = Layout::from_size_align(0, 1).unwrap();
 
     group.bench_function("null_q_valid", |b| {
         b.iter(|| black_box(null_q(black_box(valid_ptr), black_box(layout))))
@@ -218,51 +217,6 @@ fn null_q_variants(c: &mut Criterion) {
     });
     group.bench_function("null_q_dyn_invalid", |b| {
         b.iter(|| black_box(null_q_dyn(black_box(invalid_ptr), black_box(layout))))
-    });
-
-    group.bench_function("null_q_dyn_zsl_check_valid", |b| {
-        b.iter(|| {
-            let _ = black_box(null_q_dyn_zsl_check(
-                black_box(layout),
-                black_box(|l| {
-                    black_box(l);
-                    black_box(valid_ptr)
-                })
-            ));
-        });
-    });
-    group.bench_function("null_q_dyn_zsl_check_invalid_ptr", |b| {
-        b.iter(|| {
-            let _ = black_box(null_q_dyn_zsl_check(
-                black_box(layout),
-                black_box(|l| {
-                    black_box(l);
-                    black_box(invalid_ptr)
-                })
-            ));
-        });
-    });
-    group.bench_function("null_q_dyn_zsl_check_invalid_layout", |b| {
-        b.iter(|| {
-            let _ = black_box(null_q_dyn_zsl_check(
-                black_box(zsl_layout),
-                black_box(|l| {
-                    black_box(l);
-                    black_box(valid_ptr)
-                })
-            ));
-        });
-    });
-    group.bench_function("null_q_dyn_zsl_check_invalid", |b| {
-        b.iter(|| {
-            let _ = black_box(null_q_dyn_zsl_check(
-                black_box(zsl_layout),
-                black_box(|l| {
-                    black_box(l);
-                    black_box(invalid_ptr)
-                })
-            ));
-        });
     });
 }
 

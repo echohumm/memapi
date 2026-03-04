@@ -1,5 +1,5 @@
 use {
-    crate::{layout::Layout, traits::data::type_props::SizedProps},
+    crate::{helpers::USIZE_MAX_NO_HIGH_BIT, layout::Layout, traits::data::type_props::SizedProps},
     ::core::{
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         write
@@ -20,7 +20,8 @@ macro_rules! impl_error {
     };
 }
 
-// TODO: simplify this. it's getting a little absurd again.
+// TODO: add more info to these where necessary? i think i remember finding some things which would
+//  be useful but i dont remeber
 
 /// Errors for allocator operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,6 +124,8 @@ impl Display for Cause {
             #[cfg(not(feature = "os_err_reporting"))]
             Cause::OSErr(e) => write!(f, "os error code: {}", e),
             #[cfg(feature = "os_err_reporting")]
+            // my ide is dumb and thinks this is unreachable
+            #[allow(unreachable_patterns)]
             Cause::OSErr(e) => write!(f, "os error: {}", ::std::io::Error::from_raw_os_error(*e))
         }
     }
@@ -140,23 +143,18 @@ pub enum LayoutErr {
     ZeroAlign,
     /// The alignment was not a power of two. Instead, it was the contained value.
     NonPowerOfTwoAlign(usize),
-    // TODO: i dislike having both exceedsmax and arrayexceedsmax
-    /// The requested size was greater than
-    /// [`USIZE_MAX_NO_HIGH_BIT`](crate::helpers::USIZE_MAX_NO_HIGH_BIT) when
-    /// rounded up to the nearest multiple of the requested alignment.
-    ///
-    /// The first contained value is the requested size, while the second is the requested
-    /// alignment.
-    ExceedsMax(usize, usize),
     /// The total size of an array, when rounded up to the nearest multiple of its item's alignment,
     /// would exceed [`USIZE_MAX_NO_HIGH_BIT`](crate::helpers::USIZE_MAX_NO_HIGH_BIT).
     ///
-    /// The first contained value is the size of the elements, the second is the number of elements,
-    /// and the third is the alignment of the element type.
-    ArrayExceedsMax(usize, usize, usize),
+    /// The first contained value is the size of the elements, the second is the alignment of the
+    /// element type, and the third is the number of elements.
+    ExceedsMax(usize, usize, usize),
     /// An arithmetic error occurred.
     ArithmeticError(ArithErr),
-    /// <placeholder>
+    /// The alignment, when rounded up to the nearest multiple of [`uintptr_t::SZ`], would overflow
+    /// [`usize::MAX`].
+    ///
+    /// The contained value is the alignment.
     CRoundUp(usize)
 }
 
@@ -168,17 +166,19 @@ impl Display for LayoutErr {
             LayoutErr::NonPowerOfTwoAlign(aln) => {
                 write!(f, "alignment {} isn't a power of two", aln)
             }
-            LayoutErr::ExceedsMax(sz, aln) => {
-                write!(f, "size {} would overflow when rounded up to a multiple of {}", sz, aln)
-            }
-            LayoutErr::ArrayExceedsMax(sz, n, aln) => {
-                write!(
+            LayoutErr::ExceedsMax(sz, aln, n) => match n {
+                1 => write!(
                     f,
-                    "array with {} elements of size {} would have its total size overflow when \
+                    "size {} would exceed {} when rounded up to a multiple of {}",
+                    sz, USIZE_MAX_NO_HIGH_BIT, aln
+                ),
+                _ => write!(
+                    f,
+                    "array with {} elements of size {} would have its total size exceed {} when \
                      rounded up to a multiple of {}",
-                    n, sz, aln
+                    n, sz, USIZE_MAX_NO_HIGH_BIT, aln
                 )
-            }
+            },
             LayoutErr::ArithmeticError(overflow) => write!(f, "{}", overflow),
             LayoutErr::CRoundUp(aln) => {
                 write!(
