@@ -9,6 +9,7 @@ split allocator traits, and structured errors.
 Version: 0.11.4
 
 MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature flags](#feature-flags))
+macOS MSRV: 1.56?
 
 ## Highlights
 

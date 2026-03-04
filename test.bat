@@ -30,61 +30,61 @@ cargo +1.50.0 test --features "full" || goto :error
 
 echo test: 1.52
 set "CARGO_TARGET_DIR=target\1.52"
-cargo +1.52.0 test --features "full,dev" || goto :error
+cargo +1.52.0 test --features "full,__dev" || goto :error
 
 echo test: 1.56
 set "CARGO_TARGET_DIR=target\1.56"
-cargo +1.56.0 test --features "full,dev" || goto :error
+cargo +1.56.0 test --features "full,__dev" || goto :error
 
 echo test: 1.57
 set "CARGO_TARGET_DIR=target\1.57"
-cargo +1.57.0 test --features "full,dev" || goto :error
+cargo +1.57.0 test --features "full,__dev" || goto :error
 
 echo test: 1.58
 set "CARGO_TARGET_DIR=target\1.58"
-cargo +1.58.0 test --features "full,dev" || goto :error
+cargo +1.58.0 test --features "full,__dev" || goto :error
 
 echo test: 1.61
 set "CARGO_TARGET_DIR=target\1.61"
-cargo +1.61.0 test --features "full,dev" || goto :error
+cargo +1.61.0 test --features "full,__dev" || goto :error
 
 echo test: 1.64
 set "CARGO_TARGET_DIR=target\1.64"
-cargo +1.64.0 test --features "full,dev" || goto :error
+cargo +1.64.0 test --features "full,__dev" || goto :error
 
 echo test: 1.71
 set "CARGO_TARGET_DIR=target\1.71"
-cargo +1.71.0 test --features "full,dev" || goto :error
+cargo +1.71.0 test --features "full,__dev" || goto :error
 
 echo test: 1.73
 set "CARGO_TARGET_DIR=target\1.73"
-cargo +1.73.0 test --features "full,dev" || goto :error
+cargo +1.73.0 test --features "full,__dev" || goto :error
 
 echo test: 1.75
 set "CARGO_TARGET_DIR=target\1.75"
-cargo +1.75.0 test --features "full,dev" || goto :error
+cargo +1.75.0 test --features "full,__dev" || goto :error
 
 echo test: 1.81
 set "CARGO_TARGET_DIR=target\1.81"
-cargo +1.81.0 test --features "full,dev" || goto :error
+cargo +1.81.0 test --features "full,__dev" || goto :error
 
 echo test: 1.83
 set "CARGO_TARGET_DIR=target\1.83"
-cargo +1.83.0 test --features "full,dev" || goto :error
+cargo +1.83.0 test --features "full,__dev" || goto :error
 
 echo test: 1.89
 set "CARGO_TARGET_DIR=target\1.89"
-cargo +1.89.0 test --features "full,dev" || goto :error
+cargo +1.89.0 test --features "full,__dev" || goto :error
 
 echo test: stable
 set "CARGO_TARGET_DIR=target\stable"
-cargo +stable test --features "full,dev" || goto :error
+cargo +stable test --features "full,__dev" || goto :error
 
 echo test: nightly (miri)
 set "CARGO_TARGET_DIR=target\nightly"
-cargo +nightly miri test --features "full_nightly,dev" || goto :error
+cargo +nightly miri test --features "full_nightly,__dev" || goto :error
 
-cargo +nightly doc --features "full_nightly,dev" || goto :error
+cargo +nightly doc --features "full_nightly,__dev" || goto :error
 
 echo All commands completed successfully.
 endlocal
