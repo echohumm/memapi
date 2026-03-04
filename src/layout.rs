@@ -1,6 +1,6 @@
 use {
     crate::{
-        error::{ArithOp, Error, LayoutErr},
+        error::{ArithErr, ArithOp, LayoutErr},
         helpers::{USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT, align_up, checked_op, is_multiple_of},
         traits::data::type_props::{PtrProps, SizedProps}
     },
@@ -14,24 +14,27 @@ use {
     ::libc::uintptr_t
 };
 
+// TODO: docs are outdated, particularly for errors
+
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 /// A type alias for [`alloc::alloc::Layout`](::stdalloc::alloc::Layout).
 pub type StdLayout = ::stdalloc::alloc::Layout;
 
 #[inline]
-const fn align_up_checks(val: usize, align: usize) -> Result<(), Error> {
-    if align == 0 {
-        return Err(Error::InvalidLayout(val, align, LayoutErr::ZeroAlign));
-    } else if !align.is_power_of_two() {
-        return Err(Error::InvalidLayout(val, align, LayoutErr::NonPowerOfTwoAlign));
-    } else if val > USIZE_HIGH_BIT - (align - 1) {
-        return Err(Error::InvalidLayout(val, align, LayoutErr::ExceedsMax));
+const fn align_up_checks(sz: usize, aln: usize) -> Result<(), LayoutErr> {
+    if aln == 0 {
+        return Err(LayoutErr::ZeroAlign);
+    } else if !aln.is_power_of_two() {
+        return Err(LayoutErr::NonPowerOfTwoAlign(aln));
+    } else if sz > USIZE_MAX_NO_HIGH_BIT - (aln - 1) {
+        return Err(LayoutErr::ExceedsMax(sz, aln));
     }
+
     Ok(())
 }
 
 #[cfg_attr(any(miri, debug_assertions), track_caller)]
-const fn align_up_checked(size: usize, align: usize) -> Result<usize, Error> {
+const fn align_up_checked(size: usize, align: usize) -> Result<usize, LayoutErr> {
     tri!(do align_up_checks(size, align));
 
     // SAFETY: check_lay validates that `align != 0` so no underflow can occur, and `size + align`
@@ -96,9 +99,9 @@ impl Layout {
     /// <code>Err([Error::InvalidLayout]\([T::SZ](SizedProps::SZ), [T::ALN](SizedProps::ALN),
     /// [LayoutErr::ExceedsMax]\))</code> if the length of the computed array, in bytes, would
     /// exceed [`USIZE_MAX_NO_HIGH_BIT`].
-    pub const fn array<T>(n: usize) -> Result<Layout, Error> {
+    pub const fn array<T>(n: usize) -> Result<Layout, LayoutErr> {
         if T::SZ != 0 && n > (USIZE_HIGH_BIT - T::ALN) / T::SZ {
-            return Err(Error::InvalidLayout(T::SZ, T::ALN, LayoutErr::ExceedsMax));
+            return Err(LayoutErr::ArrayExceedsMax(T::SZ, n, T::ALN));
         }
 
         // SAFETY: we just validated that a layout with a size of `T::SZ * n` and alignment of
@@ -147,7 +150,7 @@ impl Layout {
     /// [`self.size()`](Layout::size) rounded up to the nearest multiple of
     /// [`other.align()`](Layout::align) would exceed [`USIZE_MAX_NO_HIGH_BIT`].
     #[::rustversion::attr(since(1.47), const)]
-    pub fn extend(&self, other: Layout) -> Result<(Layout, usize), Error> {
+    pub fn extend(&self, other: Layout) -> Result<(Layout, usize), LayoutErr> {
         let a_sz = self.size();
         let a_aln = self.align();
         let b_aln = other.align();
@@ -166,8 +169,8 @@ impl Layout {
                 // SAFETY: we validated alignment and size constraints above.
                 Ok((unsafe { Layout::from_size_align_unchecked(total, new_align) }, offset))
             }
-            Ok(_) => Err(Error::InvalidLayout(offset, new_align, LayoutErr::ExceedsMax)),
-            Err(e) => Err(Error::InvalidLayout(offset, new_align, LayoutErr::ArithErr(e)))
+            Ok(_) => Err(LayoutErr::ExceedsMax(offset, new_align)),
+            Err(e) => Err(LayoutErr::ArithmeticError(e))
         }
     }
 
@@ -222,7 +225,7 @@ impl Layout {
     /// - <code>Err([Error::InvalidLayout]\(size, align, [LayoutErr::ExceedsMax]\))</code> if `size`
     ///   rounded up to the nearest multiple of `align` would exceed [`USIZE_MAX_NO_HIGH_BIT`].
     #[inline]
-    pub const fn from_size_align(size: usize, align: usize) -> Result<Layout, Error> {
+    pub const fn from_size_align(size: usize, align: usize) -> Result<Layout, LayoutErr> {
         tri!(do align_up_checks(size, align));
 
         // SAFETY: we just validated the parameters
@@ -264,62 +267,25 @@ impl Layout {
     pub const fn posix_memalign_compatible_from_size_align(
         size: usize,
         align: usize
-    ) -> Result<Layout, Error> {
-        tri!(do align_up_checks(align, uintptr_t::SZ));
+    ) -> Result<Layout, LayoutErr> {
+        if align == 0 {
+            return Err(LayoutErr::ZeroAlign);
+        } else if !align.is_power_of_two() {
+            return Err(LayoutErr::NonPowerOfTwoAlign(align));
+        } else if align > usize::MAX - (uintptr_t::SZ - 1) {
+            return Err(LayoutErr::CRoundUp(align));
+        }
         // SAFETY: see `align_up_checked`.
-        let align_rounded = unsafe { align_up(align, uintptr_t::SZ) };
-        match Layout::from_size_align(size, align_rounded) {
-            Ok(l) => Ok(l),
-            Err(_) => Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp))
-        }
-    }
-
-    /// Attempts to create a layout compatible with C's `posix_memalign` requirements from the given
-    /// `size` and `align`.
-    ///
-    /// C's `posix_memalign(out, alignment, size)` requires `alignment` is a power of two, non-zero,
-    /// and a multiple of <code>[size_of]::<*mut [c_void](::core::ffi::c_void)>()</code>.
-    ///
-    /// Therefore, this call will fail if `align` does not meet these requirements.
-    ///
-    /// [size_of]: ::core::mem::size_of
-    ///
-    /// # Errors
-    ///
-    /// <code>Err([Error::InvalidLayout]\([self.align()](Layout::align),
-    /// [self.align()](Layout::align), [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
-    // TODO: other errs
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use memapi2::prelude::{Layout, SizedProps};
-    /// let l = Layout::posix_memalign_compatible_from_size_align(10, 1).unwrap();
-    ///
-    /// assert!(l.align() >= usize::SZ); // or libc::uintptr_t::SZ if available
-    /// assert!(l.size() >= 10);
-    /// // on 64-bit systems, l == Layout(size = 10, align = 8).
-    /// // 32-bit, l == Layout(size = 10, align = 4)
-    /// ```
-    pub const fn try_posix_memalign_compatible_from_size_align(
-        size: usize,
-        align: usize
-    ) -> Result<Layout, Error> {
-        if !is_multiple_of(align, uintptr_t::SZ) {
-            return Err(Error::InvalidLayout(size, align, LayoutErr::CRoundUp));
-        }
-
-        Layout::from_size_align(size, align)
+        Layout::from_size_align(size, unsafe { align_up(align, uintptr_t::SZ) })
     }
 
     /// Creates a layout with the given size and alignment.
-    ///
-    /// In debug mode, this will panic if passed an invalid size or alignment.
     ///
     /// # Safety
     ///
     /// The caller must ensure:
     /// - `align` is a non-zero power of two.
+    /// - `size` is non-zero.
     /// - `size` rounded up to `align` does not exceed [`USIZE_MAX_NO_HIGH_BIT`].
     #[cfg_attr(any(miri, debug_assertions), track_caller)]
     #[must_use]
@@ -348,13 +314,6 @@ impl Layout {
         self.align
     }
 
-    /// Returns `true` if <code>[self.size()](Layout::size) == 0</code>.
-    #[must_use]
-    #[inline]
-    pub const fn is_zsl(&self) -> bool {
-        self.size == 0
-    }
-
     /// Returns the amount of padding necessary after `self` to ensure that the following address
     /// will satisfy `align`.
     ///
@@ -375,7 +334,7 @@ impl Layout {
     /// assert_eq!(unsafe { Layout::from_size_align_unchecked(6, 8) }.padding_needed_for(8), Ok(2));
     /// ```
     #[inline]
-    pub const fn padding_needed_for(&self, align: usize) -> Result<usize, Error> {
+    pub const fn padding_needed_for(&self, align: usize) -> Result<usize, LayoutErr> {
         let sz = self.size();
         match align_up_checked(sz, align) {
             // align_up_checked guarantees its return value will be >= the input, so new - sz cannot
@@ -415,7 +374,7 @@ impl Layout {
     ///   <code>layout.[align](Layout::align)()</code>, would overflow.
     #[::rustversion::attr(since(1.47), const)]
     #[inline]
-    pub fn repeat(&self, count: usize) -> Result<(Layout, usize), Error> {
+    pub fn repeat(&self, count: usize) -> Result<(Layout, usize), LayoutErr> {
         let padded = self.pad_to_align();
         match padded.repeat_packed(count) {
             Ok(repeated) => Ok((repeated, padded.size())),
@@ -430,7 +389,7 @@ impl Layout {
     /// instances of the value described by `layout` will be properly aligned, even if `layout` is
     /// properly aligned.
     ///
-    /// In other words, if the layout returned by`repeat_packed` is used to allocate an array, it
+    /// In other words, if the layout returned by `repeat_packed` is used to allocate an array, it
     /// isn't guaranteed that all elements in the array will be properly aligned.
     ///
     /// Note that this is only `const` on Rust versions 1.47 and above.
@@ -445,10 +404,10 @@ impl Layout {
     ///   [`self.align()`](Layout::align) would exceed [`USIZE_MAX_NO_HIGH_BIT`].
     #[::rustversion::attr(since(1.47), const)]
     #[inline]
-    pub fn repeat_packed(&self, count: usize) -> Result<Layout, Error> {
+    pub fn repeat_packed(&self, count: usize) -> Result<Layout, LayoutErr> {
         let size = match checked_op(self.size(), ArithOp::Mul, count) {
             Ok(s) => s,
-            Err(e) => return Err(Error::ArithmeticError(e))
+            Err(e) => return Err(LayoutErr::ArithmeticError(e))
         };
         match Layout::from_size_align(size, self.align()) {
             Ok(layout) => Ok(layout),
@@ -471,7 +430,7 @@ impl Layout {
     ///   [LayoutErr::ExceedsMax]\))</code> if [`self.size()`](Layout::size) rounded up to the
     ///   nearest multiple of `align` would exceed [`USIZE_MAX_NO_HIGH_BIT`].
     #[inline]
-    pub const fn align_to(&self, align: usize) -> Result<Layout, Error> {
+    pub const fn align_to(&self, align: usize) -> Result<Layout, LayoutErr> {
         if align > self.align() { Layout::from_size_align(self.size(), align) } else { Ok(*self) }
     }
 
@@ -504,12 +463,22 @@ impl Layout {
     /// assert_eq!(rounded.size(), 30);
     /// ```
     #[inline]
-    pub const fn align_to_multiple_of(&self, align: usize) -> Result<Layout, Error> {
+    pub const fn align_to_multiple_of(&self, align: usize) -> Result<Layout, LayoutErr> {
+        if align == 0 {
+            return Err(LayoutErr::ZeroAlign);
+        } else if !align.is_power_of_two() {
+            return Err(LayoutErr::NonPowerOfTwoAlign(align));
+        }
+
         let cur_align = self.align();
+
         if is_multiple_of(cur_align, align) {
             Ok(*self)
         } else {
-            tri!(do align_up_checks(cur_align, align));
+            let m1 = align - 1;
+            if cur_align > usize::MAX - m1 {
+                return Err(LayoutErr::ArithmeticError(ArithErr(cur_align, ArithOp::Add, m1)));
+            }
             // SAFETY: see `align_up_checked`.
             Layout::from_size_align(self.size(), unsafe { align_up(cur_align, align) })
         }
@@ -547,12 +516,13 @@ impl Layout {
     /// // 32-bit, compatible == Layout(size = 10, align = 4)
     /// ```
     #[inline]
-    pub const fn to_posix_memalign_compatible(&self) -> Result<Layout, Error> {
-        // make the alignment a multiple of `size_of::<*mut c_void>()`.
-        match self.align_to_multiple_of(uintptr_t::SZ) {
-            Ok(l) => Ok(l),
-            Err(_) => Err(Error::InvalidLayout(self.size(), self.align(), LayoutErr::CRoundUp))
+    pub const fn to_posix_memalign_compatible(&self) -> Result<Layout, LayoutErr> {
+        if self.align() > usize::MAX - (uintptr_t::SZ - 1) {
+            return Err(LayoutErr::CRoundUp(self.align()));
         }
+
+        // SAFETY: see `align_up_checked`.
+        Layout::from_size_align(self.size(), unsafe { align_up(self.align(), uintptr_t::SZ) })
     }
 
     #[cfg(any(not(feature = "no_alloc"), feature = "std"))]

@@ -1,5 +1,8 @@
 use {
-    crate::{error::Error, layout::Layout},
+    crate::{
+        error::{Error, LayoutErr},
+        layout::Layout
+    },
     ::core::{
         ffi::c_void,
         mem::{ManuallyDrop, MaybeUninit},
@@ -42,7 +45,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     f: F
 ) -> Result<R, Error> {
     if layout.size() == 0 {
-        return Err(Error::ZeroSizedLayout);
+        return Err(Error::LayoutError(LayoutErr::ZeroSize));
     }
 
     let mut ret = MaybeUninit::uninit();

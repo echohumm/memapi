@@ -30,14 +30,8 @@ pub enum Error {
     ///
     /// The cause may or may not be accurate depending on the type and environment.
     AllocFailed(Layout, Cause),
-    /// The layout computed with the given size and alignment is invalid; see the contained reason.
-    InvalidLayout(usize, usize, LayoutErr),
-    /// A zero-sized allocation was requested. This is treated as an error as several allocators do
-    /// not support such requests or respond to them strangely.
-    ///
-    /// In most reasonable cases, [`layout.dangling()`](Layout::dangling) can and should be used
-    /// instead.
-    ZeroSizedLayout,
+    /// The layout with the provided size and alignment is invalid; see the contained reason.
+    LayoutError(LayoutErr),
     /// Attempted to grow to a smaller size.
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
@@ -61,42 +55,30 @@ impl Display for Error {
             ArithmeticError,
             CaughtUnwind,
             GrowSmallerNewLayout,
-            InvalidLayout,
+            LayoutError,
             Other,
             ReallocSmallerAlign,
             ShrinkLargerNewLayout,
-            Unsupported,
-            ZeroSizedLayout
+            Unsupported
         };
 
         match self {
-            AllocFailed(l, cause) => write!(
+            AllocFailed(l, c) => write!(
                 f,
-                "allocation failed:\n\tlayout:\n\t\tsize: {}\n\t\talign: {}\n\tcause: {}",
+                "allocation failed: Layout(size: {}, align: {}), cause: {}",
                 l.size(),
                 l.align(),
-                cause
+                c
             ),
-            InvalidLayout(sz, aln, e) => write!(
-                f,
-                "computed invalid layout:\n\tsize: {}\n\talign: {}\n\treason: {}",
-                sz, aln, e
-            ),
-            ZeroSizedLayout => {
-                write!(f, "received a zero-sized layout")
-            }
+            LayoutError(c) => write!(f, "layout error: {}", c),
             GrowSmallerNewLayout(old, new) => {
-                write!(f, "attempted to grow from a size of {} to a smaller size of {}", old, new)
+                write!(f, "attempted to grow from size {} to smaller size {}", old, new)
             }
             ShrinkLargerNewLayout(old, new) => {
-                write!(f, "attempted to shrink from a size of {} to a larger size of {}", old, new)
+                write!(f, "attempted to shrink from size {} to larger size {}", old, new)
             }
             ReallocSmallerAlign(old, new) => {
-                write!(
-                    f,
-                    "attempted to reallocate from an align of {} to a smaller align of {}",
-                    old, new
-                )
+                write!(f, "attempted to reallocate from align {} to smaller align {}", old, new)
             }
             ArithmeticError(overflow) => write!(f, "{}", overflow),
             CaughtUnwind => {
@@ -141,7 +123,7 @@ impl Display for Cause {
             #[cfg(not(feature = "os_err_reporting"))]
             Cause::OSErr(e) => write!(f, "os error code: {}", e),
             #[cfg(feature = "os_err_reporting")]
-            Cause::OSErr(e) => write!(f, "os error: {}", ::std::io::Error::from_raw_os_error(*e)),
+            Cause::OSErr(e) => write!(f, "os error: {}", ::std::io::Error::from_raw_os_error(*e))
         }
     }
 }
@@ -152,32 +134,59 @@ impl_error! { Cause }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LayoutErr {
+    /// The size was zero.
+    ZeroSize,
     /// The alignment was zero.
     ZeroAlign,
-    /// The alignment was not a power of two.
-    NonPowerOfTwoAlign,
+    /// The alignment was not a power of two. Instead, it was the contained value.
+    NonPowerOfTwoAlign(usize),
+    // TODO: i dislike having both exceedsmax and arrayexceedsmax
     /// The requested size was greater than
     /// [`USIZE_MAX_NO_HIGH_BIT`](crate::helpers::USIZE_MAX_NO_HIGH_BIT) when
     /// rounded up to the nearest multiple of the requested alignment.
-    ExceedsMax,
+    ///
+    /// The first contained value is the requested size, while the second is the requested
+    /// alignment.
+    ExceedsMax(usize, usize),
+    /// The total size of an array, when rounded up to the nearest multiple of its item's alignment,
+    /// would exceed [`USIZE_MAX_NO_HIGH_BIT`](crate::helpers::USIZE_MAX_NO_HIGH_BIT).
+    ///
+    /// The first contained value is the size of the elements, the second is the number of elements,
+    /// and the third is the alignment of the element type.
+    ArrayExceedsMax(usize, usize, usize),
     /// An arithmetic error occurred.
-    ArithErr(ArithErr),
-    /// An error occurred while rounding the alignment of the requested layout up to a value
-    /// compatible with C's `posix_memalign`.
-    CRoundUp
+    ArithmeticError(ArithErr),
+    /// <placeholder>
+    CRoundUp(usize)
 }
 
 impl Display for LayoutErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
+            LayoutErr::ZeroSize => write!(f, "size is zero"),
             LayoutErr::ZeroAlign => write!(f, "alignment is zero"),
-            LayoutErr::NonPowerOfTwoAlign => {
-                write!(f, "alignment isn't a power of two")
+            LayoutErr::NonPowerOfTwoAlign(aln) => {
+                write!(f, "alignment {} isn't a power of two", aln)
             }
-            LayoutErr::ExceedsMax => write!(f, "size would overflow when rounded up to alignment"),
-            LayoutErr::ArithErr(overflow) => write!(f, "layout err: {}", overflow),
-            LayoutErr::CRoundUp => {
-                write!(f, "failed to round layout alignment up to a multiple of {}", uintptr_t::SZ)
+            LayoutErr::ExceedsMax(sz, aln) => {
+                write!(f, "size {} would overflow when rounded up to a multiple of {}", sz, aln)
+            }
+            LayoutErr::ArrayExceedsMax(sz, n, aln) => {
+                write!(
+                    f,
+                    "array with {} elements of size {} would have its total size overflow when \
+                     rounded up to a multiple of {}",
+                    n, sz, aln
+                )
+            }
+            LayoutErr::ArithmeticError(overflow) => write!(f, "{}", overflow),
+            LayoutErr::CRoundUp(aln) => {
+                write!(
+                    f,
+                    "alignment {} would overflow `usize::MAX` when rounded up to a multiple of {}",
+                    aln,
+                    uintptr_t::SZ
+                )
             }
         }
     }

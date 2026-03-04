@@ -2,7 +2,7 @@
 use {
     ::core::mem::{align_of, size_of},
     memapi2::{
-        error::{Error, LayoutErr},
+        error::{LayoutErr},
         helpers::USIZE_HIGH_BIT,
         layout::Layout
     },
@@ -38,13 +38,13 @@ fn layout_to_stdlib() {
 #[test]
 fn from_size_align_invalid_zero_align() {
     let err = Layout::from_size_align(8, 0).unwrap_err();
-    assert_eq!(err, Error::InvalidLayout(8, 0, LayoutErr::ZeroAlign));
+    assert_eq!(err, LayoutErr::ZeroAlign);
 }
 
 #[test]
 fn from_size_align_invalid_non_power_of_two() {
     let err = Layout::from_size_align(8, 3).unwrap_err();
-    assert_eq!(err, Error::InvalidLayout(8, 3, LayoutErr::NonPowerOfTwoAlign));
+    assert_eq!(err, LayoutErr::NonPowerOfTwoAlign(3));
 }
 
 #[test]
@@ -72,7 +72,7 @@ fn padding_needed_for_invalid() {
     let l = Layout::from_size_align(6, 8).unwrap();
     assert_eq!(
         l.padding_needed_for(3),
-        Err(Error::InvalidLayout(6, 3, LayoutErr::NonPowerOfTwoAlign))
+        Err(LayoutErr::NonPowerOfTwoAlign(3))
     );
 }
 
@@ -116,7 +116,7 @@ fn array_layout_basic_and_zst() {
 fn array_layout_exceeds_max() {
     let max = (USIZE_HIGH_BIT - align_of::<u8>()) / size_of::<u8>();
     let err = Layout::array::<u8>(max + 1).unwrap_err();
-    assert_eq!(err, Error::InvalidLayout(1, 1, LayoutErr::ExceedsMax));
+    assert_eq!(err, LayoutErr::ArrayExceedsMax(1, max + 1, 1));
 }
 
 #[test]

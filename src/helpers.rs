@@ -10,7 +10,6 @@ use {
     },
     ::core::{
         marker::Sized,
-        ops::Fn,
         option::Option::{self, None, Some},
         ptr::NonNull,
         result::Result::{self, Err, Ok}
@@ -272,26 +271,6 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
     null_q(ptr, layout)
 }
 
-/// Checks layout for being zero-sized, returning a [dangling](::core::ptr::dangling) pointer if it
-/// is, otherwise attempting allocation using `f(layout)`.
-///
-/// # Errors
-///
-/// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if `f` returns a null pointer. `cause`
-///   is typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
-///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-/// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() == 0</code>.
-///
-/// [last_os_error]: ::std::io::Error::last_os_error
-/// [raw_os_error]: ::std::io::Error::raw_os_error
-#[inline]
-pub fn null_q_dyn_zsl_check<T, F: Fn(Layout) -> *mut T>(
-    layout: Layout,
-    f: F
-) -> Result<NonNull<u8>, Error> {
-    if layout.is_zsl() { Err(Error::ZeroSizedLayout) } else { null_q_dyn(f(layout), layout) }
-}
 // TODO: lower const msrv and generally improve these
 #[::rustversion::since(1.75)]
 /// Subtracts `n` bytes from a pointer's address.

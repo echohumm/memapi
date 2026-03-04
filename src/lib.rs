@@ -142,10 +142,10 @@ macro_rules! default_alloc_impl {
                 &self,
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
-                crate::helpers::null_q_dyn_zsl_check(
-                    layout,
-                    // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { ::stdalloc::alloc::alloc(layout.to_stdlib()) }
+                crate::helpers::null_q_dyn(
+                    // SAFETY: layout requires that it has non-zero size
+                    unsafe { ::stdalloc::alloc::alloc(layout.to_stdlib()) },
+                    layout
                 )
             }
 
@@ -155,10 +155,10 @@ macro_rules! default_alloc_impl {
                 &self,
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
-                crate::helpers::null_q_dyn_zsl_check(
-                    layout,
-                    // SAFETY: we check the layout is non-zero-sized before use.
-                    |layout| unsafe { ::stdalloc::alloc::alloc_zeroed(layout.to_stdlib()) }
+                crate::helpers::null_q_dyn(
+                    // SAFETY: layout requires that it has non-zero size
+                    unsafe { ::stdalloc::alloc::alloc_zeroed(layout.to_stdlib()) },
+                    layout
                 )
             }
         }
@@ -166,7 +166,7 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             unsafe fn dealloc(&self, ptr: ::core::ptr::NonNull<u8>, layout: crate::layout::Layout) {
-                if !layout.is_zsl() && ptr != layout.dangling() {
+                if ptr != layout.dangling() {
                     ::stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
             }
@@ -245,7 +245,7 @@ macro_rules! zalloc {
 
 macro_rules! default_dealloc {
     ($self:ident.$de:ident, $ptr:ident, $l:ident) => {
-        if !$l.is_zsl() && $ptr != $l.dangling() {
+        if $ptr != $l.dangling() {
             if let ::core::result::Result::Err(e) = $self.$de($ptr, $l) {
                 default_dealloc_panic($ptr, $l, e)
             }

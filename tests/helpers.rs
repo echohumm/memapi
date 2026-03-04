@@ -5,7 +5,7 @@ use {
     ::core::ptr::{self, NonNull},
     memapi2::{
         DefaultAlloc,
-        error::{ArithErr, ArithOp, Error},
+        error::{ArithErr, ArithOp},
         helpers::{
             align_up,
             byte_sub,
@@ -13,7 +13,6 @@ use {
             is_multiple_of,
             nonnull_slice_from_parts,
             nonnull_slice_len,
-            null_q_dyn_zsl_check,
             slice_ptr_from_parts_mut
         },
         layout::Layout,
@@ -121,16 +120,6 @@ fn dangling_nonnull_for_alignment() {
 fn is_multiple_of_zero_rhs() {
     assert!(is_multiple_of(0, 0));
     assert!(!is_multiple_of(1, 0));
-}
-
-#[test]
-fn null_q_dyn_zsl_check_zero_layout() {
-    let layout = Layout::new::<()>();
-    let ptr = null_q_dyn_zsl_check(layout, |l| -> *mut u8 {
-        panic!("unexpected alloc with layout: {:#?}", l)
-    })
-    .unwrap_err();
-    assert_eq!(ptr, Error::ZeroSizedLayout);
 }
 
 #[test]

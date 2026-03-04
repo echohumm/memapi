@@ -498,10 +498,10 @@ impl_alloc_ref! { ::stdalloc::boxed::Box<A>, ::stdalloc::rc::Rc<A>, ::stdalloc::
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
 macro_rules! sysalloc {
     ($self:ident, $alloc:ident, $layout:ident) => {
-        crate::helpers::null_q_dyn_zsl_check(
-            $layout,
-            // SAFETY: System::$alloc is only called after the layout is verified non-zero-sized.
-            |layout| unsafe { ::stdalloc::alloc::GlobalAlloc::$alloc($self, layout.to_stdlib()) }
+        crate::helpers::null_q_dyn(
+            // SAFETY: layout requires that it has non-zero size
+            unsafe { ::stdalloc::alloc::GlobalAlloc::$alloc($self, $layout.to_stdlib()) },
+            $layout
         )
     };
 }
@@ -531,7 +531,7 @@ impl Dealloc for ::std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        if !layout.is_zsl() && ptr != layout.dangling() {
+        if ptr != layout.dangling() {
             ::stdalloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
         }
     }
