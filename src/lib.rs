@@ -82,11 +82,13 @@
 //  make sure they match and make sense
 
 #[cfg(not(feature = "no_alloc"))] extern crate alloc as stdalloc;
-extern crate bitflags;
+#[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;
+
 extern crate core;
 extern crate libc;
+
+extern crate bitflags;
 extern crate rustversion;
-#[cfg(all(feature = "std", feature = "no_alloc"))] extern crate std as stdalloc;
 
 /// A relatively minimal prelude containing the most common, important things from this crate.
 // unfortunately we need this cfg_attr, or it thinks rustfmt is a module and can't find it
@@ -131,8 +133,6 @@ macro_rules! default_alloc_impl {
     ($ty:ty) => {
         impl crate::traits::AllocDescriptor for $ty {
             type Error = crate::error::Error;
-
-            const FEATURES: crate::traits::AllocFeatures = crate::traits::AllocFeatures::DEALLOC;
         }
 
         impl crate::traits::alloc::Alloc for $ty {
@@ -254,7 +254,8 @@ macro_rules! default_dealloc {
 }
 
 macro_rules! assert_unsafe_precondition {
-        (
+    // TODO: use these for higher msrv checks
+    (
         noconst,
         $message:expr,
         $(<$($gen:ident $(: [$($req:tt)+])?),*>)?
@@ -315,11 +316,11 @@ macro_rules! assert_unsafe_precondition {
             #[track_caller]
             const fn precondition_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) {
                 #[::rustversion::since($msrv)]
-                fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
+                const fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
                     !($($msrv_e)+)
                 }
                 #[::rustversion::before($msrv)]
-                fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
+                const fn extra_check $(<$($gen $(: $($req)+)?),*>)? ($($name: $ty),*) -> bool {
                     false
                 }
 

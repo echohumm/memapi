@@ -13,7 +13,6 @@ use {
     },
     ::libc::uintptr_t
 };
-
 // TODO: docs are outdated, particularly for errors
 
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
@@ -162,7 +161,7 @@ impl Layout {
         // i love how max, possibly the simplest function in existence (aside from accessors), is
         // not const.
         let new_align = if a_aln > b_aln { a_aln } else { b_aln };
-        
+
         // check the total size fits within limits and doesn't overflow.
         match checked_op(a_sz, ArithOp::Add, offset) {
             Ok(total) if total <= USIZE_MAX_NO_HIGH_BIT => {
@@ -249,9 +248,9 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// <code>Err([Error::InvalidLayout]\([self.align()](Layout::align),
-    /// [self.align()](Layout::align), [LayoutErr::ZeroAlign]\))</code> if `align == 0`.
-    // TODO: missing other errors
+    /// <code>Err([Error::LayoutError](crate::error::Error)([LayoutErr::ZeroAlign]))</code> if
+    /// `align == 0`.
+    // TODO: missing other errors, i've only fixed this one's error type
     ///
     /// # Examples
     ///

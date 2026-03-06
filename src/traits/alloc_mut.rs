@@ -34,8 +34,6 @@ pub trait AllocMut: AllocDescriptor {
     ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
-    ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
     /// [raw_os_error]: ::std::io::Error::raw_os_error
@@ -56,8 +54,6 @@ pub trait AllocMut: AllocDescriptor {
     ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ZeroSizedLayout])</code> if <code>layout.[size](Layout::size)() ==
-    ///   0</code>.
     ///
     /// [last_os_error]: ::std::io::Error::last_os_error
     /// [raw_os_error]: ::std::io::Error::raw_os_error

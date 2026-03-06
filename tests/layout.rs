@@ -1,11 +1,7 @@
 #![cfg(any(not(feature = "no_alloc"), feature = "std"))]
 use {
     ::core::mem::{align_of, size_of},
-    memapi2::{
-        error::{LayoutErr},
-        helpers::USIZE_HIGH_BIT,
-        layout::Layout
-    },
+    memapi2::{error::LayoutErr, helpers::USIZE_HIGH_BIT, layout::Layout},
     std::alloc::Layout as StdLayout
 };
 
@@ -70,10 +66,7 @@ fn align_to() {
 #[test]
 fn padding_needed_for_invalid() {
     let l = Layout::from_size_align(6, 8).unwrap();
-    assert_eq!(
-        l.padding_needed_for(3),
-        Err(LayoutErr::NonPowerOfTwoAlign(3))
-    );
+    assert_eq!(l.padding_needed_for(3), Err(LayoutErr::NonPowerOfTwoAlign(3)));
 }
 
 #[test]

@@ -9,7 +9,6 @@ use {
         }
     },
     ::core::{
-        marker::Sized,
         option::Option::{self, None, Some},
         ptr::NonNull,
         result::Result::{self, Err, Ok}
@@ -31,15 +30,23 @@ pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (USIZE_MAX_NO_HIGH_BIT);
 
 // TODO: better docs
 #[cfg(target_pointer_width = "64")]
-/// An alias for whatever type is double the size of a `usize`.
+/// Unsigned integer type that is twice the bit-width of `usize`.
+///
+/// On 64-bit targets this is an alias for `u128`.
 #[allow(non_camel_case_types)]
 pub type udouble = u128;
+
 #[cfg(target_pointer_width = "32")]
-/// An alias for whatever type is double the size of a `usize`.
+/// Unsigned integer type that is twice the bit-width of `usize`.
+///
+/// On 32-bit targets this is an alias for `u64`.
 #[allow(non_camel_case_types)]
 pub type udouble = u64;
+
 #[cfg(target_pointer_width = "16")]
-/// An alias for whatever type is double the size of a `usize`.
+/// Unsigned integer type that is twice the bit-width of `usize`.
+///
+/// On 16-bit targets this is an alias for `u32`.
 #[allow(non_camel_case_types)]
 pub type udouble = u32;
 
@@ -269,76 +276,6 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
 /// <code>Err([Error::AllocFailed]\(layout, [Cause::Unknown]\)</code> if `ptr.is_null()`.
 pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> {
     null_q(ptr, layout)
-}
-
-// TODO: lower const msrv and generally improve these
-#[::rustversion::since(1.75)]
-/// Subtracts `n` bytes from a pointer's address.
-///
-/// Note that this is only `const` on Rust versions 1.75 and above.
-///
-/// # Safety
-///
-/// The caller must ensure:
-/// - <code>n < [USIZE_MAX_NO_HIGH_BIT]</code>
-/// - the resulting pointer will be within the same allocation as `p`
-/// - the resulting pointer's metadata remains valid for the new address
-pub const unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
-    p.byte_sub(n)
-}
-#[::rustversion::before(1.75)]
-/// Subtracts `n` bytes from a pointer's address.
-///
-/// Note that this is only `const` on Rust versions 1.75 and above.
-///
-/// # Safety
-///
-/// The caller must ensure:
-/// - <code>n < [USIZE_MAX_NO_HIGH_BIT]</code>
-/// - the resulting pointer will be within the same allocation as `p`
-/// - the resulting pointer's metadata remains valid for the new address
-pub unsafe fn byte_sub<T: ?Sized>(p: *const T, n: usize) -> *const T {
-    // a bit convoluted, but as we dont know the meta type of T, we can't do any better
-    let mut p = p;
-    let addr_ptr = (&mut p as *mut *const T).cast::<usize>();
-    // SAFETY: the pointer is valid as it is from a &mut.
-    unsafe {
-        ::core::ptr::write(addr_ptr, *addr_ptr - n);
-    }
-    p
-}
-
-#[::rustversion::since(1.75)]
-/// Adds `n` bytes to a pointer's address.
-///
-/// Note that this is only `const` on Rust versions 1.75 and above.
-///
-/// # Safety
-///
-/// The caller must ensure:
-/// - <code>n < [USIZE_MAX_NO_HIGH_BIT]</code>
-/// - the resulting pointer will be within the same allocation as `p`
-/// - the resulting pointer's metadata remains valid for the new address
-pub const unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
-    p.byte_add(n)
-}
-#[::rustversion::before(1.75)]
-/// Adds `n` bytes to a pointer's address.
-///
-/// # Safety
-///
-/// The caller must ensure:
-/// - <code>n < [USIZE_MAX_NO_HIGH_BIT]</code>
-/// - the resulting pointer will be within the same allocation as `p`
-/// - the resulting pointer's metadata remains valid for the new address
-pub unsafe fn byte_add<T: ?Sized>(p: *const T, n: usize) -> *const T {
-    let mut p = p;
-    let addr_ptr = (&mut p as *mut *const T).cast::<usize>();
-    // SAFETY: the pointer is valid as it is from a &mut.
-    unsafe {
-        ::core::ptr::write(addr_ptr, *addr_ptr + n);
-    }
-    p
 }
 
 #[::rustversion::since(1.49)]

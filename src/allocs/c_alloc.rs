@@ -6,7 +6,6 @@ use {
         layout::Layout,
         traits::{
             AllocDescriptor,
-            AllocFeatures,
             alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
         }
     },
@@ -53,8 +52,6 @@ pub struct CAlloc;
 
 impl AllocDescriptor for CAlloc {
     type Error = Error;
-
-    const FEATURES: AllocFeatures = AllocFeatures::DEALLOC;
 }
 
 impl Alloc for CAlloc {

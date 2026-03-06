@@ -4,11 +4,9 @@
 use {
     ::core::ptr::{self, NonNull},
     memapi2::{
-        DefaultAlloc,
         error::{ArithErr, ArithOp},
         helpers::{
             align_up,
-            byte_sub,
             checked_op,
             is_multiple_of,
             nonnull_slice_from_parts,
@@ -16,53 +14,9 @@ use {
             slice_ptr_from_parts_mut
         },
         layout::Layout,
-        traits::{
-            alloc::{Alloc, Dealloc},
-            data::type_props::varsized_ptr_from_parts_mut
-        }
+        traits::data::type_props::varsized_ptr_from_parts_mut
     }
 };
-
-const VALUE: u64 =
-    0b1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010_1010;
-const BYTE: u8 = 0b1010_1010;
-
-#[test]
-fn byte_sub_stack() {
-    let value = VALUE;
-
-    let ptr = (&value as *const u64).cast::<u8>();
-    assert_eq!(unsafe { *ptr }, BYTE);
-    let ptr_halfway = unsafe { ptr.add(4) };
-    assert_eq!(unsafe { *ptr_halfway }, BYTE);
-
-    let ptr_subbed = unsafe { byte_sub(ptr_halfway.cast::<u64>(), 4) };
-    assert_eq!(unsafe { *ptr_subbed }, VALUE);
-    assert_eq!(unsafe { *ptr_subbed.cast::<u8>() }, BYTE);
-}
-
-#[test]
-fn byte_sub_heap() {
-    let a = DefaultAlloc;
-    let l = Layout::new::<u64>();
-    let mem = a.alloc(l).unwrap().cast();
-    unsafe {
-        ptr::write(mem.as_ptr(), VALUE);
-    }
-
-    let ptr = mem.as_ptr().cast::<u8>();
-    assert_eq!(unsafe { *ptr }, BYTE);
-    let ptr_halfway = unsafe { ptr.add(4) };
-    assert_eq!(unsafe { *ptr_halfway }, BYTE);
-
-    let ptr_subbed = unsafe { byte_sub(ptr_halfway.cast::<u64>(), 4) };
-    assert_eq!(unsafe { *ptr_subbed }, VALUE);
-    assert_eq!(unsafe { *ptr_subbed.cast::<u8>() }, BYTE);
-
-    unsafe {
-        a.dealloc(mem.cast(), l);
-    }
-}
 
 #[test]
 fn slice_ptr_from_parts_stack_roundtrip() {
@@ -104,9 +58,34 @@ fn checked_op_basic_and_errors() {
 #[test]
 fn align_up_basic() {
     assert_eq!(unsafe { align_up(7, 8) }, 8);
+    assert_eq!(unsafe { align_up(8, 16) }, 16);
+    assert_eq!(unsafe { align_up(23, 8) }, 24);
 }
 
-// TODO: more align_up tests
+#[rustversion::since(1.57)]
+#[test]
+#[should_panic = "unsafe precondition(s) violated: `align_up` requires that `align` is a non-zero \
+                  power of two and that `v + (align - 1)` does not overflow."]
+fn align_up_zero_align() {
+    let _ = unsafe { align_up(7, 0) };
+}
+
+#[rustversion::since(1.57)]
+#[test]
+#[should_panic = "unsafe precondition(s) violated: `align_up` requires that `align` is a non-zero \
+                  power of two and that `v + (align - 1)` does not overflow."]
+fn align_up_nonpow2() {
+    let _ = unsafe { align_up(7, 3) };
+}
+
+#[rustversion::since(1.57)]
+#[test]
+#[should_panic = "unsafe precondition(s) violated: `align_up` requires that `align` is a non-zero \
+                  power of two and that `v + (align - 1)` does not overflow."]
+fn align_up_overflow() {
+    // usize limit is 18_446_744_073_709_551_615, that + (a - 1) where a > 1 will overflow
+    let _ = unsafe { align_up(18_446_744_073_709_551_615, 2) };
+}
 
 #[test]
 fn dangling_nonnull_for_alignment() {
