@@ -3,6 +3,7 @@ use {
     ::core::{ptr::NonNull, result::Result}
 };
 
+// TODO: remove, not worth it for doc maintainability
 macro_rules! trait_decl {
     (
         $([$doc:literal, $name:ident : $req:ident,

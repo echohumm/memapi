@@ -62,7 +62,7 @@ os_err_reporting = ["std"]
 catch_unwind = ["stack_alloc", "std"]
 
 # feature bundles
-full = ["c_alloc", "catch_unwind", "os_err_reporting"]
+full = ["c_alloc", "catch_unwind", "os_err_reporting", "checked_ops"]
 full_nightly = ["metadata", "full"]
 
 
