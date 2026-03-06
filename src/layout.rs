@@ -127,7 +127,7 @@ impl Layout {
         assert_unsafe_precondition!(
             "`Layout::array_unchecked` requires that `T::SZ * n` rounded up to `T::ALN` will not \
              exceed `USIZE_MAX_NO_HIGH_BIT`.",
-            <T>(n: usize = n) => [T::SZ == 0 || n <= (USIZE_HIGH_BIT - T::ALN) / T::SZ]
+            <T>(n: usize = n) => [T::SZ != 0 || n <= (USIZE_HIGH_BIT - T::ALN) / T::SZ]
         );
         Layout::from_size_align_unchecked(T::SZ * n, T::ALN)
     }
@@ -522,6 +522,12 @@ impl Layout {
 
         // SAFETY: see `align_up_checked`.
         Layout::from_size_align(self.size(), unsafe { align_up(self.align(), uintptr_t::SZ) })
+    }
+
+    /// Returns `true` if this layout is zero-sized.
+    #[must_use]
+    pub const fn is_zsl(&self) -> bool {
+        self.size() == 0
     }
 
     #[cfg(any(not(feature = "no_alloc"), feature = "std"))]

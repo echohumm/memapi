@@ -23,6 +23,9 @@ use {
 pub trait Alloc: AllocDescriptor + AllocMut {
     /// Attempts to allocate a block of memory fitting the given [`Layout`].
     ///
+    /// If <code>layout.[size](Layout::size)() == 0</code>, no allocation will be performed and a
+    /// [dangling](::core::ptr::dangling) pointer will be returned.
+    ///
     /// # Errors
     ///
     /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
@@ -42,6 +45,9 @@ pub trait Alloc: AllocDescriptor + AllocMut {
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
+    ///
+    /// If <code>layout.[size](Layout::size)() == 0</code>, no allocation will be performed and a
+    /// [dangling](::core::ptr::dangling) pointer will be returned.
     ///
     /// # Errors
     ///
@@ -510,9 +516,9 @@ impl_alloc_ref! { ::stdalloc::boxed::Box<A>, ::stdalloc::rc::Rc<A>, ::stdalloc::
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
 macro_rules! sysalloc {
     ($self:ident, $alloc:ident, $layout:ident) => {
-        crate::helpers::null_q_dyn(
+        crate::helpers::null_q_dyn_zsl_check(
             // SAFETY: layout requires that it has non-zero size
-            unsafe { ::stdalloc::alloc::GlobalAlloc::$alloc($self, $layout.to_stdlib()) },
+            |l| unsafe { ::stdalloc::alloc::GlobalAlloc::$alloc($self, l.to_stdlib()) },
             $layout
         )
     };
@@ -542,7 +548,7 @@ impl Dealloc for ::std::alloc::System {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
-        if ptr != layout.dangling() {
+        if !layout.is_zsl() && ptr != layout.dangling() {
             ::stdalloc::alloc::GlobalAlloc::dealloc(self, ptr.as_ptr(), layout.to_stdlib());
         }
     }

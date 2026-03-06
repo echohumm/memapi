@@ -72,6 +72,11 @@ fn test_shrink_and_error_cases() {
 }
 
 #[test]
+fn shrink_to_zero() {
+    todo!()
+}
+
+#[test]
 fn grow_preserves_prefix() {
     let a = DefaultAlloc;
     let old = Layout::from_size_align(8, 8).unwrap();

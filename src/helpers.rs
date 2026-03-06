@@ -278,6 +278,19 @@ pub fn null_q_dyn<T>(ptr: *mut T, layout: Layout) -> Result<NonNull<u8>, Error> 
     null_q(ptr, layout)
 }
 
+/// Checks if `layout` is zero-sized, returns `Ok(layout.dangling())` if it is, otherwise returns
+/// `null_q_dyn(alloc(layout), layout)`.
+///
+/// # Errors
+///
+/// See [`null_q_dyn`]
+pub fn null_q_dyn_zsl_check<T, F: ::core::ops::FnOnce(Layout) -> *mut T>(
+    alloc: F,
+    layout: Layout
+) -> Result<NonNull<u8>, Error> {
+    if layout.size() == 0 { Ok(layout.dangling()) } else { null_q_dyn(alloc(layout), layout) }
+}
+
 #[::rustversion::since(1.49)]
 /// Transmutes via a `union`. Performs no validity checks.
 ///

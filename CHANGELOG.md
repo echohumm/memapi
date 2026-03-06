@@ -8,38 +8,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 ## [Unreleased]
 
-[//]: # (TODO: update after e01b523d3c8a7fd61a098171032ca3df8a881cde)
-
 ### Added
 
 * `Error::ReallocSmallerAlign` for when attempting to reallocate with a smaller new alignment
 * `Layout::try_posix_memalign_compatible_from_size_align` to only allow layout creation if the
   provided size and alignment are compatible with `posix_memalign`
 * `PtrProps::varsized_metadata` for getting the size of `VarSized` types
+* `checked_ops` feature controlling `traits::alloc_checked` module
+* `traits::AllocDescriptor::FEATURES` supported feature bitflags with `traits::AllocFeatures`
+* `helpers::udouble`
+* `ArithOp::DivCeil` and the matching checked arithmetic operation
 
 ### Changed
 
 * `Dealloc::try_dealloc` on a zero-sized layout or dangling pointer is now a no-op, not an error
 * Renamed `Layout::is_zero_sized` to `Layout::is_zsl`
+* Renamed `traits::AllocError` to `AllocDescriptor`
+* Renamed `Error::InvalidLayout` to `LayoutError`; removed size and align fields
+* Renamed `LayoutError::ArithErr` to `ArithmeticError`
+* `Layout` functions' error type is now `LayoutError`
+* `LayoutErr` now stores relevant data for layout errors
 * Moved `VarSized` pointer creation functions from `helpers` to `traits::data::type_props`
+* Renamed `dev` feature to `__dev`
+* `Dealloc::checked_dealloc` moved to `alloc_checked::alloc::DeallocChecked::checked_dealloc`
 
 ### Fixed
 
 * Reallocation that requests a smaller alignment is now treated as an error
   (`Error::ReallocSmallerAlign`) instead of allowing potential undefined behavior
 * Build spuriously failing on MSRV
+* `CAlloc` allocations being unaligned in certain cases
 
 ### Removed
 
 * Useless `sized_hierarchy` feature
-* Useless `full_nightly` feature bundle with only one item
+* Useless `all_nightly` feature bundle with only one item
 * `c_str` feature in favor of auto-detecting a compatible compiler version
-* `full_msrv` feature made usless by removing `c_str`
+* `full_msrv` feature made useless by removing `c_str`
 * `Error::DanglingDeallocation` error; attempting to deallocate a dangling pointer is now a no-op.
+* `Error::ZeroSizedLayout` error
 * `helpers::align_up_checked`
 * `helpers::dangling_nonnull`; replaced by `SizedProps::DANGLING_PTR` and `Layout::dangling`
-* `Layout::is_nonzero_sized`
 * `traits::data::marker::{Thin,SizeMeta}`
+* `helpers::{AllocGuard, SliceAllocGuard}`
+* `Layout::try_posix_memalign_compatible_from_size_align`
+* `GlobalAlloc` implementation for `DefaultAlloc`
 
 ---
 

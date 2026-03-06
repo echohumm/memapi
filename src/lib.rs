@@ -142,9 +142,9 @@ macro_rules! default_alloc_impl {
                 &self,
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
-                crate::helpers::null_q_dyn(
+                crate::helpers::null_q_dyn_zsl_check(
                     // SAFETY: layout requires that it has non-zero size
-                    unsafe { ::stdalloc::alloc::alloc(layout.to_stdlib()) },
+                    |layout| unsafe { ::stdalloc::alloc::alloc(layout.to_stdlib()) },
                     layout
                 )
             }
@@ -155,9 +155,9 @@ macro_rules! default_alloc_impl {
                 &self,
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
-                crate::helpers::null_q_dyn(
+                crate::helpers::null_q_dyn_zsl_check(
                     // SAFETY: layout requires that it has non-zero size
-                    unsafe { ::stdalloc::alloc::alloc_zeroed(layout.to_stdlib()) },
+                    |layout| unsafe { ::stdalloc::alloc::alloc_zeroed(layout.to_stdlib()) },
                     layout
                 )
             }
@@ -166,7 +166,7 @@ macro_rules! default_alloc_impl {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
             unsafe fn dealloc(&self, ptr: ::core::ptr::NonNull<u8>, layout: crate::layout::Layout) {
-                if ptr != layout.dangling() {
+                if !layout.is_zsl() && ptr != layout.dangling() {
                     ::stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
             }
@@ -245,7 +245,7 @@ macro_rules! zalloc {
 
 macro_rules! default_dealloc {
     ($self:ident.$de:ident, $ptr:ident, $l:ident) => {
-        if $ptr != $l.dangling() {
+        if !$l.is_zsl() && $ptr != $l.dangling() {
             if let ::core::result::Result::Err(e) = $self.$de($ptr, $l) {
                 default_dealloc_panic($ptr, $l, e)
             }
@@ -384,47 +384,8 @@ pub mod allocs;
 pub mod ffi;
 
 /// Default allocator, delegating to the global allocator.
-///
-/// # Note
-///
-/// This must _not_ be set as the global allocator (via `#[global_allocator]`). Doing so will lead
-/// to infinite recursion, as the allocation functions this calls (in
-/// [`alloc::alloc`](::stdalloc::alloc)) delegate to the global allocator.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DefaultAlloc;
-
-#[cfg(any(not(feature = "no_alloc"), feature = "std"))]
-// SAFETY: DefaultAlloc doesn't unwind, and all layout operations are correct
-unsafe impl ::stdalloc::alloc::GlobalAlloc for DefaultAlloc {
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn alloc(&self, layout: crate::layout::StdLayout) -> *mut u8 {
-        ::stdalloc::alloc::alloc(layout)
-    }
-
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: crate::layout::StdLayout) {
-        ::stdalloc::alloc::dealloc(ptr, layout);
-    }
-
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn alloc_zeroed(&self, layout: crate::layout::StdLayout) -> *mut u8 {
-        ::stdalloc::alloc::alloc_zeroed(layout)
-    }
-
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn realloc(
-        &self,
-        ptr: *mut u8,
-        layout: crate::layout::StdLayout,
-        new_size: usize
-    ) -> *mut u8 {
-        ::stdalloc::alloc::realloc(ptr, layout, new_size)
-    }
-}
 
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
 default_alloc_impl!(DefaultAlloc);

@@ -23,20 +23,24 @@ fn null_q_dyn_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
     layout: Layout,
     f: F
 ) -> Result<NonNull<u8>, Error> {
-    // _aligned_malloc doesn't have the weird pointer-size requirement
-    #[cfg(not(windows))]
-    let layout = tri!(::LayoutError layout.to_posix_memalign_compatible());
+    if layout.size() == 0 {
+        Ok(layout.dangling())
+    } else {
+        // _aligned_malloc doesn't have the weird pointer-size requirement
+        #[cfg(not(windows))]
+        let layout = tri!(::LayoutError layout.to_posix_memalign_compatible());
 
-    assert_unsafe_precondition!(
-        noconst, "go tell the developer they're stupid, and a layout somehow became unaligned in \
-        CAlloc",
-        (layout: Layout = layout) => [layout.align().is_power_of_two()]
-    );
+        assert_unsafe_precondition!(
+            noconst, "go tell the developer they're stupid, and a layout somehow became unaligned in \
+            CAlloc",
+            (layout: Layout = layout) => [layout.align().is_power_of_two()]
+        );
 
-    let (ptr, status) = f(layout);
-    match status {
-        0 => null_q_dyn(ptr, layout),
-        code => Err(Error::AllocFailed(layout, Cause::OSErr(code as c_int)))
+        let (ptr, status) = f(layout);
+        match status {
+            0 => null_q_dyn(ptr, layout),
+            code => Err(Error::AllocFailed(layout, Cause::OSErr(code as c_int)))
+        }
     }
 }
 
@@ -109,7 +113,7 @@ impl Dealloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
-        if ptr != layout.dangling() {
+        if !layout.is_zsl() && ptr != layout.dangling() {
             let padded = tri!(::LayoutError layout.to_posix_memalign_compatible());
             let _size = padded.size();
             let _align = padded.align();

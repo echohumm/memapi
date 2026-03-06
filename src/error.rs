@@ -137,8 +137,6 @@ impl_error! { Cause }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum LayoutErr {
-    /// The size was zero.
-    ZeroSize,
     /// The alignment was zero.
     ZeroAlign,
     /// The alignment was not a power of two. Instead, it was the contained value.
@@ -161,7 +159,6 @@ pub enum LayoutErr {
 impl Display for LayoutErr {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            LayoutErr::ZeroSize => write!(f, "size is zero"),
             LayoutErr::ZeroAlign => write!(f, "alignment is zero"),
             LayoutErr::NonPowerOfTwoAlign(aln) => {
                 write!(f, "alignment {} isn't a power of two", aln)
