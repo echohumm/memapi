@@ -21,6 +21,7 @@ jobs:
       matrix:
         os: [ ubuntu-latest, windows-latest, macos-latest ]
         rust: [ stable, nightly, 1.46.0, 1.47.0, 1.49.0, 1.50.0, 1.52.0, 1.56.0, 1.57.0, 1.58.0, 1.61.0, 1.64.0, 1.71.0, 1.73.0, 1.75.0, 1.81.0, 1.83.0, 1.89.0 ]
+        # TODO: make it work on these versions
         exclude:
           - os: macos-latest
             rust: 1.46.0
@@ -104,8 +105,7 @@ jobs:
         run: cargo +${{ matrix.rust }} miri test --verbose --features "${{ matrix.features }}"
 
       - name: Run Clippy
-        # other rust versions had weird clippy things, might check and try to fix them someday if
-        #  they are real issues
+        # other rust versions had weird clippy things
         if: matrix.rust == 'nightly' || matrix.rust == 'stable'
         continue-on-error: false
         run: cargo +${{ matrix.rust }} clippy --features "${{ matrix.features }}" -- -D unused_unsafe -D warnings

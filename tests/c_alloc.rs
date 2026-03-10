@@ -76,6 +76,19 @@ fn test_shrink_and_error_cases() {
 }
 
 #[test]
+fn shrink_to_zero() {
+    let allocator = CAlloc;
+
+    let old = Layout::from_size_align(8, 2).unwrap();
+    let new = Layout::from_size_align(0, 2).unwrap();
+
+    let ptr = allocator.alloc(old).unwrap();
+    let new = unsafe {allocator.shrink(ptr, old, new)}.unwrap();
+
+    assert_eq!(new.as_ptr() as usize, 2);
+}
+
+#[test]
 fn grow_preserves_prefix() {
     let a = CAlloc;
     let old = Layout::from_size_align(8, 8).unwrap();

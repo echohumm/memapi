@@ -34,10 +34,16 @@ pub enum Error {
     /// The layout with the provided size and alignment is invalid; see the contained reason.
     LayoutError(LayoutErr),
     /// Attempted to grow to a smaller size.
+    ///
+    /// The first contained value is the original size, while the second is the new size.
     GrowSmallerNewLayout(usize, usize),
     /// Attempted to shrink to a larger size.
+    ///
+    /// The first contained value is the original size, while the second is the new size.
     ShrinkLargerNewLayout(usize, usize),
     /// Attempted to reallocate a block with a smaller alignment.
+    ///
+    /// The first contained value is the original alignment, while the second is the new alignment.
     ReallocSmallerAlign(usize, usize),
     /// An arithmetic error.
     ArithmeticError(ArithErr),
@@ -66,7 +72,7 @@ impl Display for Error {
         match self {
             AllocFailed(l, c) => write!(
                 f,
-                "allocation failed: Layout(size: {}, align: {}), cause: {}",
+                "allocation failed: Layout(size: {}, align: {}), {}",
                 l.size(),
                 l.align(),
                 c
@@ -118,7 +124,7 @@ pub enum Cause {
 impl Display for Cause {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Cause::Unknown => write!(f, "unknown"),
+            Cause::Unknown => write!(f, "cause: unknown"),
             Cause::OutOfMemory => write!(f, "out of memory"),
             Cause::Other(other) => write!(f, "{}", other),
             #[cfg(not(feature = "os_err_reporting"))]
@@ -142,7 +148,7 @@ pub enum LayoutErr {
     /// The alignment was not a power of two. Instead, it was the contained value.
     NonPowerOfTwoAlign(usize),
     /// The total size of an array, when rounded up to the nearest multiple of its item's alignment,
-    /// would exceed [`USIZE_MAX_NO_HIGH_BIT`](crate::helpers::USIZE_MAX_NO_HIGH_BIT).
+    /// would exceed [`USIZE_MAX_NO_HIGH_BIT`].
     ///
     /// The first contained value is the size of the elements, the second is the alignment of the
     /// element type, and the third is the number of elements.

@@ -381,9 +381,8 @@ pub mod alloc_mut {
         ///   supported.
         /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
         ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements
-        ///   [`GrowMut`](crate::traits::alloc_mut::GrowMut), a generic error message will also be
-        ///   returned if locking the primitive fails.
+        ///   primitive wrapping a type which implements [`GrowMut`], a generic error message will
+        ///   also be returned if locking the primitive fails.
         fn checked_grow_mut(
             &mut self,
             ptr: NonNull<u8>,
@@ -409,9 +408,8 @@ pub mod alloc_mut {
         ///   supported.
         /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
         ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements
-        ///   [`GrowMut`](crate::traits::alloc_mut::GrowMut), a generic error message will also be
-        ///   returned if locking the primitive fails.
+        ///   primitive wrapping a type which implements [`GrowMut`], a generic error message will
+        ///   also be returned if locking the primitive fails.
         fn checked_zgrow_mut(
             &mut self,
             ptr: NonNull<u8>,
@@ -442,9 +440,8 @@ pub mod alloc_mut {
         /// - <code>Err([Error::Unsupported])</code> if checked reallocation is unsupported.
         /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
         ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements
-        ///   [`ReallocMut`](crate::traits::alloc_mut::ReallocMut), a generic error message will
-        ///   also be returned if locking the primitive fails.
+        ///   primitive wrapping a type which implements [`ReallocMut`], a generic error message
+        ///   will also be returned if locking the primitive fails.
         fn checked_realloc_mut(
             &mut self,
             ptr: NonNull<u8>,
@@ -472,9 +469,8 @@ pub mod alloc_mut {
         /// - <code>Err([Error::Unsupported])</code> if checked reallocation is unsupported.
         /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
         ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements
-        ///   [`ReallocMut`](crate::traits::alloc_mut::ReallocMut), a generic error message will
-        ///   also be returned if locking the primitive fails.
+        ///   primitive wrapping a type which implements [`ReallocMut`], a generic error message
+        ///   will also be returned if locking the primitive fails.
         fn checked_rezalloc_mut(
             &mut self,
             ptr: NonNull<u8>,
