@@ -1,10 +1,13 @@
 use {
-    crate::{helpers::USIZE_MAX_NO_HIGH_BIT, layout::Layout, traits::data::type_props::SizedProps},
+    crate::{
+        helpers::{USIZE_MAX_NO_HIGH_BIT, void_ptr},
+        layout::Layout,
+        traits::data::type_props::SizedProps
+    },
     ::core::{
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         write
-    },
-    ::libc::uintptr_t
+    }
 };
 
 /// Helper macro to implement the Error trait based on its availability. Uses [`std::error::Error`]
@@ -139,8 +142,8 @@ pub enum LayoutErr {
     ExceedsMax(usize, usize, usize),
     /// An arithmetic error occurred.
     ArithErr(ArithErr),
-    /// The alignment, when rounded up to the nearest multiple of
-    /// [`uintptr_t::SZ`](libc::uintptr_t::SZ), would overflow [`usize::MAX`].
+    /// The alignment, when rounded up to the nearest multiple of [`void_ptr::SZ`], would overflow
+    /// [`usize::MAX`].
     ///
     /// The contained value is the alignment.
     CRoundUp(usize)
@@ -172,7 +175,7 @@ impl Display for LayoutErr {
                     f,
                     "alignment {} would overflow `usize::MAX` when rounded up to a multiple of {}",
                     aln,
-                    uintptr_t::SZ
+                    void_ptr::SZ
                 )
             }
         }

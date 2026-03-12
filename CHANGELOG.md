@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
+[//]: # (TODO: update after 88e5bc6a0feb525f04ff5313fed1993b848a20d6)
 ## [Unreleased]
 
 ### Added

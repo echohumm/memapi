@@ -1,0 +1,35 @@
+name: Test macOS 1.46.0
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: Test on macOS + 1.46.0
+    runs-on: macos-latest
+    env:
+      CARGO_TARGET_DIR: "target/1.46.0"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        id: install_rust
+        uses: dtolnay/rust-toolchain@efa25f7f19611383d5b0ccf2d1c8914531636bf9
+        continue-on-error: true
+        with:
+          toolchain: 1.46.0
+          components: clippy
+
+      - name: Run all tests
+        if: steps.install_rust.outcome == 'success'
+        run: cargo +1.46.0 test --verbose --features "full"

@@ -30,12 +30,6 @@ fn null_q_dyn_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
         #[cfg(not(windows))]
         let layout = tri!(::LayoutErr layout.to_posix_memalign_compatible());
 
-        assert_unsafe_precondition!(
-            noconst, "go tell the developer they're stupid, and a layout somehow became unaligned in \
-            CAlloc",
-            (layout: Layout = layout) => [layout.align().is_power_of_two()]
-        );
-
         let (ptr, status) = f(layout);
         match status {
             0 => null_q_dyn(ptr, layout),

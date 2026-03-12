@@ -25,10 +25,13 @@ pub const USIZE_MAX_NO_HIGH_BIT: usize = usize::MAX >> 1;
 /// A `usize` in which only the high bit is set.
 ///
 /// Equivalent to <code>[usize::MAX] ^ ([usize::MAX] >> 1)</code>, <code>[usize::MAX] <<
-/// [usize::BITS] - 1</code>, or <code>[USIZE_MAX_NO_HIGH_BIT] + 1</code>
+/// ([usize::BITS] - 1)</code>, or <code>[USIZE_MAX_NO_HIGH_BIT] + 1</code>.
 pub const USIZE_HIGH_BIT: usize = usize::MAX ^ (USIZE_MAX_NO_HIGH_BIT);
 
-// TODO: better docs
+/// A pointer to a [`c_void`](::core::ffi::c_void).
+#[allow(non_camel_case_types)]
+pub type void_ptr = *mut ::core::ffi::c_void;
+
 #[cfg(target_pointer_width = "64")]
 /// Unsigned integer type that is twice the bit-width of `usize`.
 ///

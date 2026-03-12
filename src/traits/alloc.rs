@@ -137,7 +137,6 @@ pub trait Dealloc: Alloc + DeallocMut {
     ) -> Result<(), <Self as AllocDescriptor>::Error>;
 }
 
-// TODO: consistent trait order, maybe error list order too?
 /// A memory allocation interface which can arbitrarily resize allocations.
 pub trait Realloc: ReallocMut + Dealloc {
     /// Reallocates a block, growing or shrinking as needed. The new alignment may be larger or the
