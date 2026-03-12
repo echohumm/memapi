@@ -5,13 +5,12 @@ use {
         traits::{
             AllocDescriptor,
             AllocFeatures,
-            alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut},
+            alloc_mut::{AllocMut, DeallocMut, ReallocMut},
             helpers::{default_dealloc_panic, ralloc}
         }
     },
     ::core::{
         marker::Sized,
-        option::Option::{None, Some},
         ptr::{self, NonNull},
         result::Result::{self}
     }
@@ -107,7 +106,8 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// [dangling](ptr::dangling).
     ///
     /// Note that this function differs from checked deallocation in that it may still cause UB if
-    /// it receives invalid inputs.
+    /// it receives invalid inputs. However, if it is supported, implementations should prefer to
+    /// delegate to `CheckedDealloc::checked_dealloc` and thus avoid UB.
     ///
     /// # Safety
     ///
@@ -121,7 +121,7 @@ pub trait Dealloc: Alloc + DeallocMut {
     ///
     /// The standard implementations may return:
     /// <code>Err([Error::Unsupported])</code> if deallocation is unsupported. In this case,
-    /// reallocation via [`Grow`], [`Shrink`], and [`Realloc`] may still be supported.
+    /// reallocation via [`Realloc`] may still be supported.
     ///
     /// However, if the `alloc_mut` feature is enabled, and using this method on a synchronization
     /// primitive wrapping a type which implements [`DeallocMut`], an
@@ -137,171 +137,24 @@ pub trait Dealloc: Alloc + DeallocMut {
     ) -> Result<(), <Self as AllocDescriptor>::Error>;
 }
 
-/// A memory allocation interface which can also grow allocations.
-pub trait Grow: Alloc + Dealloc + GrowMut {
-    /// Grow the given block to a new, larger layout.
-    ///
-    /// On failure, the original memory will not be deallocated.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure:
-    /// - `ptr` points to a block of memory allocated using this allocator.
-    /// - `old_layout` describes exactly the same block.
-    ///
-    /// # Errors
-    ///
-    /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-    ///
-    /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
-    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
-    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::GrowSmallerNewLayout]\(old_layout.[size](Layout::size)(),
-    ///   new_layout.[size](Layout::size)())\)</code> if <code>old_layout.[size](Layout::size)() >
-    ///   new_layout.[size](Layout::size)()</code>.
-    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
-    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
-    /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures. If the
-    ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
-    ///   wrapping a type which implements [`GrowMut`], a generic error message will also be
-    ///   returned if locking the primitive fails.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn grow(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
-        ralloc(
-            self,
-            ptr,
-            old_layout,
-            new_layout,
-            Alloc::alloc,
-            Some(Error::GrowSmallerNewLayout),
-            None
-        )
-    }
-
-    /// Grows the given block to a new, larger layout, with extra bytes being zeroed.
-    ///
-    /// On failure, the original memory will not be deallocated.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure:
-    /// - `ptr` points to a block of memory allocated using this allocator.
-    /// - `old_layout` describes exactly the same block.
-    ///
-    /// # Errors
-    ///
-    /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-    ///
-    /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
-    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
-    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::GrowSmallerNewLayout]\(old_layout.[size](Layout::size)(),
-    ///   new_layout.[size](Layout::size)())\)</code> if <code>old_layout.[size](Layout::size)() >
-    ///   new_layout.[size](Layout::size)()</code>.
-    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
-    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
-    /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures. If the
-    ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
-    ///   wrapping a type which implements [`GrowMut`], a generic error message will also be
-    ///   returned if locking the primitive fails.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn zgrow(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
-        ralloc(
-            self,
-            ptr,
-            old_layout,
-            new_layout,
-            Alloc::zalloc,
-            Some(Error::GrowSmallerNewLayout),
-            None
-        )
-    }
-}
-
-/// A memory allocation interface which can also shrink allocations.
-pub trait Shrink: Alloc + Dealloc + ShrinkMut {
-    /// Shrink the given block to a new, smaller layout.
-    ///
-    /// On failure, the original memory will not be deallocated.
-    ///
-    /// # Safety
-    ///
-    /// The caller must ensure:
-    /// - `ptr` points to a block of memory allocated using this allocator.
-    /// - `old_layout` describes exactly the same block.
-    ///
-    /// # Errors
-    ///
-    /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-    ///
-    /// The standard implementations may return:
-    /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
-    ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
-    ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    /// - <code>Err([Error::ShrinkLargerNewLayout]\(old_layout.[size](Layout::size)(),
-    ///   new_layout.[size](Layout::size)())\)</code> if <code>old_layout.[size](Layout::size)() <
-    ///   new_layout.[size](Layout::size)()</code>.
-    /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
-    ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
-    /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures. If the
-    ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
-    ///   wrapping a type which implements [`ShrinkMut`], a generic error message will also be
-    ///   returned if locking the primitive fails.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
-    #[cfg_attr(miri, track_caller)]
-    #[inline]
-    unsafe fn shrink(
-        &self,
-        ptr: NonNull<u8>,
-        old_layout: Layout,
-        new_layout: Layout
-    ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
-        ralloc(
-            self,
-            ptr,
-            old_layout,
-            new_layout,
-            Alloc::alloc,
-            None,
-            Some(Error::ShrinkLargerNewLayout)
-        )
-    }
-}
-
 // TODO: consistent trait order, maybe error list order too?
 /// A memory allocation interface which can arbitrarily resize allocations.
-pub trait Realloc: Grow + Shrink + ReallocMut {
-    /// Reallocates a block, growing or shrinking as needed.
+pub trait Realloc: ReallocMut + Dealloc {
+    /// Reallocates a block, growing or shrinking as needed. The new alignment may be larger or the
+    /// same, but cannot be smaller.
     ///
     /// On grow, preserves existing contents up to <code>old_layout.[size](Layout::size)()</code>,
     /// and on shrink, truncates to <code>new_layout.[size](Layout::size)()</code>.
     ///
     /// On failure, the original memory will not be deallocated.
+    ///
+    /// If `ptr` is dangling and `old_layout` is zero-sized, this will behave the same as
+    /// [`Alloc::alloc`].
+    ///
+    /// If `new_layout` is zero-sized, assuming that is a valid call (meaning `old_layout` is as
+    /// well, and `ptr` is dangling), a new dangling pointer will be returned. This new pointer may
+    /// have a different address if <code>new_layout.[align](Layout::align)() >
+    /// old_layout.[align](Layout::align)()</code>.
     ///
     /// # Safety
     ///
@@ -335,15 +188,24 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
-        ralloc(self, ptr, old_layout, new_layout, Alloc::alloc, None, None)
+        ralloc(self, ptr, old_layout, new_layout, Alloc::alloc)
     }
 
-    /// Reallocates a block, growing or shrinking as needed, with extra bytes being zeroed.
+    /// Reallocates a block, growing or shrinking as needed, with extra bytes being zeroed. The new
+    /// alignment may be larger or the same, but cannot be smaller.
     ///
     /// On grow, preserves existing contents up to <code>old_layout.[size](Layout::size)()</code>,
     /// and on shrink, truncates to <code>new_layout.[size](Layout::size)()</code>.
     ///
     /// On failure, the original memory will not be deallocated.
+    ///
+    /// If `ptr` is dangling and `old_layout` is zero-sized, this will behave the same as
+    /// [`Alloc::alloc`].
+    ///
+    /// If `new_layout` is zero-sized, assuming that is a valid call (meaning `old_layout` is as
+    /// well, and `ptr` is dangling), a new dangling pointer will be returned. This new pointer may
+    /// have a different address if <code>new_layout.[align](Layout::align)() >
+    /// old_layout.[align](Layout::align)()</code>.
     ///
     /// # Safety
     ///
@@ -377,7 +239,7 @@ pub trait Realloc: Grow + Shrink + ReallocMut {
         old_layout: Layout,
         new_layout: Layout
     ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
-        ralloc(self, ptr, old_layout, new_layout, Alloc::zalloc, None, None)
+        ralloc(self, ptr, old_layout, new_layout, Alloc::zalloc)
     }
 }
 
@@ -391,10 +253,10 @@ pub trait BasicAlloc: Alloc + Dealloc {}
 ///
 /// This exists solely because it is somewhat clearer to read than <code>A: [Realloc]</code>; the
 /// two are the same.
-pub trait FullAlloc: Realloc + Grow + Shrink + Alloc + Dealloc {}
+pub trait FullAlloc: Realloc + Alloc + Dealloc {}
 
 impl<A: Alloc + Dealloc> BasicAlloc for A {}
-impl<A: Realloc + Grow + Shrink + Alloc + Dealloc> FullAlloc for A {}
+impl<A: Realloc + Alloc + Dealloc> FullAlloc for A {}
 
 macro_rules! impl_alloc_ref {
     ($($t:ty),+) => {
@@ -442,43 +304,6 @@ macro_rules! impl_alloc_ref {
                 layout: Layout
             ) -> Result<(), <$t as AllocDescriptor>::Error> {
                 (**self).try_dealloc(ptr, layout)
-            }
-        }
-        #[allow(unused_qualifications)]
-        impl<A: Grow + ?Sized> Grow for $t {
-            #[cfg_attr(miri, track_caller)]
-            #[inline(always)]
-            unsafe fn grow(
-                &self,
-                ptr: NonNull<u8>,
-                old_layout: Layout,
-                new_layout: Layout
-            ) -> Result<NonNull<u8>, <$t as AllocDescriptor>::Error> {
-                (**self).grow(ptr, old_layout, new_layout)
-            }
-
-            #[cfg_attr(miri, track_caller)]
-            #[inline(always)]
-            unsafe fn zgrow(
-                &self,
-                ptr: NonNull<u8>,
-                old_layout: Layout,
-                new_layout: Layout
-            ) -> Result<NonNull<u8>, <$t as AllocDescriptor>::Error> {
-                (**self).zgrow(ptr, old_layout, new_layout)
-            }
-        }
-        #[allow(unused_qualifications)]
-        impl<A: Shrink + ?Sized> Shrink for $t {
-            #[cfg_attr(miri, track_caller)]
-            #[inline(always)]
-            unsafe fn shrink(
-                &self,
-                ptr: NonNull<u8>,
-                old_layout: Layout,
-                new_layout: Layout
-            ) -> Result<NonNull<u8>, <$t as AllocDescriptor>::Error> {
-                (**self).shrink(ptr, old_layout, new_layout)
             }
         }
         #[allow(unused_qualifications)]
@@ -560,9 +385,5 @@ impl Dealloc for ::std::alloc::System {
         ::core::result::Result::Ok(())
     }
 }
-#[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl Grow for ::std::alloc::System {}
-#[cfg(all(feature = "std", not(feature = "no_alloc")))]
-impl Shrink for ::std::alloc::System {}
 #[cfg(all(feature = "std", not(feature = "no_alloc")))]
 impl Realloc for ::std::alloc::System {}

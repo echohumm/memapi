@@ -10,7 +10,7 @@ use {
         traits::{
             AllocDescriptor,
             AllocFeatures,
-            alloc_mut::{AllocMut, DeallocMut, GrowMut, ReallocMut, ShrinkMut}
+            alloc_mut::{AllocMut, DeallocMut, ReallocMut}
         }
     }
 };
@@ -38,9 +38,6 @@ impl DeallocMut for MutOnlyAlloc {
         DefaultAlloc.try_dealloc_mut(ptr, layout)
     }
 }
-
-impl GrowMut for MutOnlyAlloc {}
-impl ShrinkMut for MutOnlyAlloc {}
 impl ReallocMut for MutOnlyAlloc {}
 
 #[test]
@@ -73,35 +70,6 @@ fn test_alloc_zeroed() {
 }
 
 #[test]
-fn test_shrink_and_error_cases() {
-    let mut allocator = MutOnlyAlloc;
-    let old = Layout::from_size_align(8, 1).unwrap();
-    let new = Layout::from_size_align(4, 1).unwrap();
-    let ptr = allocator.alloc_mut(old).unwrap();
-    unsafe {
-        ptr::write_bytes(ptr.as_ptr(), 0xCC, old.size());
-    }
-    let shr = unsafe { allocator.shrink_mut(ptr, old, new).unwrap() };
-    unsafe {
-        for i in 0..new.size() {
-            assert_eq!(*shr.as_ptr().add(i), 0xCC);
-        }
-    }
-
-    // error: shrink to a larger size
-    let err = unsafe { allocator.shrink_mut(shr, new, old).unwrap_err() };
-    assert_eq!(err, Error::ShrinkLargerNewLayout(new.size(), old.size()));
-
-    // error: grow to a smaller size
-    let err2 = unsafe { allocator.grow_mut(shr, old, new).unwrap_err() };
-    assert_eq!(err2, Error::GrowSmallerNewLayout(old.size(), new.size()));
-
-    unsafe {
-        allocator.dealloc_mut(shr, new);
-    }
-}
-
-#[test]
 fn grow_preserves_prefix() {
     let mut a = MutOnlyAlloc;
     let old = Layout::from_size_align(8, 8).unwrap();
@@ -112,7 +80,7 @@ fn grow_preserves_prefix() {
         ptr::write_bytes(p.as_ptr(), 0x11, old.size());
     }
 
-    let grown = unsafe { a.grow_mut(p, old, new).unwrap() };
+    let grown = unsafe { a.realloc_mut(p, old, new).unwrap() };
     // first 8 bytes preserved
     unsafe {
         for i in 0..old.size() {
@@ -123,7 +91,7 @@ fn grow_preserves_prefix() {
 }
 
 #[test]
-fn zgrow_zeros_new_region() {
+fn rezalloc_zeros_new_region() {
     let mut a = MutOnlyAlloc;
     let old = Layout::from_size_align(8, 8).unwrap();
     let new = Layout::from_size_align(16, 8).unwrap();
@@ -133,7 +101,7 @@ fn zgrow_zeros_new_region() {
         ptr::write_bytes(p.as_ptr(), 0x22, old.size());
     }
 
-    let grown = unsafe { a.zgrow_mut(p, old, new).unwrap() };
+    let grown = unsafe { a.rezalloc_mut(p, old, new).unwrap() };
     unsafe {
         // original region preserved
         for i in 0..old.size() {
@@ -158,7 +126,7 @@ fn shrink_preserves_prefix() {
         ptr::write_bytes(p.as_ptr(), 0xAB, old.size());
     }
 
-    let shr = unsafe { a.shrink_mut(p, old, new).unwrap() };
+    let shr = unsafe { a.realloc_mut(p, old, new).unwrap() };
     unsafe {
         for i in 0..new.size() {
             assert_eq!(*shr.as_ptr().add(i), 0xAB);

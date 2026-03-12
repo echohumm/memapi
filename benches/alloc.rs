@@ -26,7 +26,6 @@ where
     group.bench_function("alloc", |b| {
         b.iter(|| {
             let l = black_box(small);
-            // TODO: alloc call should be black_box ed
             let ptr = black_box(alloc.alloc(black_box(l)).unwrap());
             unsafe { alloc.dealloc(black_box(ptr), black_box(l)) };
         });
@@ -35,7 +34,7 @@ where
     group.bench_function("zalloc", |b| {
         b.iter(|| {
             let l = black_box(small);
-            let ptr =black_box( alloc.zalloc(black_box(l)).unwrap());
+            let ptr = black_box(alloc.zalloc(black_box(l)).unwrap());
             unsafe { alloc.dealloc(black_box(ptr), black_box(l)) };
         });
     });
@@ -56,43 +55,14 @@ where
         });
     });
 
-    group.bench_function("grow", |b| {
-        b.iter(|| unsafe {
-            let old_l = black_box(small);
-            let new_l = black_box(large);
-            let ptr = black_box(alloc.alloc(black_box(old_l)).unwrap());
-            let new_ptr = black_box(alloc.grow(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
-            alloc.dealloc(black_box(new_ptr), black_box(new_l));
-        });
-    });
-
-    group.bench_function("zgrow", |b| {
-        b.iter(|| unsafe {
-            let old_l = black_box(small);
-            let new_l = black_box(large);
-            let ptr = black_box(alloc.alloc(black_box(old_l)).unwrap());
-            let new_ptr = black_box(alloc.zgrow(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
-            alloc.dealloc(black_box(new_ptr), black_box(new_l));
-        });
-    });
-
-    group.bench_function("shrink", |b| {
-        b.iter(|| unsafe {
-            let old_l = black_box(large);
-            let new_l = black_box(small);
-            let ptr = black_box(alloc.alloc(black_box(old_l)).unwrap());
-            let new_ptr = black_box(alloc.shrink(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
-            alloc.dealloc(black_box(new_ptr), black_box(new_l));
-        });
-    });
-
     group.bench_function("realloc", |b| {
         b.iter(|| unsafe {
             let old_l = black_box(small);
             let new_l = black_box(large);
             let ptr = black_box(alloc.alloc(black_box(old_l)).unwrap());
-            let new_ptr =
-                black_box(alloc.realloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.realloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc(black_box(new_ptr), black_box(new_l));
         });
     });
@@ -102,8 +72,9 @@ where
             let old_l = black_box(small);
             let new_l = black_box(large);
             let ptr = alloc.alloc(black_box(old_l)).unwrap();
-            let new_ptr =
-                black_box(alloc.rezalloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.rezalloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc(black_box(new_ptr), black_box(new_l));
         });
     });
@@ -113,8 +84,9 @@ where
             let old_l = black_box(zero);
             let new_l = black_box(large);
             let ptr = NonNull::dangling();
-            let new_ptr =
-                black_box(alloc.realloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.realloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc(black_box(new_ptr), black_box(new_l));
         })
     });
@@ -124,8 +96,9 @@ where
             let old_l = black_box(zero);
             let new_l = black_box(large);
             let ptr = NonNull::dangling();
-            let new_ptr =
-                black_box(alloc.rezalloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.rezalloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc(black_box(new_ptr), black_box(new_l));
         })
     });
@@ -203,46 +176,14 @@ where
         });
     });
 
-    group.bench_function("grow_mut", |b| {
-        b.iter(|| unsafe {
-            let old_l = black_box(small);
-            let new_l = black_box(large);
-            let ptr = black_box(alloc.alloc_mut(black_box(old_l)).unwrap());
-            let new_ptr =
-                black_box(alloc.grow_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
-            alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
-        });
-    });
-
-    group.bench_function("zgrow_mut", |b| {
-        b.iter(|| unsafe {
-            let old_l = black_box(small);
-            let new_l = black_box(large);
-            let ptr = alloc.alloc_mut(black_box(old_l)).unwrap();
-            let new_ptr =
-                black_box(alloc.zgrow_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
-            alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
-        });
-    });
-
-    group.bench_function("shrink_mut", |b| {
-        b.iter(|| unsafe {
-            let old_l = black_box(large);
-            let new_l = black_box(small);
-            let ptr = alloc.alloc_mut(black_box(old_l)).unwrap();
-            let new_ptr =
-                black_box(alloc.shrink_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
-            alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
-        });
-    });
-
     group.bench_function("realloc_mut", |b| {
         b.iter(|| unsafe {
             let old_l = black_box(small);
             let new_l = black_box(large);
             let ptr = alloc.alloc_mut(black_box(old_l)).unwrap();
-            let new_ptr =
-                black_box(alloc.realloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.realloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
         });
     });
@@ -252,8 +193,9 @@ where
             let old_l = black_box(small);
             let new_l = black_box(large);
             let ptr = alloc.alloc_mut(black_box(old_l)).unwrap();
-            let new_ptr =
-                black_box(alloc.rezalloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.rezalloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
         });
     });
@@ -263,8 +205,9 @@ where
             let old_l = black_box(zero);
             let new_l = black_box(large);
             let ptr = NonNull::dangling();
-            let new_ptr =
-                black_box(alloc.realloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.realloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
         })
     });
@@ -274,8 +217,9 @@ where
             let old_l = black_box(zero);
             let new_l = black_box(large);
             let ptr = NonNull::dangling();
-            let new_ptr =
-                black_box(alloc.rezalloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            let new_ptr = black_box(
+                alloc.rezalloc_mut(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap()
+            );
             alloc.dealloc_mut(black_box(new_ptr), black_box(new_l));
         })
     });

@@ -6,7 +6,7 @@ use {
         layout::Layout,
         traits::{
             AllocDescriptor,
-            alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
+            alloc::{Alloc, Dealloc, Realloc}
         }
     },
     ::core::{
@@ -28,7 +28,7 @@ fn null_q_dyn_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
     } else {
         // _aligned_malloc doesn't have the weird pointer-size requirement
         #[cfg(not(windows))]
-        let layout = tri!(::LayoutError layout.to_posix_memalign_compatible());
+        let layout = tri!(::LayoutErr layout.to_posix_memalign_compatible());
 
         assert_unsafe_precondition!(
             noconst, "go tell the developer they're stupid, and a layout somehow became unaligned in \
@@ -114,7 +114,7 @@ impl Dealloc for CAlloc {
     #[inline]
     unsafe fn try_dealloc(&self, ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
         if !layout.is_zsl() && ptr != layout.dangling() {
-            let padded = tri!(::LayoutError layout.to_posix_memalign_compatible());
+            let padded = tri!(::LayoutErr layout.to_posix_memalign_compatible());
             let _size = padded.size();
             let _align = padded.align();
 
@@ -148,8 +148,7 @@ impl Dealloc for CAlloc {
         Ok(())
     }
 }
-impl Grow for CAlloc {}
-impl Shrink for CAlloc {}
+// TODO: now that grow and shrink are gone, a manual realloc may actually be good
 impl Realloc for CAlloc {}
 
 pub use crate::ffi::c_alloc as ffi;

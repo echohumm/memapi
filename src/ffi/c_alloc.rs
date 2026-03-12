@@ -115,7 +115,6 @@ compile_error!("this platform is missing a value for `MIN_ALIGN`");
 /// The minimum alignment returned by the platform's [`malloc`].
 pub const MIN_ALIGN: usize = 1;
 
-// TODO: test diff. inlines
 #[cfg(all(not(any(target_os = "horizon", target_os = "vita")), not(windows)))]
 #[cfg_attr(miri, track_caller)]
 #[inline(always)]

@@ -5,12 +5,8 @@ use {
     core::cmp,
     memapi2::{
         allocs::c_alloc::CAlloc,
-        error::Error,
         layout::Layout,
-        traits::{
-            alloc::{Alloc, Dealloc, Grow, Shrink},
-            data::type_props::SizedProps
-        }
+        traits::alloc::{Alloc, Dealloc, Realloc}
     },
     std::ptr
 };
@@ -45,45 +41,14 @@ fn test_alloc_zeroed() {
 }
 
 #[test]
-fn test_shrink_and_error_cases() {
-    let allocator = CAlloc;
-    let old = Layout::from_size_align(32, usize::SZ).unwrap();
-    // 1 is fine here though because we already satisfy the alignment, and
-    //  1 < MAXIMUM_GUARANTEED_ALIGNMENT
-    let new = Layout::from_size_align(16, usize::SZ).unwrap();
-    let ptr = allocator.alloc(old).unwrap();
-    unsafe {
-        ptr::write_bytes(ptr.as_ptr(), 0xCC, old.size());
-    }
-    let shr = unsafe { allocator.shrink(ptr, old, new).unwrap() };
-    unsafe {
-        for i in 0..new.size() {
-            assert_eq!(*shr.as_ptr().add(i), 0xCC);
-        }
-    }
-
-    // error: shrink to a larger size
-    let err = unsafe { allocator.shrink(shr, new, old).unwrap_err() };
-    assert_eq!(err, Error::ShrinkLargerNewLayout(new.size(), old.size()));
-
-    // error: grow to a smaller size
-    let err2 = unsafe { allocator.grow(shr, old, new).unwrap_err() };
-    assert_eq!(err2, Error::GrowSmallerNewLayout(old.size(), new.size()));
-
-    unsafe {
-        allocator.dealloc(shr, new);
-    }
-}
-
-#[test]
-fn shrink_to_zero() {
+fn realloc_to_zero() {
     let allocator = CAlloc;
 
     let old = Layout::from_size_align(8, 2).unwrap();
     let new = Layout::from_size_align(0, 2).unwrap();
 
     let ptr = allocator.alloc(old).unwrap();
-    let new = unsafe {allocator.shrink(ptr, old, new)}.unwrap();
+    let new = unsafe { allocator.realloc(ptr, old, new) }.unwrap();
 
     assert_eq!(new.as_ptr() as usize, 2);
 }
@@ -99,7 +64,7 @@ fn grow_preserves_prefix() {
         ptr::write_bytes(p.as_ptr(), 0x11, old.size());
     }
 
-    let grown = unsafe { a.grow(p, old, new).unwrap() };
+    let grown = unsafe { a.realloc(p, old, new).unwrap() };
     // first 8 bytes preserved
     unsafe {
         for i in 0..old.size() {
@@ -120,7 +85,7 @@ fn zgrow_zeros_new_region() {
         ptr::write_bytes(p.as_ptr(), 0x22, old.size());
     }
 
-    let grown = unsafe { a.zgrow(p, old, new).unwrap() };
+    let grown = unsafe { a.rezalloc(p, old, new).unwrap() };
     unsafe {
         // original region preserved
         for i in 0..old.size() {
@@ -145,7 +110,7 @@ fn shrink_preserves_prefix() {
         ptr::write_bytes(p.as_ptr(), 0xAB, old.size());
     }
 
-    let shr = unsafe { a.shrink(p, old, new).unwrap() };
+    let shr = unsafe { a.realloc(p, old, new).unwrap() };
     unsafe {
         for i in 0..new.size() {
             assert_eq!(*shr.as_ptr().add(i), 0xAB);
@@ -190,7 +155,7 @@ fn test_alloc_dealloc_var_alignments() {
 }
 
 #[test]
-fn test_grow_var_alignments_combinations() {
+fn test_realloc_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
@@ -210,7 +175,7 @@ fn test_grow_var_alignments_combinations() {
             }
 
             // try grow (non-zeroing)
-            match unsafe { a.grow(p, old, new) } {
+            match unsafe { a.realloc(p, old, new) } {
                 Ok(gptr) => unsafe {
                     // preserved prefix
                     for i in 0..old.size() {
@@ -255,7 +220,7 @@ fn test_grow_var_alignments_combinations() {
 }
 
 #[test]
-fn test_zgrow_var_alignments_combinations() {
+fn test_rezalloc_var_alignments_combinations() {
     let a = CAlloc;
     let aligns = [1usize, 2, 4, 8, 16, 32];
 
@@ -273,7 +238,7 @@ fn test_zgrow_var_alignments_combinations() {
                 ptr::write_bytes(p.as_ptr(), pat, old.size());
             }
 
-            match unsafe { a.zgrow(p, old, new) } {
+            match unsafe { a.rezalloc(p, old, new) } {
                 Ok(gptr) => unsafe {
                     // original region preserved
                     for i in 0..old.size() {
@@ -347,7 +312,7 @@ fn test_shrink_var_alignments_combinations() {
                 ptr::write_bytes(p.as_ptr(), pat, old.size());
             }
 
-            match unsafe { a.shrink(p, old, new) } {
+            match unsafe { a.realloc(p, old, new) } {
                 Ok(sptr) => unsafe {
                     // prefix preserved (up to new.size())
                     for i in 0..new.size() {

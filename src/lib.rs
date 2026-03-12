@@ -6,13 +6,11 @@
 //!
 //! # Core traits
 //! - [`Alloc`](traits::alloc::Alloc), [`Dealloc`](traits::alloc::Dealloc),
-//!   [`Grow`](traits::alloc::Grow), [`Shrink`](traits::alloc::Shrink),
 //!   [`Realloc`](traits::alloc::Realloc)
 //! - Convenience aliases: [`BasicAlloc`](traits::alloc::BasicAlloc) and
 //!   [`FullAlloc`](traits::alloc::FullAlloc)
 //! - Mutable variants in [`alloc_mut`](traits::alloc_mut):
 //!   [`AllocMut`](traits::alloc_mut::AllocMut), [`DeallocMut`](traits::alloc_mut::DeallocMut),
-//!   [`GrowMut`](traits::alloc_mut::GrowMut), [`ShrinkMut`](traits::alloc_mut::ShrinkMut),
 //!   [`ReallocMut`](traits::alloc_mut::ReallocMut),
 //!   [`BasicAllocMut`](traits::alloc_mut::BasicAllocMut),
 //!   [`FullAllocMut`](traits::alloc_mut::FullAllocMut)
@@ -100,16 +98,15 @@ pub mod prelude {
         error::Error,
         layout::Layout,
         traits::{
-            alloc::{Alloc, BasicAlloc, Dealloc, FullAlloc, Grow, Realloc, Shrink},
+            alloc::{Alloc, BasicAlloc, Dealloc, FullAlloc, Realloc},
             alloc_mut::{
                 AllocMut,
                 BasicAllocMut,
                 DeallocMut,
                 FullAllocMut,
-                GrowMut,
+
                 ReallocMut,
-                ShrinkMut
-            },
+                            },
             data::{
                 marker::UnsizedCopy,
                 type_props::{PtrProps, SizedProps}
@@ -182,8 +179,6 @@ macro_rules! default_alloc_impl {
                 ::core::result::Result::Ok(())
             }
         }
-        impl crate::traits::alloc::Grow for $ty {}
-        impl crate::traits::alloc::Shrink for $ty {}
         impl crate::traits::alloc::Realloc for $ty {}
     };
 }

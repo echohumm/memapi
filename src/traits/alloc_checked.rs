@@ -59,7 +59,7 @@ pub mod alloc {
             layout::Layout,
             prelude::AllocDescriptor,
             traits::{
-                alloc::{Alloc, Dealloc, Grow, Realloc, Shrink},
+                alloc::{Alloc, Dealloc, Realloc},
                 alloc_checked::AllocOwned
             }
         },
@@ -70,12 +70,14 @@ pub mod alloc {
         }
     };
 
+    #[allow(unused_imports)] use crate::error::Error;
+
     /// A memory allocation interface which can also perform deallocation safely.
     pub trait CheckedDealloc: Alloc + Dealloc {
         /// Attempts to deallocate a previously allocated block after performing validity checks.
         ///
         /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-        /// [dangling](ptr::dangling).
+        /// [dangling](::core::ptr::dangling).
         ///
         /// This method must return an error rather than silently accepting the deallocation and
         /// potentially causing UB.
@@ -86,110 +88,20 @@ pub mod alloc {
         ///
         /// The standard implementations may return:
         /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported. In this
-        ///   case, reallocation via [`CheckedGrow`], [`CheckedShrink`], and [`CheckedRealloc`] may
-        ///   still be supported.
+        ///   case, reallocation via [`CheckedRealloc`] may still be supported.
         /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
         ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
         ///   primitive wrapping a type which implements
         ///   [`CheckedDeallocMut`](crate::traits::alloc_checked::alloc_mut::CheckedDeallocMut), a
         ///   generic error message will also be returned if locking the primitive fails.
         ///
-        /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+        /// This method will not return an error if `ptr` is [dangling](::core::ptr::dangling) or if
         /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
         fn checked_dealloc(
             &self,
             ptr: NonNull<u8>,
             layout: Layout
         ) -> Result<(), <Self as AllocDescriptor>::Error>;
-    }
-
-    /// A memory allocation interface which can also shrink allocations safely.
-    pub trait CheckedShrink: Shrink {
-        /// Attempts to shrink a previously allocated block after performing validity checks.
-        ///
-        /// On failure, the original memory will not be deallocated.
-        ///
-        /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
-        ///
-        /// # Errors
-        ///
-        /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-        ///
-        /// The standard implementations may return:
-        /// - <code>Err([Error::Unsupported])</code> if checked shrinking is unsupported. In this
-        ///   case, [`CheckedGrow`], [`CheckedRealloc`], and/or [`CheckedDealloc`] may still be
-        ///   supported.
-        /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
-        ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements
-        ///   [`ShrinkMut`](crate::traits::alloc_mut::ShrinkMut), a generic error message will also
-        ///   be returned if locking the primitive fails.
-        fn checked_shrink(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout
-        ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
-    }
-
-    /// A memory allocation interface which can also grow allocations safely.
-    pub trait CheckedGrow: Grow {
-        /// Attempts to grow a previously allocated block after performing validity checks.
-        ///
-        /// On failure, the original memory will not be deallocated.
-        ///
-        /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
-        ///
-        /// # Errors
-        ///
-        /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-        ///
-        /// The standard implementations may return:
-        /// - <code>Err([Error::Unsupported])</code> if checked growing is unsupported. In this
-        ///   case, [`CheckedShrink`], [`CheckedRealloc`], and/or [`CheckedDealloc`] may still be
-        ///   supported.
-        /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
-        ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements
-        ///   [`GrowMut`](crate::traits::alloc_mut::GrowMut), a generic error message will also be
-        ///   returned if locking the primitive fails.
-        fn checked_grow(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout
-        ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
-
-        /// Attempts to grow a previously allocated block after performing validity checks, with
-        /// extra bytes being zeroed.
-        ///
-        /// On failure, the original memory will not be deallocated.
-        ///
-        /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
-        ///
-        /// # Errors
-        ///
-        /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-        ///
-        /// The standard implementations may return:
-        /// - <code>Err([Error::Unsupported])</code> if checked growing is unsupported. In this
-        ///   case, [`CheckedShrink`], [`CheckedRealloc`], and/or [`CheckedDealloc`] may still be
-        ///   supported.
-        /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
-        ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements
-        ///   [`GrowMut`](crate::traits::alloc_mut::GrowMut), a generic error message will also be
-        ///   returned if locking the primitive fails.
-        fn checked_zgrow(
-            &self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout
-        ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
-        // TODO: default zeroed impl may be better?
     }
 
     /// A memory allocation interface which can arbitrarily resize allocations safely.
@@ -275,10 +187,7 @@ pub mod alloc {
             Ok(())
         }
     }
-    impl_checked_realloc_group!(CheckedShrink : Shrink { checked_shrink => shrink });
-    impl_checked_realloc_group!(CheckedGrow : Grow 
-        { checked_grow => grow, checked_zgrow => zgrow });
-    impl_checked_realloc_group!(CheckedRealloc : Realloc 
+    impl_checked_realloc_group!(CheckedRealloc : Realloc
         { checked_realloc => realloc, checked_rezalloc => rezalloc });
 }
 
@@ -292,9 +201,9 @@ pub mod alloc_mut {
             traits::{
                 alloc_checked::{
                     AllocOwned,
-                    alloc::{CheckedDealloc, CheckedGrow, CheckedRealloc, CheckedShrink}
+                    alloc::{CheckedDealloc, CheckedRealloc}
                 },
-                alloc_mut::{DeallocMut, GrowMut, ReallocMut, ShrinkMut}
+                alloc_mut::{DeallocMut, ReallocMut}
             }
         },
         ::core::{
@@ -311,7 +220,7 @@ pub mod alloc_mut {
         /// Attempts to deallocate a previously allocated block after performing validity checks.
         ///
         /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-        /// [dangling](ptr::dangling).
+        /// [dangling](::core::ptr::dangling).
         ///
         /// This method must return an error rather than silently accepting the deallocation and
         /// potentially causing UB.
@@ -327,95 +236,13 @@ pub mod alloc_mut {
         /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
         /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures.
         ///
-        /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+        /// This method will not return an error if `ptr` is [dangling](::core::ptr::dangling) or if
         /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
         fn checked_dealloc_mut(
             &mut self,
             ptr: NonNull<u8>,
             layout: Layout
         ) -> Result<(), <Self as AllocDescriptor>::Error>;
-    }
-
-    /// A memory allocation interface which can also shrink allocations safely, requiring mutable
-    /// access.
-    pub trait CheckedShrinkMut: ShrinkMut {
-        /// Attempts to shrink a previously allocated block after performing validity checks.
-        ///
-        /// On failure, the original memory will not be deallocated.
-        ///
-        /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
-        ///
-        /// # Errors
-        ///
-        /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-        ///
-        /// The standard implementations may return:
-        /// - <code>Err([Error::Unsupported])</code> if checked deallocation is unsupported.
-        /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures.
-        fn checked_shrink_mut(
-            &mut self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout
-        ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
-    }
-
-    /// A memory allocation interface which can also grow allocations safely, requiring mutable
-    /// access.
-    pub trait CheckedGrowMut: GrowMut {
-        /// Attempts to grow a previously allocated block after performing validity checks.
-        ///
-        /// On failure, the original memory will not be deallocated.
-        ///
-        /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
-        ///
-        /// # Errors
-        ///
-        /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-        ///
-        /// The standard implementations may return:
-        /// - <code>Err([Error::Unsupported])</code> if checked growing is unsupported. In this
-        ///   case, [`CheckedShrink`], [`CheckedRealloc`], and/or [`CheckedDealloc`] may still be
-        ///   supported.
-        /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
-        ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements [`GrowMut`], a generic error message will
-        ///   also be returned if locking the primitive fails.
-        fn checked_grow_mut(
-            &mut self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout
-        ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
-
-        /// Attempts to grow a previously allocated block after performing validity checks, with
-        /// extra bytes being zeroed.
-        ///
-        /// On failure, the original memory will not be deallocated.
-        ///
-        /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
-        ///
-        /// # Errors
-        ///
-        /// Errors are implementation-defined, refer to [`AllocDescriptor::Error`] and [`Error`].
-        ///
-        /// The standard implementations may return:
-        /// - <code>Err([Error::Unsupported])</code> if checked growing is unsupported. In this
-        ///   case, [`CheckedShrink`], [`CheckedRealloc`], and/or [`CheckedDealloc`] may still be
-        ///   supported.
-        /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific validation failures. If
-        ///   the `alloc_mut` feature is enabled, and using this method on a synchronization
-        ///   primitive wrapping a type which implements [`GrowMut`], a generic error message will
-        ///   also be returned if locking the primitive fails.
-        fn checked_zgrow_mut(
-            &mut self,
-            ptr: NonNull<u8>,
-            old_layout: Layout,
-            new_layout: Layout
-        ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
     }
 
     /// A memory allocation interface which can arbitrarily resize allocations safely, requiring
@@ -495,10 +322,6 @@ pub mod alloc_mut {
             Ok(())
         }
     }
-    impl_checked_realloc_group!(CheckedShrinkMut : ShrinkMut
-        { [mut] checked_shrink_mut => shrink_mut });
-    impl_checked_realloc_group!(CheckedGrowMut : GrowMut
-        { [mut] checked_grow_mut => grow_mut, [mut] checked_zgrow_mut => zgrow_mut });
     impl_checked_realloc_group!(CheckedReallocMut : ReallocMut
         { [mut] checked_realloc_mut => realloc_mut, [mut] checked_rezalloc_mut => rezalloc_mut });
 
@@ -514,40 +337,6 @@ pub mod alloc_mut {
                 ) -> Result<(), <$t as AllocDescriptor>::Error> {
                     tri!(cmap(LOCK_ERR) from <Self as AllocDescriptor>::Error, self.$borrow_call())
                         .checked_dealloc_mut(ptr, layout)
-                }
-            }
-
-            impl<A: CheckedGrowMut + ?Sized> CheckedGrow for $t {
-                fn checked_grow(
-                    &self,
-                    ptr: NonNull<u8>,
-                    old_layout: Layout,
-                    new_layout: Layout,
-                ) -> Result<NonNull<u8>, <$t as AllocDescriptor>::Error> {
-                    tri!(cmap(LOCK_ERR) from <Self as AllocDescriptor>::Error, self.$borrow_call())
-                        .checked_grow_mut(ptr, old_layout, new_layout)
-                }
-
-                fn checked_zgrow(
-                    &self,
-                    ptr: NonNull<u8>,
-                    old_layout: Layout,
-                    new_layout: Layout,
-                ) -> Result<NonNull<u8>, <$t as AllocDescriptor>::Error> {
-                    tri!(cmap(LOCK_ERR) from <Self as AllocDescriptor>::Error, self.$borrow_call())
-                        .checked_zgrow_mut(ptr, old_layout, new_layout)
-                }
-            }
-
-            impl<A: CheckedShrinkMut + ?Sized> CheckedShrink for $t {
-                fn checked_shrink(
-                    &self,
-                    ptr: NonNull<u8>,
-                    old_layout: Layout,
-                    new_layout: Layout,
-                ) -> Result<NonNull<u8>, <$t as AllocDescriptor>::Error> {
-                    tri!(cmap(LOCK_ERR) from <Self as AllocDescriptor>::Error, self.$borrow_call())
-                        .checked_shrink_mut(ptr, old_layout, new_layout)
                 }
             }
 

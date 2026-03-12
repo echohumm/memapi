@@ -169,7 +169,7 @@ impl Layout {
                 Ok((unsafe { Layout::from_size_align_unchecked(total, new_align) }, offset))
             }
             Ok(_) => Err(LayoutErr::ExceedsMax(offset, new_align, 1)),
-            Err(e) => Err(LayoutErr::ArithmeticError(e))
+            Err(e) => Err(LayoutErr::ArithErr(e))
         }
     }
 
@@ -406,7 +406,7 @@ impl Layout {
     pub fn repeat_packed(&self, count: usize) -> Result<Layout, LayoutErr> {
         let size = match checked_op(self.size(), ArithOp::Mul, count) {
             Ok(s) => s,
-            Err(e) => return Err(LayoutErr::ArithmeticError(e))
+            Err(e) => return Err(LayoutErr::ArithErr(e))
         };
         match Layout::from_size_align(size, self.align()) {
             Ok(layout) => Ok(layout),
@@ -476,7 +476,7 @@ impl Layout {
         } else {
             let m1 = align - 1;
             if cur_align > usize::MAX - m1 {
-                return Err(LayoutErr::ArithmeticError(ArithErr(cur_align, ArithOp::Add, m1)));
+                return Err(LayoutErr::ArithErr(ArithErr(cur_align, ArithOp::Add, m1)));
             }
             // SAFETY: see `align_up_checked`.
             Layout::from_size_align(self.size(), unsafe { align_up(cur_align, align) })

@@ -6,7 +6,6 @@ use {
         fmt::{Debug, Display},
         hint::unreachable_unchecked,
         marker::Sized,
-        option::Option::{self},
         panic,
         ptr::{self, NonNull},
         result::Result::{self, Err, Ok}
@@ -26,9 +25,7 @@ macro_rules! ralloc {
             ptr: NonNull<u8>,
             old: Layout,
             new: Layout,
-            alloc: fn(& $($self_ex)? A, Layout) -> Result<NonNull<u8>, E>,
-            less: Option<fn(usize, usize) -> Error>,
-            greater: Option<fn(usize, usize) -> Error>
+            alloc: fn(& $($self_ex)? A, Layout) -> Result<NonNull<u8>, E>
         ) -> Result<NonNull<u8>, E> {
             let old_align = old.align();
             let new_align = new.align();
@@ -41,8 +38,6 @@ macro_rules! ralloc {
             let new_size = new.size();
 
             let new_ptr = match new_size.cmp(&old_size) {
-                Ordering::Greater => greater
-                    .map_or_else(|| alloc(a, new), |greater| Err(E::from(greater(old_size, new_size)))),
                 Ordering::Equal => {
                     match new_align.cmp(&old_align) {
                         Ordering::Greater => alloc(a, new),
@@ -51,9 +46,7 @@ macro_rules! ralloc {
                         Ordering::Less => unsafe { unreachable_unchecked() }
                     }
                 }
-                Ordering::Less => {
-                    less.map_or_else(|| alloc(a, new), |less| Err(E::from(less(old_size, new_size))))
-                }
+                Ordering::Less | Ordering::Greater => alloc(a, new)
             };
             if let Ok(new_ptr) = new_ptr {
                 // for some reason, the dealloc call being outside of this branch is faster (for most

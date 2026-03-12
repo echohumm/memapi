@@ -32,21 +32,13 @@ pub enum Error {
     /// The cause may or may not be accurate depending on the type and environment.
     AllocFailed(Layout, Cause),
     /// The layout with the provided size and alignment is invalid; see the contained reason.
-    LayoutError(LayoutErr),
-    /// Attempted to grow to a smaller size.
-    ///
-    /// The first contained value is the original size, while the second is the new size.
-    GrowSmallerNewLayout(usize, usize),
-    /// Attempted to shrink to a larger size.
-    ///
-    /// The first contained value is the original size, while the second is the new size.
-    ShrinkLargerNewLayout(usize, usize),
+    LayoutErr(LayoutErr),
     /// Attempted to reallocate a block with a smaller alignment.
     ///
     /// The first contained value is the original alignment, while the second is the new alignment.
     ReallocSmallerAlign(usize, usize),
     /// An arithmetic error.
-    ArithmeticError(ArithErr),
+    ArithErr(ArithErr),
     /// An unwinding panic occurred in a function which does not support unwinding; likely FFI.
     CaughtUnwind,
     /// The requested operation is unsupported.
@@ -59,13 +51,11 @@ impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         use Error::{
             AllocFailed,
-            ArithmeticError,
+            ArithErr,
             CaughtUnwind,
-            GrowSmallerNewLayout,
-            LayoutError,
+            LayoutErr,
             Other,
             ReallocSmallerAlign,
-            ShrinkLargerNewLayout,
             Unsupported
         };
 
@@ -77,17 +67,11 @@ impl Display for Error {
                 l.align(),
                 c
             ),
-            LayoutError(c) => write!(f, "layout error: {}", c),
-            GrowSmallerNewLayout(old, new) => {
-                write!(f, "attempted to grow from size {} to smaller size {}", old, new)
-            }
-            ShrinkLargerNewLayout(old, new) => {
-                write!(f, "attempted to shrink from size {} to larger size {}", old, new)
-            }
+            LayoutErr(c) => write!(f, "layout error: {}", c),
             ReallocSmallerAlign(old, new) => {
                 write!(f, "attempted to reallocate from align {} to smaller align {}", old, new)
             }
-            ArithmeticError(overflow) => write!(f, "{}", overflow),
+            ArithErr(overflow) => write!(f, "{}", overflow),
             CaughtUnwind => {
                 write!(f, "unwind caught in unsupported function")
             }
@@ -154,9 +138,9 @@ pub enum LayoutErr {
     /// element type, and the third is the number of elements.
     ExceedsMax(usize, usize, usize),
     /// An arithmetic error occurred.
-    ArithmeticError(ArithErr),
-    /// The alignment, when rounded up to the nearest multiple of [`uintptr_t::SZ`], would overflow
-    /// [`usize::MAX`].
+    ArithErr(ArithErr),
+    /// The alignment, when rounded up to the nearest multiple of
+    /// [`uintptr_t::SZ`](libc::uintptr_t::SZ), would overflow [`usize::MAX`].
     ///
     /// The contained value is the alignment.
     CRoundUp(usize)
@@ -182,7 +166,7 @@ impl Display for LayoutErr {
                     n, sz, USIZE_MAX_NO_HIGH_BIT, aln
                 )
             },
-            LayoutErr::ArithmeticError(overflow) => write!(f, "{}", overflow),
+            LayoutErr::ArithErr(overflow) => write!(f, "{}", overflow),
             LayoutErr::CRoundUp(aln) => {
                 write!(
                     f,
