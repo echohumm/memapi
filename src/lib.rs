@@ -358,6 +358,8 @@ macro_rules! assert_unsafe_precondition {
     };
 }
 
+#[doc(hidden)] pub mod data;
+
 /// All traits provided by this crate.
 pub mod traits;
 
