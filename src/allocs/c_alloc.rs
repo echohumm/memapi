@@ -142,7 +142,6 @@ impl Dealloc for CAlloc {
         Ok(())
     }
 }
-// TODO: now that grow and shrink are gone, a manual realloc may actually be good
 impl Realloc for CAlloc {}
 
 pub use crate::ffi::c_alloc as ffi;
