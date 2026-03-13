@@ -42,8 +42,6 @@ pub enum Error {
     ReallocSmallerAlign(usize, usize),
     /// An arithmetic error.
     ArithErr(ArithErr),
-    /// An unwinding panic occurred in a function which does not support unwinding; likely FFI.
-    CaughtUnwind,
     /// The requested operation is unsupported.
     Unsupported,
     /// Any other kind of error, in the form of a string.
@@ -52,34 +50,21 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        use Error::{
-            AllocFailed,
-            ArithErr,
-            CaughtUnwind,
-            LayoutErr,
-            Other,
-            ReallocSmallerAlign,
-            Unsupported
-        };
-
         match self {
-            AllocFailed(l, c) => write!(
+            Error::AllocFailed(l, c) => write!(
                 f,
                 "allocation failed: Layout(size: {}, align: {}), {}",
                 l.size(),
                 l.align(),
                 c
             ),
-            LayoutErr(c) => write!(f, "layout error: {}", c),
-            ReallocSmallerAlign(old, new) => {
+            Error::LayoutErr(c) => write!(f, "layout error: {}", c),
+            Error::ReallocSmallerAlign(old, new) => {
                 write!(f, "attempted to reallocate from align {} to smaller align {}", old, new)
             }
-            ArithErr(overflow) => write!(f, "{}", overflow),
-            CaughtUnwind => {
-                write!(f, "unwind caught in unsupported function")
-            }
-            Unsupported => write!(f, "unsupported operation"),
-            Other(other) => write!(f, "{}", other)
+            Error::ArithErr(overflow) => write!(f, "{}", overflow),
+            Error::Unsupported => write!(f, "unsupported operation"),
+            Error::Other(other) => write!(f, "{}", other)
         }
     }
 }
@@ -142,8 +127,8 @@ pub enum LayoutErr {
     ExceedsMax(usize, usize, usize),
     /// An arithmetic error occurred.
     ArithErr(ArithErr),
-    /// The alignment, when rounded up to the nearest multiple of [`void_ptr::SZ`], would overflow
-    /// [`usize::MAX`].
+    /// The alignment, when rounded up to the nearest multiple of [`void_ptr::SZ`](SizedProps::SZ),
+    /// would overflow [`usize::MAX`].
     ///
     /// The contained value is the alignment.
     CRoundUp(usize)

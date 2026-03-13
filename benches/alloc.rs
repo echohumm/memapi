@@ -9,14 +9,14 @@ use {
     memapi2::{
         DefaultAlloc,
         layout::Layout,
-        traits::alloc::{Alloc, Dealloc, Grow, Realloc, Shrink}
+        traits::alloc::{Alloc, Dealloc, Realloc}
     },
     std::time::Duration
 };
 
 fn bench_allocs<A>(c: &mut Criterion, name: &str, alloc: A)
 where
-    A: Alloc + Dealloc + Grow + Shrink + Realloc
+    A: Alloc + Dealloc + Realloc
 {
     let mut group = c.benchmark_group(name);
     let zero = unsafe { Layout::from_size_align_unchecked(0, 8) };

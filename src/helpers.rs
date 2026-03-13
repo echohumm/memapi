@@ -1,6 +1,6 @@
 use {
     crate::{
-        error::{ArithErr, ArithOp, Cause, Error},
+        error::{Cause, Error},
         layout::Layout,
         traits::data::type_props::{
             varsized_nonnull_from_parts,
@@ -9,7 +9,6 @@ use {
         }
     },
     ::core::{
-        option::Option::{self, None, Some},
         ptr::NonNull,
         result::Result::{self, Err, Ok}
     }
@@ -52,97 +51,6 @@ pub type udouble = u64;
 /// On 16-bit targets this is an alias for `u32`.
 #[allow(non_camel_case_types)]
 pub type udouble = u32;
-
-/// Performs a checked arithmetic operation on two `usize`s.
-///
-/// Note that this is only `const` on Rust versions 1.47 and above.
-///
-/// # Errors
-///
-/// <code>Err([ArithErr]\(l, op, r\))</code> if the requested operation would cause an overflow,
-/// underflow, or conversion error.
-#[::rustversion::attr(since(1.47), const)]
-pub fn checked_op(l: usize, op: ArithOp, r: usize) -> Result<usize, ArithErr> {
-    #[::rustversion::since(1.52)]
-    const fn checked_div(l: usize, r: usize) -> Option<usize> {
-        l.checked_div(r)
-    }
-    #[::rustversion::before(1.52)]
-    const fn checked_div(l: usize, r: usize) -> Option<usize> {
-        if r == 0 { None } else { Some(l / r) }
-    }
-
-    #[::rustversion::since(1.73)]
-    const fn checked_div_ceil(l: usize, r: usize) -> Option<usize> {
-        if r == 0 { None } else { Some(l.div_ceil(r)) }
-    }
-    #[::rustversion::before(1.73)]
-    const fn checked_div_ceil(l: usize, r: usize) -> Option<usize> {
-        if r == 0 {
-            None
-        } else {
-            let quo = l / r;
-            let rem = l % r;
-            if rem > 0 { Some(quo + 1) } else { Some(quo) }
-        }
-    }
-
-    #[::rustversion::since(1.52)]
-    const fn checked_rem(l: usize, r: usize) -> Option<usize> {
-        l.checked_rem(r)
-    }
-    #[::rustversion::before(1.52)]
-    const fn checked_rem(l: usize, r: usize) -> Option<usize> {
-        if r == 0 { None } else { Some(l % r) }
-    }
-
-    #[::rustversion::since(1.50)]
-    const fn checked_pow(l: usize, r: usize) -> Option<usize> {
-        if r > u32::MAX as usize {
-            None
-        } else {
-            #[allow(clippy::cast_possible_truncation)]
-            l.checked_pow(r as u32)
-        }
-    }
-    #[::rustversion::before(1.50)]
-    #[::rustversion::attr(since(1.47), const)]
-    fn checked_pow(l: usize, mut r: usize) -> Option<usize> {
-        if r == 0 {
-            return Some(1);
-        }
-        let mut base = l;
-        let mut acc: usize = 1;
-
-        loop {
-            if (r & 1) == 1 {
-                acc = tri!(opt acc.checked_mul(base));
-                // since exp!=0, finally the exp must be 1.
-                if r == 1 {
-                    return Some(acc);
-                }
-            }
-            r /= 2;
-            base = tri!(opt base.checked_mul(base));
-        }
-    }
-
-    let res = match op {
-        // add, sub, and mul use an intrinsic and cannot be manually implemented afaik
-        ArithOp::Add => l.checked_add(r),
-        ArithOp::Sub => l.checked_sub(r),
-        ArithOp::Mul => l.checked_mul(r),
-        ArithOp::Div => checked_div(l, r),
-        ArithOp::DivCeil => checked_div_ceil(l, r),
-        ArithOp::Rem => checked_rem(l, r),
-        ArithOp::Pow => checked_pow(l, r)
-    };
-
-    match res {
-        Some(v) => Ok(v),
-        None => Err(ArithErr(l, op, r))
-    }
-}
 
 /// Aligns the given value `v` up to the next multiple of `align`.
 ///

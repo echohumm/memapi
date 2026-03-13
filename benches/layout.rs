@@ -15,8 +15,7 @@ use {
 };
 
 fn to_posix_memalign_compatible(c: &mut Criterion) {
-    // i'm not lazy wdym
-    let mut group = c.benchmark_group("taac");
+    let mut group = c.benchmark_group("to_posix");
 
     let noop = unsafe { Layout::from_size_align_unchecked(usize::SZ, usize::ALN) };
     let round_size = unsafe { Layout::from_size_align_unchecked(usize::SZ - 2, usize::ALN) };
@@ -51,7 +50,7 @@ fn to_posix_memalign_compatible(c: &mut Criterion) {
 }
 
 fn posix_memalign_compatible_from_size_align(c: &mut Criterion) {
-    let mut group = c.benchmark_group("aacfsa");
+    let mut group = c.benchmark_group("posix_from");
 
     let noop = (usize::SZ, usize::ALN);
     let round_size = (usize::SZ - 2, usize::ALN);
@@ -220,6 +219,46 @@ fn from_size_align(c: &mut Criterion) {
     group.finish();
 }
 
+fn extend(c: &mut Criterion) {
+    let mut group = c.benchmark_group("extend");
+
+    let u8 = u8::LAYOUT;
+    let u32 = u32::LAYOUT;
+    let u64 = u64::LAYOUT;
+
+    group.bench_function("u8_u32", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u8).extend(black_box(u32)));
+        });
+    });
+
+    group.bench_function("u32_u8", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u32).extend(black_box(u8)));
+        })
+    });
+
+    group.bench_function("u32_u32", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u32).extend(black_box(u32)));
+        })
+    });
+
+    group.bench_function("u64_u32", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u64).extend(black_box(u32)));
+        })
+    });
+
+    group.bench_function("u32_u64", |c| {
+        c.iter(|| {
+            let _ = black_box(black_box(u32).extend(black_box(u64)));
+        })
+    });
+
+    group.finish();
+}
+
 fn main() {
     let mut c = Criterion::default()
         .sample_size(512)
@@ -236,6 +275,7 @@ fn main() {
     repeat(&mut c);
     repeat_packed(&mut c);
     from_size_align(&mut c);
+    extend(&mut c);
 
     c.final_summary();
 }

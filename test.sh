@@ -47,7 +47,10 @@ CARGO_TARGET_DIR="target/1.89" cargo +1.89.0 test --features "full,__dev"
 # main versions
 echo "test: stable"
 CARGO_TARGET_DIR="target/stable" cargo +stable test --features "full,__dev"
+echo "test: nightly"
+CARGO_TARGET_DIR="target/nightly" cargo +nightly test --features "full_nightly,__dev"
 echo "test: nightly (miri)"
 CARGO_TARGET_DIR="target/nightly" cargo +nightly miri test --features "full_nightly,__dev"
 
-cargo +nightly doc --features "full_nightly,__dev"
+echo "doc: nightly"
+CARGO_TARGET_DIR="target/nightly" cargo +nightly doc --features "full_nightly,__dev"

@@ -183,6 +183,7 @@ macro_rules! default_alloc_impl {
     };
 }
 
+// TODO: this sucks. need i say more?
 /// This macro is theoretically faster than `<fallible>?`.
 macro_rules! tri {
     (::$err:ident $($fallible:expr)+) => {
@@ -215,14 +216,12 @@ macro_rules! tri {
             ::core::result::Result::Err(_) => return ::core::result::Result::Err(<$e>::from($err)),
         }
     };
-    (from $e:ty, $($fallible:expr)+) => {
+    (wrap($e:ident::$in:ident) $($fallible:expr)+) => {
         match $($fallible)+ {
-            ::core::result::Result::Ok(s) => s,
-            ::core::result::Result::Err(e) => {
-                 return ::core::result::Result::Err(<$e as ::core::convert::From<Error>>::from(e))
-            }
+            ::core::result::Result::Ok(x) => x,
+            ::core::result::Result::Err(e) => return ::core::result::Result::Err($e::$in(e)),
         }
-    }
+    };
 }
 
 macro_rules! zalloc {
@@ -358,7 +357,9 @@ macro_rules! assert_unsafe_precondition {
     };
 }
 
-#[doc(hidden)] pub mod data;
+#[cfg(feature = "stdlib_data")]
+#[doc(hidden)]
+pub mod data;
 
 /// All traits provided by this crate.
 pub mod traits;

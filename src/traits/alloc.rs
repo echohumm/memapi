@@ -1,6 +1,5 @@
 use {
     crate::{
-        error::Error,
         layout::Layout,
         traits::{
             AllocDescriptor,

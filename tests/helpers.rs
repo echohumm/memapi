@@ -4,10 +4,8 @@
 use {
     ::core::ptr::{self, NonNull},
     memapi2::{
-        error::{ArithErr, ArithOp},
         helpers::{
             align_up,
-            checked_op,
             is_multiple_of,
             nonnull_slice_from_parts,
             nonnull_slice_len,
@@ -41,18 +39,6 @@ fn varsized_ptr_from_parts_for_slices() {
         assert_eq!(s, &mut [10, 20, 30]);
     }
     assert!(ptr::eq(&arr, raw_slice as *const _));
-}
-
-#[test]
-fn checked_op_basic_and_errors() {
-    assert_eq!(checked_op(2, ArithOp::Add, 3).unwrap(), 5);
-    assert_eq!(checked_op(10, ArithOp::Sub, 3).unwrap(), 7);
-    assert_eq!(checked_op(4, ArithOp::Mul, 5).unwrap(), 20);
-    // div by zero results in overflow err
-    assert_eq!(checked_op(10, ArithOp::Div, 0).unwrap_err(), ArithErr(10, ArithOp::Div, 0));
-    // pow with too-large rhs
-    let big = (u32::MAX as usize) + 1;
-    assert_eq!(checked_op(2, ArithOp::Pow, big).unwrap_err(), ArithErr(2, ArithOp::Pow, big));
 }
 
 #[test]

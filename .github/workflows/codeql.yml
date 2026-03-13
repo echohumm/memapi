@@ -25,70 +25,50 @@ jobs:
       fail-fast: false
       matrix:
         include:
-        - language: actions
-          build-mode: none
-        - language: c-cpp
-          build-mode: manual
-        - language: rust
-          build-mode: none
-        # CodeQL supports the following values keywords for 'language': 'actions', 'c-cpp', 'csharp', 'go', 'java-kotlin', 'javascript-typescript', 'python', 'ruby', 'rust', 'swift'
-        # Use `c-cpp` to analyze code written in C, C++ or both
-        # Use 'java-kotlin' to analyze code written in Java, Kotlin or both
-        # Use 'javascript-typescript' to analyze code written in JavaScript, TypeScript or both
-        # To learn more about changing the languages that are analyzed or customizing the build mode for your analysis,
-        # see https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/customizing-your-advanced-setup-for-code-scanning.
-        # If you are analyzing a compiled language, you can modify the 'build-mode' for that language to customize how
-        # your codebase is analyzed, see https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning/codeql-code-scanning-for-compiled-languages
+          - language: actions
+            build-mode: none
+          - language: c-cpp
+            build-mode: manual
+          - language: rust
+            build-mode: none
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # Add any setup steps before running the `github/codeql-action/init` action.
-    # This includes steps like installing compilers or runtimes (`actions/setup-node`
-    # or others). This is typically only required for manual builds.
-    # - name: Setup runtime (example)
-    #   uses: actions/setup-example@v1
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended,security-and-quality
 
-    # Initializes the CodeQL tools for scanning.
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v4
-      with:
-        languages: ${{ matrix.language }}
-        build-mode: ${{ matrix.build-mode }}
-        queries: security-extended,security-and-quality
+      - name: Run manual build steps
+        if: matrix.build-mode == 'manual'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          
+          # make sure the system C toolchain is available
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config
+          
+          # show some debug info
+          which gcc
+          gcc --version
+          echo "repo tree (src/ffi):"
+          ls -la src/ffi || true
+          ls -la src/ffi/c || true
+          
+          # compile
+          mkdir -p build
+          if [ -f src/ffi/c/calloca.c ]; then
+            gcc -c -fPIC -I. -o build/calloca.o src/ffi/c/calloca.c
+          fi
+          
+          # also build with the build.rs
+          cargo build --verbose --features stack_alloc
 
-    # If the analyze step fails for one of the languages you are analyzing with
-    # "We were unable to automatically build your code", modify the matrix above
-    # to set the build mode to "manual" for that language. Then modify this step
-    # to build your code.
-    # ℹ️ Command-line programs to run using the OS shell.
-    - name: Run manual build steps
-      if: matrix.build-mode == 'manual'
-      shell: bash
-      run: |
-        set -euxo pipefail
-        
-        # make sure the system C toolchain is available
-        sudo apt-get update
-        sudo apt-get install -y build-essential pkg-config
-
-        # show some debug info
-        which gcc
-        gcc --version
-        echo "repo tree (src/ffi):"
-        ls -la src/ffi || true
-        ls -la src/ffi/c || true
-
-        # compile
-        mkdir -p build
-        if [ -f src/ffi/c/calloca.c ]; then
-          gcc -c -fPIC -I. -o build/calloca.o src/ffi/c/calloca.c
-        fi
-
-        # also build with the build.rs
-        cargo build --verbose --features stack_alloc
-
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v4
-      with:
-        category: "/language:${{matrix.language}}"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: "/language:${{matrix.language}}"

@@ -1,3 +1,4 @@
+use ::core::sync::atomic::{AtomicBool, Ordering};
 use {
     memapi2::{helpers::ptr_max_align, prelude::*},
     std::{
@@ -8,6 +9,12 @@ use {
 };
 
 fn main() {
+    static BREAK: AtomicBool = AtomicBool::new(false);
+
+    ctrlc::set_handler(move || {
+        BREAK.store(true, Ordering::Relaxed);
+    }).expect("failed to set ctrl-c handler");
+
     let o = stdout();
     let i = stdin();
 
@@ -30,7 +37,7 @@ fn main() {
 
     let mut size = 1;
     let mut align = 1;
-    loop {
+    'size: loop {
         total_sizes_tried += 1;
 
         let err: Box<dyn Error> = loop {
@@ -50,7 +57,7 @@ fn main() {
                 Ok(layout) => layout,
                 Err(e) => {
                     total_failures += 1;
-                    break Box::new(e)
+                    break Box::new(e);
                 }
             };
 
@@ -81,8 +88,12 @@ fn main() {
                 }
                 Err(e) => {
                     total_failures += 1;
-                    break Box::new(e)
+                    break Box::new(e);
                 }
+            }
+
+            if BREAK.load(Ordering::Relaxed) {
+                break 'size;
             }
 
             align *= 2
@@ -110,7 +121,8 @@ fn main() {
     writeln!(out, "successes: {}", total_successes).unwrap();
     writeln!(out, "failures: {}", total_failures).unwrap();
     writeln!(out, "success rate: {:.2}%", success_rate).unwrap();
-    writeln!(out, "total bytes allocated (sum of successful sizes): {}", total_bytes_allocated).unwrap();
+    writeln!(out, "total bytes allocated (sum of successful sizes): {}", total_bytes_allocated)
+        .unwrap();
     writeln!(out, "largest successful size: {}", max_success_size).unwrap();
     writeln!(out, "largest successful size's largest align: {}", max_success_size_align).unwrap();
     writeln!(out, "largest successful alignment: {}", max_success_align).unwrap();

@@ -5,8 +5,9 @@ use {
         mem::{ManuallyDrop, MaybeUninit},
         ops::FnOnce,
         ptr::NonNull,
-        result::Result::{self, Err, Ok}
-    }
+        result::Result::{self, Ok}
+    },
+    ::libc::size_t
 };
 
 #[cfg(feature = "catch_unwind")]
@@ -26,7 +27,8 @@ use {
 ///
 /// # Errors
 ///
-/// <code>Err([Error::CaughtUnwind])</code> when `f` panics if `catch_unwind` is enabled.
+/// <code>Err([Error::Other]\("unwind in ffi function below rust 1.71"\))</code> when `f` panics if
+/// `catch_unwind` is enabled and on a Rust version below 1.71.
 ///
 /// # Safety
 ///
@@ -57,8 +59,8 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     // in rust we declare it as
     // ```
     // pub fn c_alloca(
-    //     size: usize,
-    //     align: usize,
+    //     size: libc::size_t,
+    //     align: libc::size_t,
     //     cb: unsafe extern $ffi fn(*mut c_void, *mut u8, *mut c_void),
     //     closure: *mut c_void,
     //     out: *mut c_void
@@ -66,10 +68,10 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     // ```
     // so:
     // - the return types match as `()` == `void`
-    // - the size and align parameters match as `usize` == `size_t`
+    // - the size and align parameters match as `libc::size_t` == `size_t`
     // - the callback types match as the rust callback is defined as `extern "C"`
     // - the `closure` pointer points to a valid closure which `cb` can call
-    // - the `ret` pointer points to a valid `R` which `closure` initializes
+    // - the `out` pointer points to a valid `R` which `closure` initializes
     // additionally:
     // - the caller guarantees that `closure` cannot unwind in an unsafe environment
     // - the c function is safe
@@ -84,7 +86,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     }
     #[cfg(feature = "catch_unwind")]
     if UNWIND.with(|v| v.replace(false)) {
-        return Err(Error::CaughtUnwind);
+        return Err(Error::Other("unwind in ffi function below rust 1.71"));
     }
     // SAFETY: the closure will have initialized ret with the return value of the callback provided
     // by the user.
@@ -145,8 +147,8 @@ macro_rules! c_ext {
             /// - `cb` does not store the pointer or use it after the call returns.
             /// - `cb` initializes `out` if the caller expects a value to be written there.
             pub fn c_alloca(
-                size: usize,
-                align: usize,
+                size: size_t,
+                align: size_t,
                 cb: unsafe extern $ffi fn(*mut c_void, *mut u8, *mut c_void),
                 closure: *mut c_void,
                 out: *mut c_void

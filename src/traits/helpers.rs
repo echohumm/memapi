@@ -49,8 +49,8 @@ macro_rules! ralloc {
                 Ordering::Less | Ordering::Greater => alloc(a, new)
             };
             if let Ok(new_ptr) = new_ptr {
-                // for some reason, the dealloc call being outside of this branch is faster (for most
-                // things)? idk
+                // for some reason, the dealloc call being outside of this branch is faster (for
+                // most things)? idk
                 if old_size > 0 {
                     ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), min(old_size, new_size));
                 }
