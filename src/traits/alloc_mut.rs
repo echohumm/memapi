@@ -35,10 +35,7 @@ pub trait AllocMut: AllocDescriptor {
     ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
     ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
-    ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
+    ///   be the error from `::std::io::Error::last_os_error().raw_os_error()`.
     fn alloc_mut(
         &mut self,
         layout: Layout
@@ -58,10 +55,7 @@ pub trait AllocMut: AllocDescriptor {
     ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
     ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
-    ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
+    ///   be the error from `::std::io::Error::last_os_error().raw_os_error()`.
     #[inline]
     fn zalloc_mut(
         &mut self,
@@ -174,12 +168,9 @@ pub trait ReallocMut: DeallocMut {
     ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
     ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
-    ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///   be the error from `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
     ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc_mut(
@@ -222,12 +213,9 @@ pub trait ReallocMut: DeallocMut {
     ///   typically [`Cause::Unknown`](crate::error::Cause::Unknown). If the `os_err_reporting`
     ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
-    ///   be the error from <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///   be the error from `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
     ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn rezalloc_mut(

@@ -7,7 +7,13 @@ use {
             alloc_mut::BasicAllocMut,
             data::{
                 marker::UnsizedCopy,
-                type_props::{PtrProps, SizedProps, VarSized, varsized_nonnull_from_parts}
+                type_props::{
+                    KnownAlign,
+                    PtrProps,
+                    SizedProps,
+                    VarSized,
+                    varsized_nonnull_from_parts
+                }
             }
         }
     },
@@ -16,7 +22,7 @@ use {
         default::Default,
         fmt::{Debug, Display, Formatter, Result as FmtResult},
         marker::{PhantomData, Send, Sized, Sync},
-        mem::MaybeUninit,
+        mem::{ManuallyDrop, MaybeUninit},
         ops::{Deref, DerefMut, Drop},
         panic,
         ptr::{self, NonNull},
@@ -25,15 +31,20 @@ use {
     }
 };
 
+// TODO: box_all_unsized which adds support for trait objects and all unsized types, even those that
+// don't implement VarSized.
+
 #[inline]
-fn unwrap_fail<T: ?Sized, A: BasicAllocMut, E: Display>(r: Result<Box<T, A>, E>) -> Box<T, A> {
+fn unwrap_fail<T: ?Sized + KnownAlign, A: BasicAllocMut, E: Display>(
+    r: Result<Box<T, A>, E>
+) -> Box<T, A> {
     match r {
         Ok(b) => b,
         Err(e) => panic!("allocation for `Box` failed: {}", e)
     }
 }
 
-pub struct Box<T: ?Sized, A: BasicAllocMut = DefaultAlloc> {
+pub struct Box<T: ?Sized + KnownAlign, A: BasicAllocMut = DefaultAlloc> {
     ptr: NonNull<T>,
     alloc: A,
     _marker: PhantomData<T>
@@ -42,10 +53,12 @@ pub struct Box<T: ?Sized, A: BasicAllocMut = DefaultAlloc> {
 pub enum BoxErr<E: Debug + Display + From<Error>> {
     AllocError(E),
     NullPtr,
-    DanglingPtr(*const ())
+    DanglingPtr(usize)
 }
 
+// SAFETY: we own the `T` instance/as `Unique` puts it, "the data [this points to] is unaliased."
 unsafe impl<T: Send, A: BasicAllocMut + Send> Send for Box<T, A> {}
+// SAFETY: above
 unsafe impl<T: Sync, A: BasicAllocMut + Sync> Sync for Box<T, A> {}
 
 impl<E: Debug + Display + From<Error>> Display for BoxErr<E> {
@@ -94,12 +107,13 @@ impl<T, A: BasicAllocMut> Box<T, A> {
         data: T,
         alloc: A
     ) -> Result<Box<T, A>, BoxErr<<A as AllocDescriptor>::Error>> {
-        let mut alloc = alloc;
-        let ptr = tri!(wrap(BoxErr::AllocError) alloc.alloc_mut(T::LAYOUT)).cast();
+        let mut boxed = tri!(do Box::try_new_uninit_in(alloc));
+        // SAFETY: alloc traits always return a valid pointer.
         unsafe {
-            ptr::write(ptr.as_ptr(), data);
+            ptr::write(boxed.as_mut_ptr(), data);
         }
-        Ok(Box { ptr, alloc, _marker: PhantomData })
+        // SAFETY: we just initialized the box
+        Ok(unsafe { boxed.assume_init() })
     }
     pub fn try_new_uninit_in(
         alloc: A
@@ -110,9 +124,18 @@ impl<T, A: BasicAllocMut> Box<T, A> {
     }
 }
 
-impl<T: ?Sized> Box<T> {
+impl<T: KnownAlign, A: BasicAllocMut> Box<MaybeUninit<T>, A> {
+    // at least for now, this has no reason to be const
+    pub unsafe fn assume_init(self) -> Box<T, A> {
+        let no_drop = ManuallyDrop::new(self);
+        Box { ptr: no_drop.ptr.cast(), alloc: ptr::read(&no_drop.alloc), _marker: PhantomData }
+    }
+}
+
+impl<T: ?Sized + KnownAlign> Box<T> {
+    #[::rustversion::attr(since(1.61), const)]
     #[allow(clippy::must_use_candidate)]
-    pub const unsafe fn from_raw(ptr: NonNull<T>) -> Box<T> {
+    pub unsafe fn from_raw(ptr: NonNull<T>) -> Box<T> {
         Box::from_raw_in(ptr, DefaultAlloc)
     }
 
@@ -134,6 +157,7 @@ impl<T: ?Sized> Box<T> {
     where
         T: UnsizedCopy + VarSized
     {
+        // SAFETY: caller guarantee
         unsafe { Box::copy_from_ptr_in(p, DefaultAlloc) }
     }
 
@@ -141,12 +165,14 @@ impl<T: ?Sized> Box<T> {
     where
         T: UnsizedCopy + VarSized
     {
+        // SAFETY: caller guarantee
         unsafe { Box::try_copy_from_ptr_in(p, DefaultAlloc) }
     }
 }
 
-impl<T: ?Sized, A: BasicAllocMut> Box<T, A> {
-    pub const unsafe fn from_raw_in(ptr: NonNull<T>, alloc: A) -> Box<T, A> {
+impl<T: ?Sized + KnownAlign, A: BasicAllocMut> Box<T, A> {
+    #[::rustversion::attr(since(1.61), const)]
+    pub unsafe fn from_raw_in(ptr: NonNull<T>, alloc: A) -> Box<T, A> {
         Box { ptr, alloc, _marker: PhantomData }
     }
 
@@ -158,19 +184,20 @@ impl<T: ?Sized, A: BasicAllocMut> Box<T, A> {
     }
 
     pub fn try_copy_from_ref_in(
-        r: &T,
-        alloc: A
+        _r: &T,
+        _alloc: A
     ) -> Result<Box<T, A>, BoxErr<<A as AllocDescriptor>::Error>>
     where
         T: UnsizedCopy + VarSized
     {
-        unsafe { Box::try_copy_from_ptr_in(r, alloc) }
+        ::core::todo!()
     }
 
     pub unsafe fn copy_from_ptr_in(p: *const T, alloc: A) -> Box<T, A>
     where
         T: UnsizedCopy + VarSized
     {
+        // SAFETY: caller guarantee
         unwrap_fail(unsafe { Box::try_copy_from_ptr_in(p, alloc) })
     }
 
@@ -181,11 +208,19 @@ impl<T: ?Sized, A: BasicAllocMut> Box<T, A> {
     where
         T: UnsizedCopy + VarSized
     {
+        let p_addr = p.cast::<()>() as usize;
+        if p.is_null() {
+            return Err(BoxErr::NullPtr);
+        } else if p_addr == T::ALN {
+            return Err(BoxErr::DanglingPtr(p_addr));
+        } // we purposefully don't check for alignment here.
+
         let mut alloc = alloc;
 
+        // SAFETY: caller guarantee
         let sz = unsafe { p.sz() };
         let ptr = tri!(wrap(BoxErr::AllocError) alloc.alloc_mut(p.layout()));
-
+        // SAFETY: `alloc` returns a pointer to at least the `p.sz()` bytes
         unsafe {
             ptr::copy_nonoverlapping(p.cast::<u8>(), ptr.as_ptr(), sz);
         }
@@ -193,28 +228,41 @@ impl<T: ?Sized, A: BasicAllocMut> Box<T, A> {
     }
 }
 
-impl<T: ?Sized, A: BasicAllocMut> Deref for Box<T, A> {
+impl<T: ?Sized + KnownAlign, A: BasicAllocMut> Deref for Box<T, A> {
     type Target = T;
 
     fn deref(&self) -> &T {
+        // SAFETY: `self.ptr` is always a pointer to a valid `T` unless a `from_raw` function had
+        // its safety contract broken.
         unsafe { &*self.ptr.as_ptr() }
     }
 }
 
-impl<T: ?Sized, A: BasicAllocMut> DerefMut for Box<T, A> {
+impl<T: ?Sized + KnownAlign, A: BasicAllocMut> DerefMut for Box<T, A> {
     fn deref_mut(&mut self) -> &mut T {
+        // SAFETY: `self.ptr` is always a pointer to a valid `T` unless a `from_raw` function had
+        // its safety contract broken; we own the `T`.
         unsafe { &mut *self.ptr.as_ptr() }
     }
 }
 
-impl<T: ?Sized, A: BasicAllocMut> Drop for Box<T, A> {
+impl<T: ?Sized + KnownAlign, A: BasicAllocMut> Drop for Box<T, A> {
     fn drop(&mut self) {
+        // SAFETY: `self.ptr` is always a pointer to a valid `T` unless a `from_raw` function had
+        // its safety contract broken; we own the `T`
         unsafe {
             ptr::drop_in_place(self.ptr.as_ptr());
         }
-        let layout = unsafe { self.ptr.layout() };
-        unsafe {
-            self.alloc.dealloc_mut(self.ptr.cast(), layout);
+        // TODO: we can make PtrProps functions like layout() fallible and safe with the new
+        //  KnownAlign::ALN
+        if self.ptr.as_ptr().cast::<()>() as usize != T::ALN {
+            // SAFETY: the pointer is non-null, we just validated it isn't dangling, and `alloc`
+            //  only returns aligned memory.
+            let layout = unsafe { self.ptr.layout() };
+            // SAFETY: we allocated the pointer
+            unsafe {
+                self.alloc.dealloc_mut(self.ptr.cast(), layout);
+            }
         }
     }
 }

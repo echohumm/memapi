@@ -83,6 +83,17 @@ pub fn ptr_max_align(ptr: NonNull<u8>) -> usize {
     p & p.wrapping_neg()
 }
 
+/// Returns `true` if `ptr` is aligned to `align`.
+///
+/// # Safety
+///
+/// This function is safe to call, but the returned value may be incorrect if `align` is not a power
+/// of two. An underflow may also occur if `align == 0`.
+#[must_use]
+pub unsafe fn is_aligned(ptr: *const u8, align: usize) -> bool {
+    ptr as usize & (align - 1) == 0
+}
+
 /// Creates a <code>[NonNull]<\[T\]></code> from a pointer and a length.
 ///
 /// Note that this is only `const` on Rust versions 1.61 and above.

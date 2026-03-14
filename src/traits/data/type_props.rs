@@ -7,12 +7,108 @@ use {
     }
 };
 
+/// A trait defining a type's constant alignment, if it has one.
+///
+/// - For [`Sized`] types the alignment is just `align_of::<T>()`.
+/// - For [`VarSized`] types the alignment is the alignment of the element type (their
+///   [`SubType`](VarSized::SubType)).
+/// - For [`VarSizedStruct`]s, follow the rules documented below.
+///
+/// # Determining the alignment of a [`VarSizedStruct`]
+///
+/// The alignment of a `VarSizedStruct` depends on its fields and any `repr` attributes applied to
+/// the struct. Consider the alignment requirements of all fields, including the unsized tail.
+///
+/// ## Rust default / `#[repr(Rust)]` / `#[repr(C)]`
+///
+/// The alignment of the struct is the maximum alignment of all of its fields (<code>ALN =
+/// max([align_of]::\<Field1\>(), [align_of]::\<Field2\>(), ...,
+/// <[Self::Tail](VarSizedStruct::Tail) as [KnownAlign]>::[ALN](KnownAlign::ALN))</code>).
+///
+/// ## `#[repr(packed)]`
+///
+/// The alignment of the struct is always 1.
+///
+/// ## `#[repr(packed(N))]`
+///
+/// The alignment of the struct is the minimum of `N` and the maximum alignment of all of its
+/// fields (<code>ALN = min(N, max([align_of]::\<Field1\>(), [align_of]::\<Field2\>(), ...,
+/// <[Self::Tail](VarSizedStruct::Tail) as [KnownAlign]>::[ALN](KnownAlign::ALN)))</code>).
+///
+/// ## `#[repr(align(N))]`
+///
+/// If `#[repr(align(N))]` is used, the alignment of the struct is the maximum of `N` and the
+/// alignment it would otherwise have (<code>ALN = max(N, [align_of]::\<Field1\>(),
+/// [align_of]::\<Field2\>(), ..., <[Self::Tail](VarSizedStruct::Tail) as
+/// [KnownAlign]>::[ALN](KnownAlign::ALN))</code>).
+///
+/// # Safety
+///
+/// # Examples
+///
+/// ```rust
+/// use memapi2::traits::data::type_props::{KnownAlign, VarSizedStruct};
+///
+/// pub struct SomethingVarSized {
+///     a: usize,
+///     b: [u8]
+/// }
+///
+/// unsafe impl KnownAlign for SomethingVarSized {
+///     // `usize::ALN` = 8 on 64-bit systems, 4 on 32-bit, 2 on 16-bit. `[u8]::ALN` is always 1,
+///     // so we directly inherit `usize`'s alignment.
+///     const ALN: usize = usize::ALN;
+/// }
+///
+/// unsafe impl VarSizedStruct for SomethingVarSized {
+///     type Tail = [u8];
+/// }
+///
+/// // VarSized is always implemented for `T: VarSizedStruct`.
+/// ```
+pub unsafe trait KnownAlign {
+    /// The alignment of the type.
+    const ALN: usize;
+}
+
+// SAFETY: all sized types have a definitive alignment.
+unsafe impl<T> KnownAlign for T {
+    const ALN: usize = align_of::<T>();
+}
+
+// SAFETY: `[T]: Pointee<Metadata = usize> + MetaSized`
+unsafe impl<T> KnownAlign for [T] {
+    const ALN: usize = <T as KnownAlign>::ALN;
+}
+
+// SAFETY: `str = [u8]`
+unsafe impl KnownAlign for str {
+    const ALN: usize = <u8 as KnownAlign>::ALN;
+}
+
+#[::rustversion::since(1.64)]
+#[cfg(not(feature = "std"))]
+// SAFETY: `CStr = [u8]`
+unsafe impl KnownAlign for ::core::ffi::CStr {
+    const ALN: usize = <u8 as KnownAlign>::ALN;
+}
+// TODO: std CStr impl??
+#[cfg(feature = "std")]
+// SAFETY: `OsStr = [u8]`
+unsafe impl KnownAlign for ::std::ffi::OsStr {
+    const ALN: usize = <u8 as KnownAlign>::ALN;
+}
+
+#[cfg(feature = "std")]
+// SAFETY: `Path = OsStr = [u8]`
+unsafe impl KnownAlign for ::std::path::Path {
+    const ALN: usize = <u8 as KnownAlign>::ALN;
+}
+
 /// A trait containing constants for sized types.
-pub trait SizedProps: Sized {
+pub trait SizedProps: Sized + KnownAlign {
     /// The size of the type.
     const SZ: usize = size_of::<Self>();
-    /// The alignment of the type.
-    const ALN: usize = align_of::<Self>();
     /// The memory layout for the type.
     const LAYOUT: Layout = Layout::new::<Self>();
 
@@ -31,7 +127,7 @@ pub trait SizedProps: Sized {
     ///
     /// This pointer is non-null and correctly aligned for this type, but should not be
     /// dereferenced.
-    // SAFETY: an alignment cannot be 0 so it is not a null pointer; caller
+    // SAFETY: an alignment cannot be 0 so it is not a null pointer; caller must not deref.
     const DANGLING_PTR: NonNull<Self> = unsafe { NonNull::new_unchecked(Self::ALN as *mut Self) };
 }
 
@@ -390,21 +486,15 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
 /// # Safety
 ///
 /// The implementor must ensure that [`SubType`](VarSized::SubType) is the actual element type
-/// contained, that the [`ALN`](VarSized::ALN) constant accurately reflects the type's alignment
-/// requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
-/// Pointee>::Metadata = usize`).
-pub unsafe trait VarSized {
+/// contained, that the type's `KnownAlign::ALN` accurately reflects the type's alignment
+/// requirement in all safe contexts, and that this type has `usize` metadata
+/// (`<Self as Pointee>::Metadata = usize`).
+pub unsafe trait VarSized: KnownAlign {
     /// The element type.
     ///
     /// [`VarSized`] types are either slices of another type or include a slice tail; this is that
     /// element type.
     type SubType: Sized;
-
-    /// The alignment of the type.
-    ///
-    /// Override this if the type contains more than just a slice of its
-    /// [`SubType`](VarSized::SubType).
-    const ALN: usize = Self::SubType::ALN;
 
     #[::rustversion::since(1.61)]
     /// A valid, [dangling](::core::ptr::dangling) pointer for this layout's alignment.
@@ -426,20 +516,14 @@ pub unsafe trait VarSized {
 /// # Safety
 ///
 /// The implementor must ensure that [`SubType`](VarSized::SubType) is the actual element type
-/// contained, and that the [`ALN`](VarSized::ALN) constant accurately reflects the type's alignment
+/// contained, and that the type's `KnownAlign::ALN` accurately reflects the type's alignment
 /// requirement in all safe contexts.
-pub unsafe trait VarSized: ::core::ptr::Pointee<Metadata = usize> {
+pub unsafe trait VarSized: ::core::ptr::Pointee<Metadata = usize> + KnownAlign {
     /// The element type.
     ///
     /// [`VarSized`] types are either slices of another type or include a slice tail; this is that
     /// element type.
     type SubType: Sized + SizedProps;
-
-    /// The alignment of the type.
-    ///
-    /// Override this if the type contains more than just a slice of its
-    /// [`SubType`](VarSized::SubType).
-    const ALN: usize = Self::SubType::ALN;
 
     #[::rustversion::since(1.61)]
     /// A valid, [dangling](::core::ptr::dangling) pointer for this layout's alignment.
@@ -463,52 +547,15 @@ pub unsafe trait VarSized: ::core::ptr::Pointee<Metadata = usize> {
 /// # Safety
 ///
 /// The implementor must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type
-/// contained, that the [`ALN`](VarSizedStruct::ALN) constant accurately reflects the type's
-/// alignment requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
+/// contained, that the type's `KnownAlign::ALN` accurately reflects the type's alignment
+/// requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
 /// Pointee>::Metadata = usize`).
-pub unsafe trait VarSizedStruct {
+pub unsafe trait VarSizedStruct: KnownAlign {
     /// The [`VarSized`] tail type.
     ///
     /// [`VarSizedStruct`] types are unsized structs that contain a [`VarSized`] tail; this is that
     /// tail type.
-    type Tail: VarSized;
-
-    /// The alignment of the type.
-    ///
-    /// # How to determine
-    ///
-    /// The alignment of a [`VarSizedStruct`] is determined by its fields and its `repr` attribute.
-    ///
-    /// ## Fields
-    ///
-    /// Consider all fields of the struct, including the unsized tail. For the tail field, use
-    /// its [`VarSized::ALN`] as its alignment.
-    ///
-    /// ## Determination based on `#[repr]`
-    ///
-    /// ### Rust default / `#[repr(Rust)]` / `#[repr(C)]`
-    ///
-    /// The alignment of the struct is the maximum alignment of all of its fields. (<code>ALN =
-    /// max([align_of]::\<Field1\>(), [align_of]::\<Field2\>(), ...,
-    /// <[Self::Tail](VarSizedStruct::Tail) as [VarSized]>::[ALN](VarSized::ALN))</code>)
-    ///
-    /// ### `#[repr(packed)]`
-    ///
-    /// The alignment of the struct is always 1.
-    ///
-    /// ### `#[repr(packed(N))]`
-    ///
-    /// The alignment of the struct is the minimum of `N` and the maximum alignment of all of its
-    /// fields. (<code>ALN = min(N, max([align_of]::\<Field1\>(), [align_of]::\<Field2\>(), ...,
-    /// <[Self::Tail](VarSizedStruct::Tail) as [VarSized]>::[ALN](VarSized::ALN)))</code>)
-    ///
-    /// ### `#[repr(align(N))]`
-    ///
-    /// If `#[repr(align(N))]` is used, the alignment of the struct is the maximum of `N` and the
-    /// alignment it would otherwise have. (<code>ALN = max(N, [align_of]::\<Field1\>(),
-    /// [align_of]::\<Field2\>(), ..., <[Self::Tail](VarSizedStruct::Tail) as
-    /// [VarSized]>::[ALN](VarSized::ALN))</code>).
-    const ALN: usize;
+    type Tail: ?Sized + VarSized;
 }
 
 #[cfg(feature = "metadata")]
@@ -517,51 +564,16 @@ pub unsafe trait VarSizedStruct {
 /// # Safety
 ///
 /// The implementor must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type
-/// contained, and that the [`ALN`](VarSizedStruct::ALN) constant accurately reflects the type's
-/// alignment requirement in all safe contexts.
-pub unsafe trait VarSizedStruct: ::core::ptr::Pointee<Metadata = usize> {
+/// contained, and that the type's `KnownAlign::ALN` accurately reflects the type's alignment
+/// requirement in all safe contexts.
+pub unsafe trait VarSizedStruct:
+    ::core::ptr::Pointee<Metadata = usize> + KnownAlign
+{
     /// The [`VarSized`] tail type.
     ///
     /// [`VarSizedStruct`] types are unsized structs that contain a [`VarSized`] tail; this is that
     /// tail type.
-    type Tail: VarSized;
-
-    /// The alignment of the type.
-    ///
-    /// # How to determine
-    ///
-    /// The alignment of a [`VarSizedStruct`] is determined by its fields and its `repr` attribute.
-    ///
-    /// ## Fields
-    ///
-    /// Consider all fields of the struct, including the unsized tail. For the tail field, use
-    /// its [`VarSized::ALN`] as its alignment.
-    ///
-    /// ## Determination based on `#[repr]`
-    ///
-    /// ### Rust default / `#[repr(Rust)]` / `#[repr(C)]`
-    ///
-    /// The alignment of the struct is the maximum alignment of all of its fields. (<code>ALN =
-    /// max([align_of]::\<Field1\>(), [align_of]::\<Field2\>(), ...,
-    /// <[Self::Tail](VarSizedStruct::Tail) as [VarSized]>::[ALN](VarSized::ALN))</code>)
-    ///
-    /// ### `#[repr(packed)]`
-    ///
-    /// The alignment of the struct is always 1.
-    ///
-    /// ### `#[repr(packed(N))]`
-    ///
-    /// The alignment of the struct is the minimum of `N` and the maximum alignment of all of its
-    /// fields. (<code>ALN = min(N, max([align_of]::\<Field1\>(), [align_of]::\<Field2\>(), ...,
-    /// <[Self::Tail](VarSizedStruct::Tail) as [VarSized]>::[ALN](VarSized::ALN)))</code>)
-    ///
-    /// ### `#[repr(align(N))]`
-    ///
-    /// If `#[repr(align(N))]` is used, the alignment of the struct is the maximum of `N` and the
-    /// alignment it would otherwise have. (<code>ALN = max(N, [align_of]::\<Field1\>(),
-    /// [align_of]::\<Field2\>(), ..., <[Self::Tail](VarSizedStruct::Tail) as
-    /// [VarSized]>::[ALN](VarSized::ALN))</code>).
-    const ALN: usize;
+    type Tail: ?Sized + VarSized;
 }
 
 // SAFETY: `[T]: Pointee<Metadata = usize> + MetaSized`
@@ -595,8 +607,6 @@ unsafe impl VarSized for ::std::path::Path {
 // SAFETY: obviously any VarSized struct is VarSized, we just propagate the values.
 unsafe impl<T: VarSizedStruct> VarSized for T {
     type SubType = <T::Tail as VarSized>::SubType;
-
-    const ALN: usize = <T as VarSizedStruct>::ALN;
 }
 
 /// Creates a <code>[NonNull]\<T\></code> from a pointer and a `usize` metadata.

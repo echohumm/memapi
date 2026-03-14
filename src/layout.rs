@@ -1,3 +1,4 @@
+use crate::traits::data::type_props::KnownAlign;
 use {
     crate::{
         error::{ArithErr, ArithOp, LayoutErr},
@@ -96,7 +97,7 @@ impl Layout {
     ///
     /// # Errors
     ///
-    /// <code>Err([LayoutErr::ExceedsMax]\([T::SZ](SizedProps::SZ), [T::ALN](SizedProps::ALN),
+    /// <code>Err([LayoutErr::ExceedsMax]\([T::SZ](SizedProps::SZ), [T::ALN](KnownAlign::ALN),
     /// n\))</code> if the length of the computed array, in bytes, would
     /// exceed [`USIZE_MAX_NO_HIGH_BIT`].
     pub const fn array<T>(n: usize) -> Result<Layout, LayoutErr> {
@@ -114,7 +115,7 @@ impl Layout {
     /// # Safety
     ///
     /// The caller must ensure that <code>[T::SZ](SizedProps::SZ) * n</code> rounded up to
-    /// [`T::ALN`](SizedProps::ALN) will not exceed [`USIZE_MAX_NO_HIGH_BIT`].
+    /// [`T::ALN`](KnownAlign::ALN) will not exceed [`USIZE_MAX_NO_HIGH_BIT`].
     ///
     /// Additionally, the return value may be unexpected if <code>[T::SZ](SizedProps::SZ) * n</code>
     /// overflows.

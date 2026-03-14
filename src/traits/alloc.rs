@@ -15,7 +15,7 @@ use {
     }
 };
 
-#[allow(unused_imports)] use crate::error::Cause;
+#[allow(unused_imports)] use crate::error::{Cause, Error};
 
 /// A memory allocation interface.
 pub trait Alloc: AllocDescriptor + AllocMut {
@@ -32,14 +32,11 @@ pub trait Alloc: AllocDescriptor + AllocMut {
     /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///   `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures. If the
     ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
     ///   wrapping a type which implements [`AllocMut`], a generic error message will also be
     ///   returned if locking the primitive fails.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
     fn alloc(&self, layout: Layout) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
@@ -55,14 +52,11 @@ pub trait Alloc: AllocDescriptor + AllocMut {
     /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///   `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures. If the
     ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
     ///   wrapping a type which implements [`AllocMut`], a generic error message will also be
     ///   returned if locking the primitive fails.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc(&self, layout: Layout) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
@@ -168,16 +162,13 @@ pub trait Realloc: ReallocMut + Dealloc {
     /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///   `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
     ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures. If the
     ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
     ///   wrapping a type which implements [`ReallocMut`], a generic error message will also be
     ///   returned if locking the primitive fails.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn realloc(
@@ -219,16 +210,13 @@ pub trait Realloc: ReallocMut + Dealloc {
     /// - <code>Err([Error::AllocFailed]\(layout, cause\))</code> if allocation fails. `cause` is
     ///   typically [`Cause::Unknown`]. If the `os_err_reporting` feature is enabled, it will be
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
-    ///   <code>[last_os_error]\(\).[raw_os_error]\(\)</code>.
+    ///   `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::ReallocSmallerAlign]\(old, new\))</code> if
     ///   <code>old_layout.[align](Layout::align)() > new_layout.[align](Layout::align)()</code>.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures. If the
     ///   `alloc_mut` feature is enabled, and using this method on a synchronization primitive
     ///   wrapping a type which implements [`ReallocMut`], a generic error message will also be
     ///   returned if locking the primitive fails.
-    ///
-    /// [last_os_error]: ::std::io::Error::last_os_error
-    /// [raw_os_error]: ::std::io::Error::raw_os_error
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn rezalloc(

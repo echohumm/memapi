@@ -34,14 +34,14 @@
 //!
 //! # Allocator implementations
 //! - [`DefaultAlloc`] (available unless `no_alloc` is enabled and `std` isn't)
-//! - [`System`](::std::alloc::System) when the `std` feature is enabled
+//! - `::std::alloc::System` when the `std` feature is enabled
 //! - [`CAlloc`](allocs::c_alloc::CAlloc) behind the `c_alloc` feature
 //! - [`StackAlloc`](allocs::stack_alloc::StackAlloc) behind the `stack_alloc` feature
 //!
 //! # Feature flags
 //! - `no_alloc` disables usage of the rust `alloc` crate; `std` crate is used instead if the `std`
 //!   feature is enabled
-//! - `std`: enables `std` integration (including [`System`](::std::alloc::System))
+//! - `std`: enables `std` integration (including `::std::alloc::System`)
 //! - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
 //! - `alloc_temp_trait`: scoped/temporary allocation trait
 //! - `c_alloc`: C `posix_memalign`-style allocator ([`allocs::c_alloc`])
@@ -104,12 +104,11 @@ pub mod prelude {
                 BasicAllocMut,
                 DeallocMut,
                 FullAllocMut,
-
                 ReallocMut,
-                            },
+            },
             data::{
                 marker::UnsizedCopy,
-                type_props::{PtrProps, SizedProps}
+                type_props::{KnownAlign, PtrProps, SizedProps}
             },
             AllocDescriptor
         },

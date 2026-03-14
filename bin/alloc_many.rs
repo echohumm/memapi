@@ -1,5 +1,5 @@
-use ::core::sync::atomic::{AtomicBool, Ordering};
 use {
+    ::core::sync::atomic::{AtomicBool, Ordering},
     memapi2::{helpers::ptr_max_align, prelude::*},
     std::{
         env,
@@ -13,7 +13,8 @@ fn main() {
 
     ctrlc::set_handler(move || {
         BREAK.store(true, Ordering::Relaxed);
-    }).expect("failed to set ctrl-c handler");
+    })
+    .expect("failed to set ctrl-c handler");
 
     let o = stdout();
     let i = stdin();
@@ -71,7 +72,9 @@ fn main() {
                     total_bytes_allocated += layout.size() as u128;
                     if layout.size() > max_success_size {
                         max_success_size = layout.size();
-                        max_success_size_align = layout.align();
+                        if layout.align() > max_success_size_align {
+                            max_success_size_align = layout.align();
+                        }
                     }
                     if layout.align() > max_success_align {
                         max_success_align = layout.align();
