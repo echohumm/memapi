@@ -86,7 +86,7 @@ pub unsafe fn with_alloca<R, F: FnOnce(NonNull<u8>, *mut R)>(
     }
     #[cfg(feature = "catch_unwind")]
     if UNWIND.with(|v| v.replace(false)) {
-        return Err(Error::Other("unwind in ffi function below rust 1.71"));
+        return ::core::result::Result::Err(Error::Other("unwind in ffi function below rust 1.71"));
     }
     // SAFETY: the closure will have initialized ret with the return value of the callback provided
     // by the user.
