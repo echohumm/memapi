@@ -486,7 +486,7 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
 /// # Safety
 ///
 /// The implementor must ensure that [`SubType`](VarSized::SubType) is the actual element type
-/// contained, that the type's `KnownAlign::ALN` accurately reflects the type's alignment
+/// contained, that the type's [`KnownAlign::ALN`] accurately reflects the type's alignment
 /// requirement in all safe contexts, and that this type has `usize` metadata
 /// (`<Self as Pointee>::Metadata = usize`).
 pub unsafe trait VarSized: KnownAlign {
@@ -516,7 +516,7 @@ pub unsafe trait VarSized: KnownAlign {
 /// # Safety
 ///
 /// The implementor must ensure that [`SubType`](VarSized::SubType) is the actual element type
-/// contained, and that the type's `KnownAlign::ALN` accurately reflects the type's alignment
+/// contained, and that the type's [`KnownAlign::ALN`] accurately reflects the type's alignment
 /// requirement in all safe contexts.
 pub unsafe trait VarSized: ::core::ptr::Pointee<Metadata = usize> + KnownAlign {
     /// The element type.
@@ -539,15 +539,13 @@ pub unsafe trait VarSized: ::core::ptr::Pointee<Metadata = usize> + KnownAlign {
         varsized_nonnull_from_parts(<Self::SubType as SizedProps>::DANGLING_PTR.cast(), 0);
 }
 
-// TODO: derive macro/other macros to help implement this would be very useful
-
 #[cfg(not(feature = "metadata"))]
 /// Trait for unsized _structs_ that have a [`VarSized`] tail.
 ///
 /// # Safety
 ///
 /// The implementor must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type
-/// contained, that the type's `KnownAlign::ALN` accurately reflects the type's alignment
+/// contained, that the type's [`KnownAlign::ALN`] accurately reflects the type's alignment
 /// requirement in all safe contexts, and that this type has `usize` metadata (`<Self as
 /// Pointee>::Metadata = usize`).
 pub unsafe trait VarSizedStruct: KnownAlign {
@@ -564,7 +562,7 @@ pub unsafe trait VarSizedStruct: KnownAlign {
 /// # Safety
 ///
 /// The implementor must ensure that [`Tail`](VarSizedStruct::Tail) is the actual tail type
-/// contained, and that the type's `KnownAlign::ALN` accurately reflects the type's alignment
+/// contained, and that the type's [`KnownAlign::ALN`] accurately reflects the type's alignment
 /// requirement in all safe contexts.
 pub unsafe trait VarSizedStruct:
     ::core::ptr::Pointee<Metadata = usize> + KnownAlign
