@@ -17,10 +17,9 @@ use {
         ptr::{self, NonNull},
         result::Result::{self, Err, Ok}
     },
-    ::libc::c_int
 };
 
-fn null_q_dyn_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
+fn null_q_dyn_or_errcode<F: Fn(Layout) -> (*mut c_void, ::libc::c_int)>(
     layout: Layout,
     f: F
 ) -> Result<NonNull<u8>, Error> {
@@ -34,7 +33,7 @@ fn null_q_dyn_or_errcode<F: Fn(Layout) -> (*mut c_void, c_int)>(
         let (ptr, status) = f(layout);
         match status {
             0 => null_q_dyn(ptr, layout),
-            code => Err(Error::AllocFailed(layout, Cause::OSErr(code as c_int)))
+            code => Err(Error::AllocFailed(layout, Cause::OSErr(code as ::libc::c_int)))
         }
     }
 }

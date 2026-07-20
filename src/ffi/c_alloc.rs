@@ -5,13 +5,12 @@
 use {
     crate::{allocs::c_alloc::CAlloc, traits::AllocDescriptor},
     ::core::ffi::c_void,
-    ::libc::c_int
 };
 
 #[cfg(all(not(any(target_os = "horizon", target_os = "vita")), not(windows)))]
 #[cfg_attr(miri, track_caller)]
 #[inline(always)]
-pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
+pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, ::libc::c_int) {
     #[cfg(target_vendor = "apple")]
     {
         if align > (1 << 31) {
@@ -27,14 +26,14 @@ pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_
 #[cfg(windows)]
 #[cfg_attr(miri, track_caller)]
 #[inline(always)]
-pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, c_int) {
+pub(crate) unsafe fn c_alloc_spec(align: usize, size: usize) -> (*mut c_void, ::libc::c_int) {
     // SAFETY: requirements are passed onto the caller
     (unsafe { _aligned_malloc(size, align) }, 0)
 }
 #[cfg(any(target_os = "horizon", target_os = "vita"))]
 #[cfg_attr(miri, track_caller)]
 #[inline(always)]
-pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> (*mut c_void, c_int) {
+pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> (*mut c_void, ::libc::c_int) {
     // SAFETY: requirements are passed onto the caller
     (unsafe { memalign(layout.align(), layout.size()) }, 0)
 }
@@ -144,7 +143,7 @@ extern "C" {
     /// If successful, the returned pointer should be freed with [`free`].
     #[must_use = "on success this function produces an allocation; dropping the returned value \
                   will leak memory"]
-    pub fn posix_memalign(out: *mut *mut c_void, align: usize, size: usize) -> c_int;
+    pub fn posix_memalign(out: *mut *mut c_void, align: usize, size: usize) -> ::libc::c_int;
 
     #[cfg(all(not(windows), any(target_os = "horizon", target_os = "vita")))]
     /// Allocates `size` bytes aligned to `align`.
