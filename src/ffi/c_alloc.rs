@@ -2,118 +2,11 @@
 #![allow(unexpected_cfgs)]
 #![warn(unknown_lints)]
 
-use {::core::ffi::c_void, ::libc::c_int};
-
-#[cfg(any(
-    all(target_arch = "riscv32", any(target_os = "espidf", target_os = "zkvm")),
-    all(target_arch = "xtensa", target_os = "espidf"),
-))]
-/// The minimum alignment returned by the platform's [`malloc`].
-pub const MIN_ALIGN: usize = 4;
-
-#[cfg(any(
-    target_arch = "x86",
-    target_arch = "arm",
-    target_arch = "m68k",
-    target_arch = "csky",
-    target_arch = "loongarch32",
-    target_arch = "mips",
-    target_arch = "mips32r6",
-    target_arch = "powerpc",
-    target_arch = "powerpc64",
-    target_arch = "sparc",
-    target_arch = "wasm32",
-    target_arch = "hexagon",
-    // riscv32 except when handled by the 4-byte case
-    all(target_arch = "riscv32", not(any(target_os = "espidf", target_os = "zkvm"))),
-    // xtensa except when handled by the 4-byte case
-    all(target_arch = "xtensa", not(target_os = "espidf")),
-))]
-/// The minimum alignment returned by the platform's [`malloc`].
-pub const MIN_ALIGN: usize = 8;
-
-#[cfg(any(
-    target_arch = "x86_64",
-    target_arch = "aarch64",
-    target_arch = "arm64ec",
-    target_arch = "loongarch64",
-    target_arch = "mips64",
-    target_arch = "mips64r6",
-    target_arch = "s390x",
-    target_arch = "sparc64",
-    target_arch = "riscv64",
-    target_arch = "wasm64",
-))]
-/// The minimum alignment returned by the platform's [`malloc`].
-pub const MIN_ALIGN: usize = 16;
-
-#[cfg(all(
-    not(any(
-        all(target_arch = "riscv32", any(target_os = "espidf", target_os = "zkvm")),
-        all(target_arch = "xtensa", target_os = "espidf"),
-        target_arch = "x86",
-        target_arch = "arm",
-        target_arch = "m68k",
-        target_arch = "csky",
-        target_arch = "loongarch32",
-        target_arch = "mips",
-        target_arch = "mips32r6",
-        target_arch = "powerpc",
-        target_arch = "powerpc64",
-        target_arch = "sparc",
-        target_arch = "wasm32",
-        target_arch = "hexagon",
-        all(target_arch = "riscv32", not(any(target_os = "espidf", target_os = "zkvm"))),
-        all(target_arch = "xtensa", not(target_os = "espidf")),
-        target_arch = "x86_64",
-        target_arch = "aarch64",
-        target_arch = "arm64ec",
-        target_arch = "loongarch64",
-        target_arch = "mips64",
-        target_arch = "mips64r6",
-        target_arch = "s390x",
-        target_arch = "sparc64",
-        target_arch = "riscv64",
-        target_arch = "wasm64",
-    )),
-    any(feature = "__dev", test)
-))]
-compile_error!("this platform is missing a value for `MIN_ALIGN`");
-
-#[cfg(all(
-    not(any(
-        all(target_arch = "riscv32", any(target_os = "espidf", target_os = "zkvm")),
-        all(target_arch = "xtensa", target_os = "espidf"),
-        target_arch = "x86",
-        target_arch = "arm",
-        target_arch = "m68k",
-        target_arch = "csky",
-        target_arch = "loongarch32",
-        target_arch = "mips",
-        target_arch = "mips32r6",
-        target_arch = "powerpc",
-        target_arch = "powerpc64",
-        target_arch = "sparc",
-        target_arch = "wasm32",
-        target_arch = "hexagon",
-        all(target_arch = "riscv32", not(any(target_os = "espidf", target_os = "zkvm"))),
-        all(target_arch = "xtensa", not(target_os = "espidf")),
-        target_arch = "x86_64",
-        target_arch = "aarch64",
-        target_arch = "arm64ec",
-        target_arch = "loongarch64",
-        target_arch = "mips64",
-        target_arch = "mips64r6",
-        target_arch = "s390x",
-        target_arch = "sparc64",
-        target_arch = "riscv64",
-        target_arch = "wasm64",
-    )),
-    not(any(feature = "__dev", test))
-))]
-// fallback to 1 if not testing
-/// The minimum alignment returned by the platform's [`malloc`].
-pub const MIN_ALIGN: usize = 1;
+use {
+    crate::{allocs::c_alloc::CAlloc, traits::AllocDescriptor},
+    ::core::ffi::c_void,
+    ::libc::c_int
+};
 
 #[cfg(all(not(any(target_os = "horizon", target_os = "vita")), not(windows)))]
 #[cfg_attr(miri, track_caller)]
@@ -149,13 +42,13 @@ pub(crate) unsafe fn c_alloc_spec(layout: &Layout) -> (*mut c_void, c_int) {
 #[cfg(windows)]
 #[inline(always)]
 pub(crate) const fn rely_on_min_align(_: usize, align: usize) -> bool {
-    align <= MIN_ALIGN
+    align <= CAlloc::MIN_ALIGN.get()
 }
 #[cfg(not(windows))]
 #[inline(always)]
 pub(crate) const fn rely_on_min_align(size: usize, align: usize) -> bool {
     // im stupid, good thing i expanded my testset
-    align <= MIN_ALIGN && size >= align
+    align <= CAlloc::MIN_ALIGN.get() && size >= align
 }
 
 // public in case the user wants them for some reason
@@ -176,6 +69,8 @@ extern "C" {
     /// # Notes
     ///
     /// If successful, the returned pointer should be freed with [`free`].
+    ///
+    /// [`MIN_ALIGN`]: crate::allocs::c_alloc::CAlloc::MIN_ALIGN
     #[must_use = "this function allocates memory on success; dropping the returned pointer will \
                   leak memory"]
     pub fn malloc(size: usize) -> *mut c_void;
@@ -197,6 +92,8 @@ extern "C" {
     /// # Notes
     ///
     /// If successful, the returned pointer should be freed with [`free`].
+    ///
+    /// [`MIN_ALIGN`]: crate::allocs::c_alloc::CAlloc::MIN_ALIGN
     #[must_use = "this function allocates memory on success; dropping the returned pointer will \
                   leak memory"]
     pub fn calloc(count: usize, size: usize) -> *mut c_void;
@@ -219,6 +116,8 @@ extern "C" {
     /// # Notes
     ///
     /// If successful, the returned pointer should be freed with [`free`].
+    ///
+    /// [`MIN_ALIGN`]: crate::allocs::c_alloc::CAlloc::MIN_ALIGN
     #[must_use = "this function allocates memory on success; dropping the returned pointer will \
                   leak memory"]
     pub fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void;

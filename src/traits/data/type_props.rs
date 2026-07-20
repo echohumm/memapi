@@ -475,7 +475,7 @@ impl<T: ?Sized> PtrProps<T> for NonNull<T> {
     where
         T: VarSized
     {
-        // ptr's impl handles ub check
+        // ptr's impl handles undefined behavior check
         self.as_ptr().varsized_metadata()
     }
 }

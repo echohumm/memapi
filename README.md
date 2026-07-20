@@ -3,20 +3,18 @@
 ![crates.io](https://img.shields.io/crates/v/memapi2.svg)
 ![docs.rs](https://docs.rs/memapi2/badge.svg)
 
-A small, `no_std`/`no_alloc`-friendly allocation interface for raw buffers, with explicit layouts,
-split allocator traits, and structured errors.
+A small, `no_std`/`no_alloc`-friendly allocation interface for raw buffers, with explicit layouts, split allocator
+traits, and structured errors.
 
 Version: 0.11.4
 
 MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature flags](#feature-flags))
-macOS MSRV: 1.56?
 
 ## Highlights
 
-- Split allocator traits: `Alloc`, `Dealloc`, `Grow`, `Shrink`, `Realloc`, plus `BasicAlloc` and
+- Split allocator traits: `Alloc`, `Dealloc`, `Realloc`, plus `BasicAlloc` and
   `FullAlloc` aliases
-- Mutable versions of allocator traits for allocation operations which require mutable access to the
-  allocator
+- Mutable versions of allocator traits for allocation operations which require mutable access to the allocator
 - Temporary/scoped allocation trait for function-scoped allocations
 - Custom `Layout` type with conversion to/from `alloc::alloc::Layout` (unless `no_alloc` is on and
   `std` isn't)
@@ -40,7 +38,7 @@ If you want common optional features:
 
 ```toml
 [dependencies]
-memapi2 = { version = "0.11.4", features = ["os_err_reporting"] }
+memapi2 = { version = "0.11.4", features = ["full_std"] }
 ```
 
 ## Example
@@ -67,21 +65,23 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `std`: enable `std` integration (including `std::alloc::System`)
 - `os_err_reporting`: best-effort OS error reporting via `errno` (requires `std`)
 - `alloc_temp_trait`: scoped/temporary allocation trait (`AllocTemp`)
+- `alloc_checked_trait`: checked allocation traits (`traits::alloc_checked`) which return an error on
+  invalid arguments instead of causing undefined behavior
+- `zst_alloc_trait`: stateless allocation traits (`traits::zst_alloc`) for zero-sized allocators,
+  exposing their operations as associated functions taking no `self` (wip, currently not used)
+- `catch_unwind`: catch unwinds across the C boundary in `stack_alloc` (requires `std`)
+- `wip_stdlib_data`: VERY wip, do not attempt to use
 - `c_alloc`: C `posix_memalign`-style allocator (`c_alloc::CAlloc`)
-- `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, requires a C toolchain)
+- `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, requires a C toolchain, MSRV on macOS is ~1.56)
 - `metadata`: nightly `core::ptr::Pointee` and `core::ptr::metadata` metadata support
-- `no_alloc`: disable the `alloc` crate (removes `DefaultAlloc`, `StdLayout`, and implementations
-  for the `System` allocator, unless `std` is on)
+- `all_nightly`: convenience bundle of all nightly-only features (currently just `metadata`)
+- `no_alloc`: disable the `alloc` crate (removes `DefaultAlloc`, `StdLayout`, and implementations for the `System`
+  allocator, unless `std` is on)
 - `no_nightly`: disable automatic nightly detection in `build.rs`
-- `full`: convenience bundle (`os_err_reporting`, `c_alloc`, `stack_alloc`)
+- `full`: convenience bundle (`c_alloc`, `alloc_checked_trait`, `zst_alloc_trait`, `stack_alloc`)
 - `full_nightly`: `full` + `metadata`
-
-## Notes
-
-- `DefaultAlloc` delegates to the global allocator. Do not set it as the global allocator itself,
-  or you will cause infinite recursion.
-- This crate is low-level and uses raw pointers. Read the safety contracts on trait methods and
-  layout constructors carefully.
+- `full_std`: `full` + `catch_unwind` + `os_err_reporting`
+- `full_nightly_std`: `full_nightly` + `full_std`
 
 ## Documentation
 

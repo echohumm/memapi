@@ -33,14 +33,15 @@ macro_rules! impl_checked_realloc_group {
 /// # Safety
 ///
 /// Implementors of this trait must ensure that [`AllocOwned::owns`] returns an error if the pointer
-/// or layout it receives would cause UB if passed to a trait method from
+/// or layout it receives would cause undefined behavior if passed to a trait method from
 /// [`alloc`](crate::traits::alloc).
 pub unsafe trait AllocOwned: AllocDescriptor {
     /// A helper to check whether `self` owns the allocation at `ptr`. The layout may be ignored or
     /// validated, so long as the below condition remains true.
     ///
     /// This function *must* return an error if calling any trait method from
-    /// [`alloc`](crate::traits::alloc) on the received pointer and layout would result in UB.
+    /// [`alloc`](crate::traits::alloc) on the received pointer and layout would result in undefined
+    /// behavior.
     ///
     /// # Errors
     ///
@@ -80,7 +81,7 @@ pub mod alloc {
         /// [dangling](::core::ptr::dangling).
         ///
         /// This method must return an error rather than silently accepting the deallocation and
-        /// potentially causing UB.
+        /// potentially causing undefined behavior.
         ///
         /// # Errors
         ///
@@ -108,11 +109,11 @@ pub mod alloc {
     ///
     /// This trait is the checked variant of [`Realloc`]. Unlike [`Realloc::realloc`] and
     /// [`Realloc::rezalloc`], its methods are safe to call: they perform validity checks (via
-    /// [`AllocOwned`]) and must return an error rather than risking UB when given an invalid
-    /// pointer/layout pair.
+    /// [`AllocOwned`]) and must return an error rather than risking undefined behavior when given
+    /// an invalid pointer/layout pair.
     pub trait CheckedRealloc: Realloc {
         /// Attempts to reallocate a previously allocated block after performing validity checks.
-        ///
+        // TODO: on grow/on shrink docs should be split
         /// On grow, preserves existing contents up to
         /// <code>old_layout.[size](Layout::size)()</code>, and on shrink, truncates to
         /// <code>new_layout.[size](Layout::size)()</code>.
@@ -120,7 +121,7 @@ pub mod alloc {
         /// On failure, the original memory will not be deallocated.
         ///
         /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
+        /// potentially causing undefined behavior.
         ///
         /// # Errors
         ///
@@ -150,7 +151,7 @@ pub mod alloc {
         /// On failure, the original memory will not be deallocated.
         ///
         /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
+        /// potentially causing undefined behavior.
         ///
         /// # Errors
         ///
@@ -223,7 +224,7 @@ pub mod alloc_mut {
         /// [dangling](::core::ptr::dangling).
         ///
         /// This method must return an error rather than silently accepting the deallocation and
-        /// potentially causing UB.
+        /// potentially causing undefined behavior.
         ///
         /// Note that the default for this method simply returns
         /// <code>Err([Error::Unsupported])</code>.
@@ -257,7 +258,7 @@ pub mod alloc_mut {
         /// On failure, the original memory will not be deallocated.
         ///
         /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
+        /// potentially causing undefined behavior.
         ///
         /// # Errors
         ///
@@ -286,7 +287,7 @@ pub mod alloc_mut {
         /// On failure, the original memory will not be deallocated.
         ///
         /// This method must return an error rather than silently accepting invalid inputs and
-        /// potentially causing UB.
+        /// potentially causing undefined behavior.
         ///
         /// # Errors
         ///

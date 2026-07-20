@@ -9,6 +9,7 @@ use {
     memapi2::{
         helpers::USIZE_MAX_NO_HIGH_BIT,
         layout::Layout,
+        prelude::KnownAlign,
         traits::data::type_props::SizedProps
     },
     std::time::Duration

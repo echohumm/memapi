@@ -1,5 +1,10 @@
 use {
-    crate::{error::Error, layout::Layout, prelude::DeallocMut, traits::alloc::Dealloc},
+    crate::{
+        error::Error,
+        layout::Layout,
+        prelude::DeallocMut,
+        traits::{AllocFeatures, alloc::Dealloc}
+    },
     ::core::{
         cmp::{Ord, Ordering, min},
         convert::From,
@@ -52,10 +57,18 @@ macro_rules! ralloc {
                 // for some reason, the dealloc call being outside of this branch is faster (for
                 // most things)? idk
                 if old_size > 0 {
-                    ptr::copy_nonoverlapping(ptr.as_ptr(), new_ptr.as_ptr(), min(old_size, new_size));
+                    ptr::copy_nonoverlapping(
+                        ptr.as_ptr(),
+                        new_ptr.as_ptr(),
+                        min(old_size, new_size)
+                    );
                 }
 
-                tri!(do a.$call(ptr, old));
+                // if the allocator doesn't support deallocation, we assume we can just skip
+                // deallocation.
+                if A::supports(AllocFeatures::DEALLOC) {
+                    tri!(do a.$call(ptr, old));
+                }
             }
             new_ptr
         }

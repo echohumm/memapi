@@ -1,3 +1,4 @@
+// TODO: crate docs are stale
 //! A small, `no_std`/`no_alloc`-friendly memory allocation interface for managing raw buffers.
 //!
 //! This crate provides explicit layouts, a split allocator trait stack, and structured errors.
@@ -108,7 +109,7 @@ pub mod prelude {
             },
             data::{
                 marker::UnsizedCopy,
-                type_props::{KnownAlign, PtrProps, SizedProps}
+                type_props::{KnownAlign, PtrProps, SizedProps},
             },
             AllocDescriptor
         },
@@ -179,6 +180,8 @@ macro_rules! default_alloc_impl {
             }
         }
         impl crate::traits::alloc::Realloc for $ty {}
+
+        // TODO: ZstAlloc impls
     };
 }
 
@@ -356,7 +359,7 @@ macro_rules! assert_unsafe_precondition {
     };
 }
 
-#[cfg(feature = "stdlib_data")]
+#[cfg(feature = "wip_stdlib_data")]
 #[doc(hidden)]
 pub mod data;
 

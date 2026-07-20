@@ -12,6 +12,7 @@ use {
     ::core::{
         cmp::Ord,
         ffi::c_void,
+        num::NonZeroUsize,
         ops::Fn,
         ptr::{self, NonNull},
         result::Result::{self, Err, Ok}
@@ -50,6 +51,84 @@ pub struct CAlloc;
 
 impl AllocDescriptor for CAlloc {
     type Error = Error;
+
+    #[cfg(any(
+        all(target_arch = "riscv32", any(target_os = "espidf", target_os = "zkvm")),
+        all(target_arch = "xtensa", target_os = "espidf"),
+    ))]
+    /// The minimum alignment returned by the platform's [`malloc`].
+    // SAFETY: 4 is a non-zero power of two.
+    const MIN_ALIGN: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(4) };
+
+    #[cfg(any(
+        target_arch = "x86",
+        target_arch = "arm",
+        target_arch = "m68k",
+        target_arch = "csky",
+        target_arch = "loongarch32",
+        target_arch = "mips",
+        target_arch = "mips32r6",
+        target_arch = "powerpc",
+        target_arch = "powerpc64",
+        target_arch = "sparc",
+        target_arch = "wasm32",
+        target_arch = "hexagon",
+        // riscv32 except when handled by the 4-byte case
+        all(target_arch = "riscv32", not(any(target_os = "espidf", target_os = "zkvm"))),
+        // xtensa except when handled by the 4-byte case
+        all(target_arch = "xtensa", not(target_os = "espidf")),
+    ))]
+    // SAFETY: 8 is a non-zero power of two.
+    const MIN_ALIGN: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(8) };
+
+    #[cfg(any(
+        target_arch = "x86_64",
+        target_arch = "aarch64",
+        target_arch = "arm64ec",
+        target_arch = "loongarch64",
+        target_arch = "mips64",
+        target_arch = "mips64r6",
+        target_arch = "s390x",
+        target_arch = "sparc64",
+        target_arch = "riscv64",
+        target_arch = "wasm64",
+    ))]
+    // SAFETY: 16 is a non-zero power of two.
+    const MIN_ALIGN: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(16) };
+
+    #[cfg(all(
+        not(any(
+            all(target_arch = "riscv32", any(target_os = "espidf", target_os = "zkvm")),
+            all(target_arch = "xtensa", target_os = "espidf"),
+            target_arch = "x86",
+            target_arch = "arm",
+            target_arch = "m68k",
+            target_arch = "csky",
+            target_arch = "loongarch32",
+            target_arch = "mips",
+            target_arch = "mips32r6",
+            target_arch = "powerpc",
+            target_arch = "powerpc64",
+            target_arch = "sparc",
+            target_arch = "wasm32",
+            target_arch = "hexagon",
+            all(target_arch = "riscv32", not(any(target_os = "espidf", target_os = "zkvm"))),
+            all(target_arch = "xtensa", not(target_os = "espidf")),
+            target_arch = "x86_64",
+            target_arch = "aarch64",
+            target_arch = "arm64ec",
+            target_arch = "loongarch64",
+            target_arch = "mips64",
+            target_arch = "mips64r6",
+            target_arch = "s390x",
+            target_arch = "sparc64",
+            target_arch = "riscv64",
+            target_arch = "wasm64",
+        )),
+        any(feature = "__dev", test)
+    ))]
+    const MIN_ALIGN: NonZeroUsize =
+        compile_error!("this platform is missing a value for `MIN_ALIGN`");
 }
 
 impl Alloc for CAlloc {

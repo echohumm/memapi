@@ -104,9 +104,10 @@ pub trait DeallocMut: AllocMut {
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
     /// [dangling](ptr::dangling).
     ///
-    /// Note that this function differs from checked deallocation in that it may still cause UB if
-    /// it receives invalid inputs. However, if it is supported, implementations should prefer to
-    /// delegate to `CheckedDealloc::checked_dealloc` and thus avoid UB.
+    /// Note that this function differs from checked deallocation in that it may still cause
+    /// undefined behavior if it receives invalid inputs. However, if it is supported,
+    /// implementations should prefer to delegate to `CheckedDealloc::checked_dealloc` and thus
+    /// avoid undefined behavior.
     ///
     /// # Safety
     ///

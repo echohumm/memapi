@@ -1,9 +1,8 @@
-use crate::traits::data::type_props::KnownAlign;
 use {
     crate::{
         error::{ArithErr, ArithOp, LayoutErr},
         helpers::{USIZE_HIGH_BIT, USIZE_MAX_NO_HIGH_BIT, align_up, is_multiple_of, void_ptr},
-        traits::data::type_props::{PtrProps, SizedProps}
+        traits::data::type_props::{KnownAlign, PtrProps, SizedProps}
     },
     ::core::{
         cmp::PartialEq,

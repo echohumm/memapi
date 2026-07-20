@@ -98,9 +98,10 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
     /// [dangling](ptr::dangling).
     ///
-    /// Note that this function differs from checked deallocation in that it may still cause UB if
-    /// it receives invalid inputs. However, if it is supported, implementations should prefer to
-    /// delegate to `CheckedDealloc::checked_dealloc` and thus avoid UB.
+    /// Note that this function differs from checked deallocation in that it may still cause
+    /// undefined behavior if it receives invalid inputs. However, if it is supported,
+    /// implementations should prefer to delegate to `CheckedDealloc::checked_dealloc` and thus
+    /// avoid undefined behavior.
     ///
     /// # Safety
     ///
@@ -130,7 +131,21 @@ pub trait Dealloc: Alloc + DeallocMut {
     ) -> Result<(), <Self as AllocDescriptor>::Error>;
 }
 
+// TODO: better docs
+// TODO: make sure docs are consistent across all trait variations; i think i updated these and not
+//  the others
 /// A memory allocation interface which can arbitrarily resize allocations.
+///
+/// # Implementation note
+///
+/// Both of the default implementations of this methods' traits simply:
+/// 1. perform a new allocation
+/// 2. copy the old allocation's data to the new allocation
+/// 3. deallocate the old allocation
+///
+/// However, deallocation of the old allocation is skipped if the allocator does not have the
+/// [`AllocFeatures::DEALLOC`] feature. In many cases, performance can be gained by using a proper
+/// implementation.
 pub trait Realloc: ReallocMut + Dealloc {
     /// Reallocates a block, growing or shrinking as needed. The new alignment may be larger or the
     /// same, but cannot be smaller.
@@ -179,6 +194,8 @@ pub trait Realloc: ReallocMut + Dealloc {
     ) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
         ralloc(self, ptr, old_layout, new_layout, Alloc::alloc)
     }
+
+    // TODO: could do try_realloc?
 
     /// Reallocates a block, growing or shrinking as needed, with extra bytes being zeroed. The new
     /// alignment may be larger or the same, but cannot be smaller.

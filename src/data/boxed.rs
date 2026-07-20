@@ -1,6 +1,9 @@
+// clippy is stupid and thinks panic is unused even though it's used in todo!
+#[allow(unused_imports)]
 use {
     crate::{
         DefaultAlloc,
+        data::unwrap_fail,
         error::Error,
         traits::{
             AllocDescriptor,
@@ -27,23 +30,16 @@ use {
         panic,
         ptr::{self, NonNull},
         result::Result::{self, Err, Ok},
+        todo,
         write
     }
 };
+// TODO: box_all_unsized which adds support for trait objects and all unsized types, even those
+//  that don't implement VarSized.
 
-// TODO: box_all_unsized which adds support for trait objects and all unsized types, even those that
-// don't implement VarSized.
-
-#[inline]
-fn unwrap_fail<T: ?Sized + KnownAlign, A: BasicAllocMut, E: Display>(
-    r: Result<Box<T, A>, E>
-) -> Box<T, A> {
-    match r {
-        Ok(b) => b,
-        Err(e) => panic!("allocation for `Box` failed: {}", e)
-    }
-}
-
+/// Don't use this.
+///
+/// [cmt]: # (<placeholder>)
 pub struct Box<T: ?Sized + KnownAlign, A: BasicAllocMut = DefaultAlloc> {
     ptr: NonNull<T>,
     alloc: A,
@@ -190,7 +186,7 @@ impl<T: ?Sized + KnownAlign, A: BasicAllocMut> Box<T, A> {
     where
         T: UnsizedCopy + VarSized
     {
-        ::core::todo!()
+        todo!()
     }
 
     pub unsafe fn copy_from_ptr_in(p: *const T, alloc: A) -> Box<T, A>

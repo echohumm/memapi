@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 * `Layout::try_posix_memalign_compatible_from_size_align` to only allow layout creation if the
   provided size and alignment are compatible with `posix_memalign`
 * `PtrProps::varsized_metadata` for getting the size of `VarSized` types
-* `checked_ops` feature controlling `traits::alloc_checked` module
+* `alloc_checked_trait` feature controlling `traits::alloc_checked` module
 * `traits::AllocDescriptor::FEATURES` supported feature bitflags with `traits::AllocFeatures`
 * `helpers::udouble`
 * `ArithOp::DivCeil` and the matching checked arithmetic operation
@@ -62,10 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 * Crate failing to compile on Windows with the `c_alloc` feature
-
-## [0.11.3] - 2026-02-15
-
-### Fixed
 
 * Crate failing to compile on Apple systems with the `c_alloc` feature
 
