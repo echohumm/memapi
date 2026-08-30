@@ -5,23 +5,17 @@ use {
         data::unwrap_fail,
         helpers::{slice_ptr_from_parts, slice_ptr_from_parts_mut},
         layout::Layout,
-        traits::{
-            AllocDescriptor,
-            alloc_mut::FullAllocMut,
-            data::type_props::{KnownAlign, SizedProps}
-        }
+        traits::{AllocDescriptor, alloc_mut::FullAllocMut, data::type_props::SizedProps}
     },
     ::core::{
         clone::Clone,
         default::Default,
         fmt::{Display, Formatter, Result as FmtResult},
-        iter::{IntoIterator, Iterator},
         marker::{PhantomData, Send, Sync},
         ops::{Deref, DerefMut, Drop},
         option::Option::{self, None, Some},
         ptr::{self, NonNull},
         result::Result::{self, Err, Ok},
-        slice,
         todo
     }
 };

@@ -9,10 +9,101 @@ use {
     memapi2::{
         DefaultAlloc,
         layout::Layout,
-        traits::alloc::{Alloc, Dealloc, Realloc}
+        traits::{
+            alloc::{Alloc, Dealloc, Realloc},
+            zst_alloc::{ZstAlloc, ZstDealloc, ZstRealloc}
+        }
     },
     std::time::Duration
 };
+
+fn bench_zst_allocs<A>(c: &mut Criterion, name: &str)
+where
+    A: ZstAlloc + ZstDealloc + ZstRealloc
+{
+    let mut group = c.benchmark_group(name);
+    let zero = unsafe { Layout::from_size_align_unchecked(0, 8) };
+    let small = unsafe { Layout::from_size_align_unchecked(32, 8) };
+    let large = unsafe { Layout::from_size_align_unchecked(64, 8) };
+
+    group.bench_function("alloc", |b| {
+        b.iter(|| {
+            let l = black_box(small);
+            let ptr = black_box(A::alloc(black_box(l)).unwrap());
+            unsafe { A::dealloc(black_box(ptr), black_box(l)) };
+        });
+    });
+
+    group.bench_function("zalloc", |b| {
+        b.iter(|| {
+            let l = black_box(small);
+            let ptr = black_box(A::zalloc(black_box(l)).unwrap());
+            unsafe { A::dealloc(black_box(ptr), black_box(l)) };
+        });
+    });
+
+    group.bench_function("dealloc", |b| {
+        b.iter(|| {
+            let l = black_box(small);
+            let ptr = black_box(A::alloc(black_box(l)).unwrap());
+            unsafe { A::dealloc(black_box(ptr), black_box(l)) };
+        });
+    });
+
+    group.bench_function("try_dealloc", |b| {
+        b.iter(|| {
+            let l = black_box(small);
+            let ptr = black_box(A::alloc(black_box(l)).unwrap());
+            unsafe { A::try_dealloc(black_box(ptr), black_box(l)).unwrap() };
+        });
+    });
+
+    group.bench_function("realloc", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(small);
+            let new_l = black_box(large);
+            let ptr = black_box(A::alloc(black_box(old_l)).unwrap());
+            let new_ptr =
+                black_box(A::realloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            A::dealloc(black_box(new_ptr), black_box(new_l));
+        });
+    });
+
+    group.bench_function("rezalloc", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(small);
+            let new_l = black_box(large);
+            let ptr = A::alloc(black_box(old_l)).unwrap();
+            let new_ptr =
+                black_box(A::rezalloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            A::dealloc(black_box(new_ptr), black_box(new_l));
+        });
+    });
+
+    group.bench_function("realloc_oldzsl_dangling", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(zero);
+            let new_l = black_box(large);
+            let ptr = NonNull::dangling();
+            let new_ptr =
+                black_box(A::realloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            A::dealloc(black_box(new_ptr), black_box(new_l));
+        })
+    });
+
+    group.bench_function("rezalloc_oldzsl_dangling", |b| {
+        b.iter(|| unsafe {
+            let old_l = black_box(zero);
+            let new_l = black_box(large);
+            let ptr = NonNull::dangling();
+            let new_ptr =
+                black_box(A::rezalloc(black_box(ptr), black_box(old_l), black_box(new_l)).unwrap());
+            A::dealloc(black_box(new_ptr), black_box(new_l));
+        })
+    });
+
+    group.finish();
+}
 
 fn bench_allocs<A>(c: &mut Criterion, name: &str, alloc: A)
 where
@@ -265,6 +356,12 @@ fn main() {
     bench_allocs(&mut c, "default_alloc", DefaultAlloc);
     #[cfg(feature = "c_alloc")]
     bench_allocs(&mut c, "c_alloc", memapi2::allocs::c_alloc::CAlloc);
+
+    // yes i know these don't follow the naming convention, but if i change them right now, criterion will dissasociate the benchmarks from the allocs they are measuring. i'll fix it soon.
+    // TEMPORARY: broken naming con.
+    bench_zst_allocs::<DefaultAlloc>(&mut c, "default_zst_alloc");
+    #[cfg(feature = "c_alloc")]
+    bench_zst_allocs::<memapi2::allocs::c_alloc::CAlloc>(&mut c, "c_alloc_zst");
 
     bench_allocs_diff_aligns(&mut c, "default_alloc_aligns", DefaultAlloc);
     #[cfg(feature = "c_alloc")]

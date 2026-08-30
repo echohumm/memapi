@@ -69,9 +69,16 @@ pub mod alloc_temp;
 ///
 /// These mirror the [`alloc`] traits, but their operations are associated functions taking no
 /// `self`, for allocators which carry no internal state (e.g. zero-sized allocators backed by a
-/// global or a static).
-#[cfg(feature = "zst_alloc_trait")]
+/// global or static).
 pub mod zst_alloc;
+
+#[cfg(feature = "alloc_temp_trait")]
+/// Stateless temporary allocation traits.
+///
+/// These mirror the [`alloc_temp`] traits, but their operations are associated functions taking no
+/// `self`, for allocators which carry no internal state (e.g. zero-sized allocators backed by a
+/// global or static).
+pub mod zst_alloc_temp;
 
 /// Module for anything related specifically to data.
 ///

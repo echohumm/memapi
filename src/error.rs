@@ -24,7 +24,7 @@ macro_rules! impl_error {
 }
 
 // TODO: add more info to these where necessary? i think i remember finding some things which would
-//  be useful but i dont remeber
+//  be useful but i dont remember
 
 /// Errors for allocator operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

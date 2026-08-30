@@ -6,7 +6,7 @@ use {
             AllocDescriptor,
             AllocFeatures,
             alloc::{Alloc, Dealloc, Realloc},
-            helpers::{default_dealloc_panic, ralloc_mut}
+            helpers::ralloc_mut
         }
     },
     ::core::{
@@ -56,6 +56,7 @@ pub trait AllocMut: AllocDescriptor {
     ///   feature is enabled, it will be
     ///   <code>[Cause::OSErr](crate::error::Cause::OSErr)(oserr)</code>. In this case, `oserr` will
     ///   be the error from `::std::io::Error::last_os_error().raw_os_error()`.
+    #[cfg_attr(miri, track_caller)]
     #[inline]
     fn zalloc_mut(
         &mut self,
@@ -74,7 +75,7 @@ pub trait DeallocMut: AllocMut {
     /// Deallocates a previously allocated block.
     ///
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-    /// [dangling](ptr::dangling).
+    /// [dangling](::core::ptr::dangling).
     ///
     /// The default implementation simply calls [`try_dealloc_mut`](DeallocMut::try_dealloc_mut) and
     /// panics if it returns an error.
@@ -89,7 +90,7 @@ pub trait DeallocMut: AllocMut {
     ///
     /// This method may panic if the [`try_dealloc_mut`](DeallocMut::try_dealloc_mut)
     /// implementation returns an error, or the implementation chooses to panic for any other
-    /// reason. It will not panic if `ptr` is [dangling](ptr::dangling) or
+    /// reason. It will not panic if `ptr` is [dangling](::core::ptr::dangling) or
     /// if <code>layout.[size](Layout::size)() == 0</code>.
     #[track_caller]
     #[inline]
@@ -102,7 +103,7 @@ pub trait DeallocMut: AllocMut {
     /// abort, or incorrectly return `Ok(())`.
     ///
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-    /// [dangling](ptr::dangling).
+    /// [dangling](::core::ptr::dangling).
     ///
     /// Note that this function differs from checked deallocation in that it may still cause
     /// undefined behavior if it receives invalid inputs. However, if it is supported,
@@ -123,7 +124,7 @@ pub trait DeallocMut: AllocMut {
     /// <code>Err([Error::Unsupported])</code> if deallocation is unsupported. In this case,
     /// reallocation via [`Realloc`] may still be supported.
     ///
-    /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+    /// This method will not return an error if `ptr` is [dangling](::core::ptr::dangling) or if
     /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
     unsafe fn try_dealloc_mut(
         &mut self,

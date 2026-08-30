@@ -5,7 +5,7 @@ use {
             AllocDescriptor,
             AllocFeatures,
             alloc_mut::{AllocMut, DeallocMut, ReallocMut},
-            helpers::{default_dealloc_panic, ralloc}
+            helpers::ralloc
         }
     },
     ::core::{
@@ -69,7 +69,7 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// Deallocates a previously allocated block.
     ///
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-    /// [dangling](ptr::dangling).
+    /// [dangling](::core::ptr::dangling).
     ///
     /// The default implementation simply calls [`try_dealloc`](Dealloc::try_dealloc) and panics if
     /// it returns an error.
@@ -84,7 +84,8 @@ pub trait Dealloc: Alloc + DeallocMut {
     ///
     /// This method may panic if the [`try_dealloc`](Dealloc::try_dealloc) implementation returns
     /// an error, or the implementation chooses to panic for any other reason. It will not panic if
-    /// `ptr` is [dangling](ptr::dangling) or if <code>layout.[size](Layout::size)() == 0</code>.
+    /// `ptr` is [dangling](::core::ptr::dangling) or if <code>layout.[size](Layout::size)() ==
+    /// 0</code>.
     #[track_caller]
     #[inline]
     unsafe fn dealloc(&self, ptr: NonNull<u8>, layout: Layout) {
@@ -96,7 +97,7 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// abort, or incorrectly return `Ok(())`.
     ///
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
-    /// [dangling](ptr::dangling).
+    /// [dangling](::core::ptr::dangling).
     ///
     /// Note that this function differs from checked deallocation in that it may still cause
     /// undefined behavior if it receives invalid inputs. However, if it is supported,
@@ -122,7 +123,7 @@ pub trait Dealloc: Alloc + DeallocMut {
     /// [`Error::Other`] wrapping a generic error message will be returned if locking the primitive
     /// fails.
     ///
-    /// This method will not return an error if `ptr` is [dangling](ptr::dangling) or if
+    /// This method will not return an error if `ptr` is [dangling](::core::ptr::dangling) or if
     /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
     unsafe fn try_dealloc(
         &self,
@@ -138,7 +139,7 @@ pub trait Dealloc: Alloc + DeallocMut {
 ///
 /// # Implementation note
 ///
-/// Both of the default implementations of this methods' traits simply:
+/// Both of the default implementations of this trait's methods simply:
 /// 1. perform a new allocation
 /// 2. copy the old allocation's data to the new allocation
 /// 3. deallocate the old allocation

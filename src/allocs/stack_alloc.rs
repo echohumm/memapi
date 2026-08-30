@@ -3,7 +3,7 @@ use {
         error::Error,
         ffi::stack_alloc::with_alloca,
         layout::Layout,
-        traits::alloc_temp::AllocTemp
+        traits::{AllocDescriptor, AllocFeatures, alloc_temp::AllocTemp}
     },
     ::core::{
         ops::FnOnce,
@@ -11,6 +11,8 @@ use {
         result::Result
     }
 };
+
+pub use crate::ffi::stack_alloc as ffi;
 
 /// An allocator that uses C's `alloca` for stack allocation.
 ///
@@ -28,9 +30,13 @@ use {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct StackAlloc;
 
-impl AllocTemp for StackAlloc {
+impl AllocDescriptor for StackAlloc {
     type Error = Error;
 
+    const FEATURES: AllocFeatures = AllocFeatures::empty();
+}
+
+impl AllocTemp for StackAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
     unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
@@ -43,5 +49,3 @@ impl AllocTemp for StackAlloc {
         })
     }
 }
-
-pub use crate::ffi::stack_alloc as ffi;

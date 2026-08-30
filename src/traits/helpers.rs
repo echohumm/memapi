@@ -3,7 +3,7 @@ use {
         error::Error,
         layout::Layout,
         prelude::DeallocMut,
-        traits::{AllocFeatures, alloc::Dealloc}
+        traits::{AllocFeatures, alloc::Dealloc, zst_alloc::ZstDealloc}
     },
     ::core::{
         cmp::{Ord, Ordering, min},
@@ -22,15 +22,22 @@ pub fn default_dealloc_panic<E: Display>(ptr: NonNull<u8>, layout: Layout, e: E)
 }
 
 macro_rules! ralloc {
-    ($(($function:ident, $req:ident, $call:ident $(, $self_ex:tt)?)),+) => {
+    ($((
+        $function:ident,
+        $req:ident,
+        $call:ident,
+        ($($self_param:tt)*),
+        ($($alloc_ty_prefix:tt)*),
+        ($($call_prefix:tt)*)
+    )),+ $(,)?) => {
         $(
         #[cfg_attr(miri, track_caller)]
         pub unsafe fn $function<A: $req<Error = E> + ?Sized, E: From<Error> + Debug + Display>(
-            a: & $($self_ex)? A,
+            $($self_param)*
             ptr: NonNull<u8>,
             old: Layout,
             new: Layout,
-            alloc: fn(& $($self_ex)? A, Layout) -> Result<NonNull<u8>, E>
+            alloc: fn($($alloc_ty_prefix)* Layout) -> Result<NonNull<u8>, E>
         ) -> Result<NonNull<u8>, E> {
             let old_align = old.align();
             let new_align = new.align();
@@ -45,13 +52,13 @@ macro_rules! ralloc {
             let new_ptr = match new_size.cmp(&old_size) {
                 Ordering::Equal => {
                     match new_align.cmp(&old_align) {
-                        Ordering::Greater => alloc(a, new),
+                        Ordering::Greater => alloc($($call_prefix)* new),
                         Ordering::Equal => Ok(ptr),
                         // SAFETY: we check above that new_align >= old_align
                         Ordering::Less => unsafe { unreachable_unchecked() }
                     }
                 }
-                Ordering::Less | Ordering::Greater => alloc(a, new)
+                Ordering::Less | Ordering::Greater => alloc($($call_prefix)* new)
             };
             if let Ok(new_ptr) = new_ptr {
                 // for some reason, the dealloc call being outside of this branch is faster (for
@@ -67,7 +74,7 @@ macro_rules! ralloc {
                 // if the allocator doesn't support deallocation, we assume we can just skip
                 // deallocation.
                 if A::supports(AllocFeatures::DEALLOC) {
-                    tri!(do a.$call(ptr, old));
+                    tri!(do <A as $req>::$call($($call_prefix)* ptr, old));
                 }
             }
             new_ptr
@@ -77,6 +84,7 @@ macro_rules! ralloc {
 }
 
 ralloc! {
-    (ralloc, Dealloc, try_dealloc),
-    (ralloc_mut, DeallocMut, try_dealloc_mut, mut)
+    (ralloc, Dealloc, try_dealloc, (a: &A,), (&A,), (a,)),
+    (ralloc_mut, DeallocMut, try_dealloc_mut, (a: &mut A,), (&mut A,), (a,)),
+    (zst_ralloc, ZstDealloc, try_dealloc, (), (), ())
 }

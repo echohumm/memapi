@@ -132,6 +132,57 @@ macro_rules! default_alloc_impl {
             type Error = crate::error::Error;
         }
 
+        impl crate::traits::zst_alloc::ZstAlloc for $ty {
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            fn alloc(
+                layout: crate::layout::Layout
+            ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
+                crate::helpers::null_q_dyn_zsl_check(
+                    // SAFETY: layout requires that it has non-zero size
+                    |layout| unsafe { ::stdalloc::alloc::alloc(layout.to_stdlib()) },
+                    layout
+                )
+            }
+
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            fn zalloc(
+                layout: crate::layout::Layout
+            ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
+                crate::helpers::null_q_dyn_zsl_check(
+                    // SAFETY: layout requires that it has non-zero size
+                    |layout| unsafe { ::stdalloc::alloc::alloc_zeroed(layout.to_stdlib()) },
+                    layout
+                )
+            }
+        }
+
+        impl crate::traits::zst_alloc::ZstDealloc for $ty {
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn dealloc(
+                ptr: ::core::ptr::NonNull<u8>,
+                layout: crate::layout::Layout
+            ) {
+                if !layout.is_zsl() && ptr != layout.dangling() {
+                    ::stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
+                }
+            }
+
+            #[cfg_attr(miri, track_caller)]
+            #[inline(always)]
+            unsafe fn try_dealloc(
+                ptr: ::core::ptr::NonNull<u8>,
+                layout: crate::layout::Layout
+            ) -> ::core::result::Result<(), crate::error::Error> {
+                <$ty>::dealloc(ptr, layout);
+                ::core::result::Result::Ok(())
+            }
+        }
+
+        impl crate::traits::zst_alloc::ZstRealloc for $ty {}
+
         impl crate::traits::alloc::Alloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
@@ -180,8 +231,6 @@ macro_rules! default_alloc_impl {
             }
         }
         impl crate::traits::alloc::Realloc for $ty {}
-
-        // TODO: ZstAlloc impls
     };
 }
 
@@ -243,7 +292,14 @@ macro_rules! default_dealloc {
     ($self:ident.$de:ident, $ptr:ident, $l:ident) => {
         if !$l.is_zsl() && $ptr != $l.dangling() {
             if let ::core::result::Result::Err(e) = $self.$de($ptr, $l) {
-                default_dealloc_panic($ptr, $l, e)
+                crate::traits::helpers::default_dealloc_panic($ptr, $l, e)
+            }
+        }
+    };
+    (::$de:ident, $ptr:ident, $l:ident) => {
+        if !$l.is_zsl() && $ptr != $l.dangling() {
+            if let ::core::result::Result::Err(e) = <Self as ZstDealloc>::$de($ptr, $l) {
+                crate::traits::helpers::default_dealloc_panic($ptr, $l, e)
             }
         }
     };

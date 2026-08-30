@@ -67,8 +67,6 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `alloc_temp_trait`: scoped/temporary allocation trait (`AllocTemp`)
 - `alloc_checked_trait`: checked allocation traits (`traits::alloc_checked`) which return an error on
   invalid arguments instead of causing undefined behavior
-- `zst_alloc_trait`: stateless allocation traits (`traits::zst_alloc`) for zero-sized allocators,
-  exposing their operations as associated functions taking no `self` (wip, currently not used)
 - `catch_unwind`: catch unwinds across the C boundary in `stack_alloc` (requires `std`)
 - `wip_stdlib_data`: VERY wip, do not attempt to use
 - `c_alloc`: C `posix_memalign`-style allocator (`c_alloc::CAlloc`)
@@ -78,7 +76,7 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `no_alloc`: disable the `alloc` crate (removes `DefaultAlloc`, `StdLayout`, and implementations for the `System`
   allocator, unless `std` is on)
 - `no_nightly`: disable automatic nightly detection in `build.rs`
-- `full`: convenience bundle (`c_alloc`, `alloc_checked_trait`, `zst_alloc_trait`, `stack_alloc`)
+- `full`: convenience bundle (`c_alloc`, `alloc_checked_trait`, `stack_alloc`)
 - `full_nightly`: `full` + `metadata`
 - `full_std`: `full` + `catch_unwind` + `os_err_reporting`
 - `full_nightly_std`: `full_nightly` + `full_std`
