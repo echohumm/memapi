@@ -31,7 +31,6 @@ no_nightly = []
 no_alloc = []
 
 metadata = []
-all_nightly = ["metadata"]
 
 # std support
 std = []
@@ -57,7 +56,7 @@ wip_stdlib_data = []
 # feature bundles
 full = ["c_alloc", "alloc_checked_trait", "stack_alloc"]
 full_std = ["full", "catch_unwind", "os_err_reporting"]
-full_nightly = ["all_nightly", "full"]
+full_nightly = ["metadata", "full"]
 full_nightly_std = ["full_nightly", "full_std"]
 
 

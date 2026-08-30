@@ -285,6 +285,8 @@ impl Layout {
         Layout::from_size_align(size, unsafe { align_up(align, void_ptr::SZ) })
     }
 
+    // TODO: try_posix_memalign_compatible_from_size_align? idk why it's gone tbh
+
     /// Creates a layout with the given size and alignment.
     ///
     /// # Safety

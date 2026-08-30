@@ -13,6 +13,7 @@ use {
 };
 
 pub use crate::ffi::stack_alloc as ffi;
+use crate::traits::zst_alloc_temp::ZstAllocTemp;
 
 /// An allocator that uses C's `alloca` for stack allocation.
 ///
@@ -34,6 +35,20 @@ impl AllocDescriptor for StackAlloc {
     type Error = Error;
 
     const FEATURES: AllocFeatures = AllocFeatures::empty();
+}
+
+// TODO: idk if i like that this is just copy-n-paste of below
+impl ZstAllocTemp for StackAlloc {
+    #[cfg_attr(miri, track_caller)]
+    #[inline]
+    unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+        layout: Layout,
+        with_mem: F
+    ) -> Result<R, Error> {
+        with_alloca(layout, |ptr, uninit: *mut R| {
+            ptr::write(uninit, with_mem(ptr));
+        })
+    }
 }
 
 impl AllocTemp for StackAlloc {
