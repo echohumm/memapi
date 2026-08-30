@@ -161,10 +161,7 @@ macro_rules! default_alloc_impl {
         impl crate::traits::zst_alloc::ZstDealloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
-            unsafe fn dealloc(
-                ptr: ::core::ptr::NonNull<u8>,
-                layout: crate::layout::Layout
-            ) {
+            unsafe fn dealloc(ptr: ::core::ptr::NonNull<u8>, layout: crate::layout::Layout) {
                 if !layout.is_zsl() && ptr != layout.dangling() {
                     ::stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }

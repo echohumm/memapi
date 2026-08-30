@@ -357,8 +357,9 @@ fn main() {
     #[cfg(feature = "c_alloc")]
     bench_allocs(&mut c, "c_alloc", memapi2::allocs::c_alloc::CAlloc);
 
-    // yes i know these don't follow the naming convention, but if i change them right now, criterion will dissasociate the benchmarks from the allocs they are measuring. i'll fix it soon.
-    // TEMPORARY: broken naming con.
+    // yes i know these don't follow the naming convention, but if i change them right now,
+    // criterion will dissasociate the benchmarks from the allocs they are measuring. i'll fix it
+    // soon. TEMPORARY: broken naming con.
     bench_zst_allocs::<DefaultAlloc>(&mut c, "default_zst_alloc");
     #[cfg(feature = "c_alloc")]
     bench_zst_allocs::<memapi2::allocs::c_alloc::CAlloc>(&mut c, "c_alloc_zst");
