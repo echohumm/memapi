@@ -97,7 +97,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 * Crate failing to compile on Windows with the `c_alloc` feature
-
 * Crate failing to compile on Apple systems with the `c_alloc` feature
 
 ---
@@ -190,8 +189,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-* `AllocMut`, `DeallocMut`, `GrowMut`, `ShrinkMut`, and `ReallocMut` traits behind
-  `alloc_mut_traits` for allocation operations requiring mutable access to the allocator
+* `AllocMut`, `DeallocMut`, `GrowMut`, `ShrinkMut`, and `ReallocMut` traits behind `alloc_mut_traits` for allocation
+  operations requiring mutable access to the allocator
 * `AllocTemp` trait for short-lived, scoped allocations behind `alloc_temp_trait`
 * `Dealloc::try_dealloc` and `DeallocMut::try_dealloc_mut` for fallible deallocation operations
 * `StackAlloc` scoped allocator based on C's `alloca` behind `stack_alloc` feature
@@ -226,8 +225,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 * `CAlloc` for allocation with C's `aligned_alloc`
 * `Layout::to_aligned_alloc_compatible` for rounding a layout to be compatible with `aligned_alloc`
 * `Layout::aligned_alloc_compatible_from_size_align` for creating an `aligned_alloc` compatible layout in one call
-* `Cause::CRoundUp` variant for failures when rounding a layout to be compatible with
-  `aligned_alloc`
+* `Cause::CRoundUp` variant for failures when rounding a layout to be compatible with `aligned_alloc`
 * `Error::Other` variant for generic string errors
 * `Layout::align_to_multiple_of` method
 * `is_multiple_of` const helper with lower MSRV than `<int>::is_multiple_of`
@@ -240,8 +238,7 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `type_props::varsized_nonnull_from_parts`, `type_props::varsized_ptr_from_parts`, and
   `type_props::varsized_ptr_from_parts_mut` to `helpers` module
 * Renamed `AllocError` to `Error`
-* Renamed `align_up_unchecked` to `align_up` and make it safe, rename `align_up` to
-  `align_up_checked`
+* Renamed `align_up_unchecked` to `align_up` and make it safe, rename `align_up` to `align_up_checked`
 * Made nightly support automatic if a nightly compiler is detected
 
 ### Fixed
