@@ -1,3 +1,4 @@
+[//]: # (TODO: expand this)
 # memapi2
 
 ![crates.io](https://img.shields.io/crates/v/memapi2.svg)
@@ -6,7 +7,7 @@
 A small, `no_std`/`no_alloc`-friendly allocation interface for raw buffers, with explicit layouts, split allocator
 traits, and structured errors.
 
-Version: 0.11.4
+Version: 0.12.1
 
 MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature flags](#feature-flags))
 
@@ -15,7 +16,14 @@ MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature fla
 - Split allocator traits: `Alloc`, `Dealloc`, `Realloc`, plus `BasicAlloc` and
   `FullAlloc` aliases
 - Mutable versions of allocator traits for allocation operations which require mutable access to the allocator
-- Temporary/scoped allocation trait for function-scoped allocations
+- Stateless allocator trait family (`traits::zst_alloc`: `ZstAlloc`, `ZstDealloc`, `ZstRealloc`,
+  `ZstBasicAlloc`, `ZstFullAlloc`) exposing associated functions instead of `&self` methods, for
+  allocators with no per-instance state
+- Checked allocation traits (`alloc_checked_trait` feature) which return an error on invalid
+  arguments instead of causing undefined behavior
+- Temporary/scoped allocation trait for function-scoped allocations (AllocTemp), plus a stateless counterpart
+  (`ZstAllocTemp`)
+- `AllocDescriptor` trait describing an allocator's supported `AllocFeatures` and minimum alignment
 - Custom `Layout` type with conversion to/from `alloc::alloc::Layout` (unless `no_alloc` is on and
   `std` isn't)
 - Generic `Error` types for allocation traits
@@ -31,14 +39,14 @@ MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature fla
 
 ```toml
 [dependencies]
-memapi2 = "0.11.4"
+memapi2 = "0.12.1"
 ```
 
 If you want common optional features:
 
 ```toml
 [dependencies]
-memapi2 = { version = "0.11.4", features = ["full_std"] }
+memapi2 = { version = "0.12.1", features = ["full_std"] }
 ```
 
 ## Example
@@ -72,7 +80,6 @@ fn main() -> Result<(), memapi2::error::Error> {
 - `c_alloc`: C `posix_memalign`-style allocator (`c_alloc::CAlloc`)
 - `stack_alloc`: `alloca`-based allocator (`stack_alloc::StackAlloc`, requires a C toolchain, MSRV on macOS is ~1.56)
 - `metadata`: nightly `core::ptr::Pointee` and `core::ptr::metadata` metadata support
-- `all_nightly`: convenience bundle of all nightly-only features (currently just `metadata`)
 - `no_alloc`: disable the `alloc` crate (removes `DefaultAlloc`, `StdLayout`, and implementations for the `System`
   allocator, unless `std` is on)
 - `no_nightly`: disable automatic nightly detection in `build.rs`

@@ -1,6 +1,6 @@
 [package]
 name = "memapi2"
-version = "0.12.0"
+version = "0.12.1"
 edition = "2018"
 rust-version = "1.46.0"
 authors = ["echohumm"]
@@ -43,7 +43,6 @@ stack_alloc = ["alloc_temp_trait", "c_alloc", "cc"]
 ## adds a trait for temporary, scoped allocations
 alloc_temp_trait = []
 alloc_checked_trait = []
-wip_data_trait = []
 
 # actual features
 ## support best-effort os error reporting from errno
