@@ -8,6 +8,7 @@ use {
         cmp::PartialEq,
         convert::From,
         marker::Sized,
+        option::Option::{self, None, Some},
         ptr::NonNull,
         result::Result::{self, Err, Ok}
     }
@@ -31,16 +32,6 @@ const fn align_up_checks(sz: usize, aln: usize) -> Result<(), LayoutErr> {
     }
 
     Ok(())
-}
-
-#[cfg_attr(any(miri, debug_assertions), track_caller)]
-const fn align_up_checked(size: usize, align: usize) -> Result<usize, LayoutErr> {
-    tri!(do align_up_checks(size, align));
-
-    // SAFETY: check_lay validates that `align != 0` so no underflow can occur, and `size + align`
-    // won't exceed either `USIZE_HIGH_BIT` or `usize::MAX` so no overflow can occur, as well as
-    // that `align` is a power of 2 so the alignment trick used by `align_up` works.
-    Ok(unsafe { align_up(size, align) })
 }
 
 /// The layout of a block of memory in the form of its size and alignment in bytes.
@@ -285,7 +276,24 @@ impl Layout {
         Layout::from_size_align(size, unsafe { align_up(align, void_ptr::SZ) })
     }
 
-    // TODO: try_posix_memalign_compatible_from_size_align? idk why it's gone tbh
+    /// <placeholder>
+    #[must_use]
+    pub const fn try_posix_memalign_compatible_from_size_align(
+        size: usize,
+        align: usize
+    ) -> Option<Layout> {
+        // TODO: i dislike the duplication of this validity checking logic. it's EVERYWHERE.
+        if align == 0
+            || !align.is_power_of_two()
+            || size > USIZE_MAX_NO_HIGH_BIT - (align - 1)
+            || !is_multiple_of(align, void_ptr::SZ)
+        {
+            return None;
+        }
+
+        // SAFETY: we validated the requirements for a layout above
+        Some(unsafe { Layout::from_size_align_unchecked(size, align) })
+    }
 
     /// Creates a layout with the given size and alignment.
     ///
@@ -303,7 +311,7 @@ impl Layout {
             "`Layout::from_size_align_unchecked` requires that `align` is a non-zero power of two \
              and `size` rounded up to `align` does not exceed `USIZE_MAX_NO_HIGH_BIT`.",
             (size: usize = size, align: usize = align)
-                => [::core::matches!(align_up_checks(size, align), Ok(()))]
+                => [crate::helpers::align_up_checks_raw(size, align)]
         );
         Layout { size, align }
     }
@@ -344,10 +352,10 @@ impl Layout {
     #[inline]
     pub const fn padding_needed_for(&self, align: usize) -> Result<usize, LayoutErr> {
         let sz = self.size();
-        match align_up_checked(sz, align) {
-            // align_up_checked guarantees its return value will be >= the input, so new - sz cannot
-            // underflow
-            Ok(new) => Ok(new - sz),
+        match align_up_checks(sz, align) {
+            // SAFETY: `align_up_checks` validates that `sz` and `align` are valid to be aligned up,
+            //  sz <= to the return value
+            Ok(()) => Ok(unsafe { align_up(sz, align) } - sz),
             Err(e) => Err(e)
         }
     }

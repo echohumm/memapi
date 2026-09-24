@@ -15,7 +15,7 @@ fn stack_alloc() {
     for &align in &[1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096] {
         assert!(
             unsafe {
-                StackAlloc.alloc_temp(Layout::from_size_align(8, align).unwrap(), |ptr| {
+                StackAlloc.talloc(Layout::from_size_align(8, align).unwrap(), |ptr| {
                     if ptr.as_ptr() as usize % align != 0 {
                         eprintln!(
                             "pointer: {:p} only has align of {} (need {})",
@@ -48,7 +48,7 @@ fn stack_alloc_unwind() {
     unsafe {
         assert!(
             StackAlloc
-                .alloc_temp::<(), _>(Layout::from_size_align(8, 8).unwrap(), |ptr| {
+                .talloc::<(), _>(Layout::from_size_align(8, 8).unwrap(), |ptr| {
                     core::ptr::write(ptr.as_ptr().cast::<u64>(), 0xAAAAAAAAAAAAAAAA);
                     panic!("no UB? yippee!");
                 })
@@ -64,7 +64,7 @@ fn stack_alloc_unwind() {
     unsafe {
         assert!(
             StackAlloc
-                .alloc_temp::<(), _>(Layout::from_size_align(8, 8).unwrap(), |ptr| {
+                .talloc::<(), _>(Layout::from_size_align(8, 8).unwrap(), |ptr| {
                     core::ptr::write(ptr.as_ptr().cast::<u64>(), 0xAAAAAAAAAAAAAAAA);
                     panic!("no UB? yippee!");
                 })

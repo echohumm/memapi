@@ -92,38 +92,42 @@ extern crate rustversion;
 /// A relatively minimal prelude containing the most common, important things from this crate.
 // unfortunately we need this cfg_attr, or it thinks rustfmt is a module and can't find it
 #[allow(clippy::deprecated_cfg_attr)]
-#[cfg_attr(rustfmt, rustfmt::skip)]
-// TODO: update prelude
+// #[cfg_attr(rustfmt, rustfmt::skip)]
 pub mod prelude {
-    pub use crate::{
-        // default allocator and layout are necessary
-        error::Error,
-        layout::Layout,
-        traits::{
-            alloc::{Alloc, BasicAlloc, Dealloc, FullAlloc, Realloc},
-            alloc_mut::{
-                AllocMut,
-                BasicAllocMut,
-                DeallocMut,
-                FullAllocMut,
-                ReallocMut,
-            },
-            data::{
-                marker::UnsizedCopy,
-                type_props::{KnownAlign, PtrProps, SizedProps},
-            },
-            AllocDescriptor
-        },
-        // traits are useful as well
-        DefaultAlloc
-    };
-
-    // alloc_temp trait too if the feature is on
-    #[cfg(feature = "alloc_temp_trait")] pub use crate::traits::alloc_temp::AllocTemp;
-
     // and extra allocators that are enabled
     #[cfg(feature = "c_alloc")] pub use crate::allocs::c_alloc::CAlloc;
     #[cfg(feature = "stack_alloc")] pub use crate::allocs::stack_alloc::StackAlloc;
+    // alloc_temp traits too if the feature is on
+    #[cfg(feature = "alloc_temp_trait")] pub use crate::traits::alloc_temp::AllocTemp;
+    #[cfg(feature = "alloc_temp_trait")] pub use crate::traits::zst_alloc_temp::ZstAllocTemp;
+    pub use crate::{
+        // default allocator is necessary
+        DefaultAlloc,
+        error::Error,
+        helpers::{
+            is_aligned,
+            nonnull_slice_from_parts,
+            nonnull_slice_len,
+            ptr_max_align,
+            slice_ptr_from_parts,
+            slice_ptr_from_parts_mut,
+            udouble,
+            union_transmute,
+            void_ptr
+        },
+        layout::Layout,
+        // many traits are as well
+        traits::{
+            AllocDescriptor,
+            alloc::{Alloc, BasicAlloc, Dealloc, FullAlloc, Realloc},
+            alloc_mut::{AllocMut, BasicAllocMut, DeallocMut, FullAllocMut, ReallocMut},
+            data::{
+                marker::UnsizedCopy,
+                type_props::{KnownAlign, PtrProps, SizedProps}
+            },
+            zst_alloc::{ZstAlloc, ZstBasicAlloc, ZstDealloc, ZstFullAlloc, ZstRealloc}
+        }
+    };
 }
 
 #[cfg(any(not(feature = "no_alloc"), feature = "std"))]
@@ -136,7 +140,7 @@ macro_rules! default_alloc_impl {
         impl crate::traits::zst_alloc::ZstAlloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
-            fn alloc(
+            fn salloc(
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
                 crate::helpers::null_q_dyn_zsl_check(
@@ -148,7 +152,7 @@ macro_rules! default_alloc_impl {
 
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
-            fn zalloc(
+            fn szalloc(
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<::core::ptr::NonNull<u8>, crate::error::Error> {
                 crate::helpers::null_q_dyn_zsl_check(
@@ -162,7 +166,7 @@ macro_rules! default_alloc_impl {
         impl crate::traits::zst_alloc::ZstDealloc for $ty {
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
-            unsafe fn dealloc(ptr: ::core::ptr::NonNull<u8>, layout: crate::layout::Layout) {
+            unsafe fn desalloc(ptr: ::core::ptr::NonNull<u8>, layout: crate::layout::Layout) {
                 if !layout.is_zsl() && ptr != layout.dangling() {
                     ::stdalloc::alloc::dealloc(ptr.as_ptr(), layout.to_stdlib());
                 }
@@ -170,11 +174,11 @@ macro_rules! default_alloc_impl {
 
             #[cfg_attr(miri, track_caller)]
             #[inline(always)]
-            unsafe fn try_dealloc(
+            unsafe fn try_desalloc(
                 ptr: ::core::ptr::NonNull<u8>,
                 layout: crate::layout::Layout
             ) -> ::core::result::Result<(), crate::error::Error> {
-                <$ty>::dealloc(ptr, layout);
+                <$ty>::desalloc(ptr, layout);
                 ::core::result::Result::Ok(())
             }
         }

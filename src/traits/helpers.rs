@@ -86,5 +86,5 @@ macro_rules! ralloc {
 ralloc! {
     (ralloc, Dealloc, try_dealloc, (a: &A,), (&A,), (a,)),
     (ralloc_mut, DeallocMut, try_dealloc_mut, (a: &mut A,), (&mut A,), (a,)),
-    (zst_ralloc, ZstDealloc, try_dealloc, (), (), ())
+    (zst_ralloc, ZstDealloc, try_desalloc, (), (), ())
 }

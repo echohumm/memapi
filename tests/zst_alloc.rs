@@ -14,26 +14,26 @@ use {
 fn test_alloc_and_dealloc() {
     let layout = Layout::from_size_align(16, 8).unwrap();
     // Allocate
-    let ptr = DefaultAlloc::alloc(layout).expect("alloc failed");
+    let ptr = DefaultAlloc::salloc(layout).expect("alloc failed");
     // Write and read
     unsafe {
         ptr::write_bytes(ptr.as_ptr(), 0xAB, layout.size());
         for i in 0..layout.size() {
             assert_eq!(*ptr.as_ptr().add(i), 0xAB);
         }
-        DefaultAlloc::dealloc(ptr, layout);
+        DefaultAlloc::desalloc(ptr, layout);
     }
 }
 
 #[test]
 fn test_alloc_zeroed() {
     let layout = Layout::from_size_align(32, 8).unwrap();
-    let ptr = DefaultAlloc::zalloc(layout).expect("alloc_zeroed failed");
+    let ptr = DefaultAlloc::szalloc(layout).expect("alloc_zeroed failed");
     unsafe {
         for i in 0..layout.size() {
             assert_eq!(*ptr.as_ptr().add(i), 0, "failed on byte {}", i);
         }
-        DefaultAlloc::dealloc(ptr, layout);
+        DefaultAlloc::desalloc(ptr, layout);
     }
 }
 
@@ -42,8 +42,8 @@ fn realloc_to_zero() {
     let old = Layout::from_size_align(8, 2).unwrap();
     let new = Layout::from_size_align(0, 2).unwrap();
 
-    let ptr = DefaultAlloc::alloc(old).unwrap();
-    let new = unsafe { DefaultAlloc::realloc(ptr, old, new) }.unwrap();
+    let ptr = DefaultAlloc::salloc(old).unwrap();
+    let new = unsafe { DefaultAlloc::resalloc(ptr, old, new) }.unwrap();
 
     assert_eq!(new.as_ptr() as usize, 2);
 }
@@ -53,18 +53,18 @@ fn grow_preserves_prefix() {
     let old = Layout::from_size_align(8, 8).unwrap();
     let new = Layout::from_size_align(16, 8).unwrap();
 
-    let p = DefaultAlloc::alloc(old).unwrap();
+    let p = DefaultAlloc::salloc(old).unwrap();
     unsafe {
         ptr::write_bytes(p.as_ptr(), 0x11, old.size());
     }
 
-    let grown = unsafe { DefaultAlloc::realloc(p, old, new).unwrap() };
+    let grown = unsafe { DefaultAlloc::resalloc(p, old, new).unwrap() };
     // first 8 bytes preserved
     unsafe {
         for i in 0..old.size() {
             assert_eq!(*grown.as_ptr().add(i), 0x11);
         }
-        DefaultAlloc::dealloc(grown, new);
+        DefaultAlloc::desalloc(grown, new);
     }
 }
 
@@ -73,12 +73,12 @@ fn rezalloc_zeros_new_region() {
     let old = Layout::from_size_align(8, 8).unwrap();
     let new = Layout::from_size_align(16, 8).unwrap();
 
-    let p = DefaultAlloc::alloc(old).unwrap();
+    let p = DefaultAlloc::salloc(old).unwrap();
     unsafe {
         ptr::write_bytes(p.as_ptr(), 0x22, old.size());
     }
 
-    let grown = unsafe { DefaultAlloc::rezalloc(p, old, new).unwrap() };
+    let grown = unsafe { DefaultAlloc::reszalloc(p, old, new).unwrap() };
     unsafe {
         // original region preserved
         for i in 0..old.size() {
@@ -88,7 +88,7 @@ fn rezalloc_zeros_new_region() {
         for i in old.size()..new.size() {
             assert_eq!(*grown.as_ptr().add(i), 0);
         }
-        DefaultAlloc::dealloc(grown, new);
+        DefaultAlloc::desalloc(grown, new);
     }
 }
 
@@ -97,16 +97,16 @@ fn shrink_preserves_prefix() {
     let old = Layout::from_size_align(16, 8).unwrap();
     let new = Layout::from_size_align(8, 8).unwrap();
 
-    let p = DefaultAlloc::alloc(old).unwrap();
+    let p = DefaultAlloc::salloc(old).unwrap();
     unsafe {
         ptr::write_bytes(p.as_ptr(), 0xAB, old.size());
     }
 
-    let shr = unsafe { DefaultAlloc::realloc(p, old, new).unwrap() };
+    let shr = unsafe { DefaultAlloc::resalloc(p, old, new).unwrap() };
     unsafe {
         for i in 0..new.size() {
             assert_eq!(*shr.as_ptr().add(i), 0xAB);
         }
-        DefaultAlloc::dealloc(shr, new);
+        DefaultAlloc::desalloc(shr, new);
     }
 }

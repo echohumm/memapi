@@ -41,7 +41,7 @@ pub trait ZstAllocTemp: AllocDescriptor {
     /// # Safety
     ///
     /// Safety preconditions are implementation defined.
-    unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn stalloc<R, F: FnOnce(NonNull<u8>) -> R>(
         layout: Layout,
         with_mem: F
     ) -> Result<R, Self::Error>;
@@ -64,11 +64,11 @@ pub trait ZstAllocTemp: AllocDescriptor {
     ///
     /// Safety preconditions are implementation defined.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn stzalloc<R, F: FnOnce(NonNull<u8>) -> R>(
         layout: Layout,
         with_mem: F
     ) -> Result<R, Self::Error> {
-        Self::alloc_temp(layout, |ptr: NonNull<u8>| {
+        Self::stalloc(layout, |ptr: NonNull<u8>| {
             ::core::ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
             with_mem(ptr)
         })
@@ -78,20 +78,20 @@ pub trait ZstAllocTemp: AllocDescriptor {
 impl<A: ZstBasicAlloc> ZstAllocTemp for A {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn stalloc<R, F: FnOnce(NonNull<u8>) -> R>(
         layout: Layout,
         with_mem: F
     ) -> Result<R, A::Error> {
-        alloc_temp_with(layout, with_mem, <A as ZstAlloc>::alloc, <A as ZstDealloc>::try_dealloc)
+        alloc_temp_with(layout, with_mem, <A as ZstAlloc>::salloc, <A as ZstDealloc>::try_desalloc)
     }
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn stzalloc<R, F: FnOnce(NonNull<u8>) -> R>(
         layout: Layout,
         with_mem: F
     ) -> Result<R, A::Error> {
-        alloc_temp_with(layout, with_mem, <A as ZstAlloc>::zalloc, <A as ZstDealloc>::try_dealloc)
+        alloc_temp_with(layout, with_mem, <A as ZstAlloc>::szalloc, <A as ZstDealloc>::try_desalloc)
     }
 }
 

@@ -1,3 +1,7 @@
+#![allow(unknown_lints)]
+#![allow(unexpected_cfgs)]
+#![warn(unknown_lints)]
+
 use {
     crate::{
         error::{Cause, Error},
@@ -137,7 +141,7 @@ impl AllocDescriptor for CAlloc {
 impl ZstAlloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn alloc(layout: Layout) -> Result<NonNull<u8>, Error> {
+    fn salloc(layout: Layout) -> Result<NonNull<u8>, Error> {
         null_q_dyn_or_errcode(
             layout,
             // SAFETY: we check the layout is non-zero-sized before use.
@@ -158,7 +162,7 @@ impl ZstAlloc for CAlloc {
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    fn zalloc(layout: Layout) -> Result<NonNull<u8>, Error> {
+    fn szalloc(layout: Layout) -> Result<NonNull<u8>, Error> {
         null_q_dyn_or_errcode(
             layout,
             // SAFETY: we check the layout is non-zero-sized before use.
@@ -189,7 +193,7 @@ impl ZstAlloc for CAlloc {
 impl ZstDealloc for CAlloc {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn try_dealloc(ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
+    unsafe fn try_desalloc(ptr: NonNull<u8>, layout: Layout) -> Result<(), Error> {
         if !layout.is_zsl() && ptr != layout.dangling() {
             let padded = tri!(::LayoutErr layout.to_posix_memalign_compatible());
             let _size = padded.size();

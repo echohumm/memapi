@@ -37,7 +37,7 @@ pub trait ZstAlloc: AllocDescriptor + Alloc {
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures.
-    fn alloc(layout: Layout) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
+    fn salloc(layout: Layout) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error>;
 
     /// Attempts to allocate a zeroed block of memory fitting the given [`Layout`].
     ///
@@ -54,8 +54,8 @@ pub trait ZstAlloc: AllocDescriptor + Alloc {
     ///   <code>[Cause::OSErr]\(oserr\)</code>. In this case, `oserr` will be the error from
     ///   `::std::io::Error::last_os_error().raw_os_error()`.
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures.
-    fn zalloc(layout: Layout) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
-        let res = <Self as ZstAlloc>::alloc(layout);
+    fn szalloc(layout: Layout) -> Result<NonNull<u8>, <Self as AllocDescriptor>::Error> {
+        let res = <Self as ZstAlloc>::salloc(layout);
         if let ::core::result::Result::Ok(p) = res {
             // SAFETY: alloc returns at least layout.size() allocated bytes
             unsafe {
@@ -84,14 +84,14 @@ pub trait ZstDealloc: ZstAlloc + Dealloc {
     ///
     /// # Panics
     ///
-    /// This method may panic if the [`try_dealloc`](ZstDealloc::try_dealloc) implementation returns
-    /// an error, or the implementation chooses to panic for any other reason. It will not panic if
-    /// `ptr` is [dangling](::core::ptr::dangling) or if <code>layout.[size](Layout::size)() ==
-    /// 0</code>.
+    /// This method may panic if the [`try_dealloc`](ZstDealloc::try_desalloc) implementation
+    /// returns an error, or the implementation chooses to panic for any other reason. It will
+    /// not panic if `ptr` is [dangling](::core::ptr::dangling) or if
+    /// <code>layout.[size](Layout::size)() == 0</code>.
     #[track_caller]
     #[inline]
-    unsafe fn dealloc(ptr: NonNull<u8>, layout: Layout) {
-        default_dealloc!(::try_dealloc, ptr, layout);
+    unsafe fn desalloc(ptr: NonNull<u8>, layout: Layout) {
+        default_dealloc!(::try_desalloc, ptr, layout);
     }
 
     /// Attempts to deallocate a previously allocated block. If this allocator is backed by an
@@ -100,7 +100,6 @@ pub trait ZstDealloc: ZstAlloc + Dealloc {
     ///
     /// This is a noop if <code>layout.[size](Layout::size)() == 0</code> or `ptr` is
     /// [dangling](::core::ptr::dangling).
-    ///
     // TODO: ZstChecked stuff
     /// Note that this function differs from checked deallocation in that it may still cause
     /// undefined behavior if it receives invalid inputs.
@@ -121,7 +120,7 @@ pub trait ZstDealloc: ZstAlloc + Dealloc {
     ///
     /// This method will not return an error if `ptr` is [dangling](::core::ptr::dangling) or if
     /// <code>layout.[size](Layout::size)() == 0</code>. Instead, no action will be performed.
-    unsafe fn try_dealloc(
+    unsafe fn try_desalloc(
         ptr: NonNull<u8>,
         layout: Layout
     ) -> Result<(), <Self as AllocDescriptor>::Error>;
@@ -141,7 +140,7 @@ pub trait ZstRealloc: ZstDealloc + Realloc {
     /// On failure, the original memory will not be deallocated.
     ///
     /// If `ptr` is dangling and `old_layout` is zero-sized, this will behave the same as
-    /// [`ZstAlloc::alloc`].
+    /// [`ZstAlloc::salloc`].
     ///
     /// If `new_layout` is zero-sized, assuming that is a valid call (meaning `old_layout` is as
     /// well, and `ptr` is dangling), a new dangling pointer will be returned. This new pointer may
@@ -168,7 +167,7 @@ pub trait ZstRealloc: ZstDealloc + Realloc {
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn realloc(
+    unsafe fn resalloc(
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout
@@ -177,7 +176,7 @@ pub trait ZstRealloc: ZstDealloc + Realloc {
             ptr,
             old_layout,
             new_layout,
-            <Self as ZstAlloc>::alloc
+            <Self as ZstAlloc>::salloc
         )
     }
 
@@ -190,7 +189,7 @@ pub trait ZstRealloc: ZstDealloc + Realloc {
     /// On failure, the original memory will not be deallocated.
     ///
     /// If `ptr` is dangling and `old_layout` is zero-sized, this will behave the same as
-    /// [`ZstAlloc::alloc`].
+    /// [`ZstAlloc::salloc`].
     ///
     /// If `new_layout` is zero-sized, assuming that is a valid call (meaning `old_layout` is as
     /// well, and `ptr` is dangling), a new dangling pointer will be returned. This new pointer may
@@ -217,7 +216,7 @@ pub trait ZstRealloc: ZstDealloc + Realloc {
     /// - <code>Err([Error::Other]\(err\))</code> for allocator-specific failures.
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn rezalloc(
+    unsafe fn reszalloc(
         ptr: NonNull<u8>,
         old_layout: Layout,
         new_layout: Layout
@@ -226,7 +225,7 @@ pub trait ZstRealloc: ZstDealloc + Realloc {
             ptr,
             old_layout,
             new_layout,
-            <Self as ZstAlloc>::zalloc
+            <Self as ZstAlloc>::szalloc
         )
     }
 }

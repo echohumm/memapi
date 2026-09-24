@@ -52,6 +52,12 @@ pub type udouble = u64;
 #[allow(non_camel_case_types)]
 pub type udouble = u32;
 
+#[cfg(debug_assertions)]
+#[allow(dead_code)]
+pub(crate) const fn align_up_checks_raw(sz: usize, aln: usize) -> bool {
+    aln.is_power_of_two() && sz <= USIZE_MAX_NO_HIGH_BIT - (aln - 1)
+}
+
 /// Aligns the given value `v` up to the next multiple of `align`.
 ///
 /// # Safety
@@ -63,15 +69,15 @@ pub type udouble = u32;
 #[cfg_attr(any(miri, debug_assertions), track_caller)]
 #[must_use]
 #[inline]
-pub const unsafe fn align_up(v: usize, align: usize) -> usize {
+pub const unsafe fn align_up(size: usize, align: usize) -> usize {
     assert_unsafe_precondition!(
         "`align_up` requires that `align` is a non-zero power of two and that `v + (align - 1)` \
         does not overflow.",
-        (align: usize = align, v: usize = v)
-            => [align.is_power_of_two() && v <= usize::MAX - (align - 1)]
+        (size: usize = size, align: usize = align)
+            => [align_up_checks_raw(size, align)]
     );
     let m1 = align - 1;
-    (v + m1) & !m1
+    (size + m1) & !m1
 }
 
 /// Returns the maximum alignment satisfied by a non-null pointer.

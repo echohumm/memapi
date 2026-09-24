@@ -15,26 +15,26 @@ use {
 fn test_alloc_and_dealloc() {
     let layout = Layout::from_size_align(16, 8).unwrap();
     // Allocate
-    let ptr = CAlloc::alloc(layout).expect("alloc failed");
+    let ptr = CAlloc::salloc(layout).expect("alloc failed");
     // Write and read
     unsafe {
         ptr::write_bytes(ptr.as_ptr(), 0xAB, layout.size());
         for i in 0..layout.size() {
             assert_eq!(*ptr.as_ptr().add(i), 0xAB);
         }
-        CAlloc::dealloc(ptr, layout);
+        CAlloc::desalloc(ptr, layout);
     }
 }
 
 #[test]
 fn test_alloc_zeroed() {
     let layout = Layout::from_size_align(32, 8).unwrap();
-    let ptr = CAlloc::zalloc(layout).expect("alloc_zeroed failed");
+    let ptr = CAlloc::szalloc(layout).expect("alloc_zeroed failed");
     unsafe {
         for i in 0..layout.size() {
             assert_eq!(*ptr.as_ptr().add(i), 0, "failed on byte {}", i);
         }
-        CAlloc::dealloc(ptr, layout);
+        CAlloc::desalloc(ptr, layout);
     }
 }
 
@@ -43,8 +43,8 @@ fn realloc_to_zero() {
     let old = Layout::from_size_align(8, 2).unwrap();
     let new = Layout::from_size_align(0, 2).unwrap();
 
-    let ptr = CAlloc::alloc(old).unwrap();
-    let new = unsafe { CAlloc::realloc(ptr, old, new) }.unwrap();
+    let ptr = CAlloc::salloc(old).unwrap();
+    let new = unsafe { CAlloc::resalloc(ptr, old, new) }.unwrap();
 
     assert_eq!(new.as_ptr() as usize, 2);
 }
@@ -54,18 +54,18 @@ fn grow_preserves_prefix() {
     let old = Layout::from_size_align(8, 8).unwrap();
     let new = Layout::from_size_align(16, 8).unwrap();
 
-    let p = CAlloc::alloc(old).unwrap();
+    let p = CAlloc::salloc(old).unwrap();
     unsafe {
         ptr::write_bytes(p.as_ptr(), 0x11, old.size());
     }
 
-    let grown = unsafe { CAlloc::realloc(p, old, new).unwrap() };
+    let grown = unsafe { CAlloc::resalloc(p, old, new).unwrap() };
     // first 8 bytes preserved
     unsafe {
         for i in 0..old.size() {
             assert_eq!(*grown.as_ptr().add(i), 0x11);
         }
-        CAlloc::dealloc(grown, new);
+        CAlloc::desalloc(grown, new);
     }
 }
 
@@ -74,12 +74,12 @@ fn zgrow_zeros_new_region() {
     let old = Layout::from_size_align(8, 8).unwrap();
     let new = Layout::from_size_align(16, 8).unwrap();
 
-    let p = CAlloc::alloc(old).unwrap();
+    let p = CAlloc::salloc(old).unwrap();
     unsafe {
         ptr::write_bytes(p.as_ptr(), 0x22, old.size());
     }
 
-    let grown = unsafe { CAlloc::rezalloc(p, old, new).unwrap() };
+    let grown = unsafe { CAlloc::reszalloc(p, old, new).unwrap() };
     unsafe {
         // original region preserved
         for i in 0..old.size() {
@@ -89,7 +89,7 @@ fn zgrow_zeros_new_region() {
         for i in old.size()..new.size() {
             assert_eq!(*grown.as_ptr().add(i), 0);
         }
-        CAlloc::dealloc(grown, new);
+        CAlloc::desalloc(grown, new);
     }
 }
 
@@ -98,17 +98,17 @@ fn shrink_preserves_prefix() {
     let old = Layout::from_size_align(16, 8).unwrap();
     let new = Layout::from_size_align(8, 8).unwrap();
 
-    let p = CAlloc::alloc(old).unwrap();
+    let p = CAlloc::salloc(old).unwrap();
     unsafe {
         ptr::write_bytes(p.as_ptr(), 0xAB, old.size());
     }
 
-    let shr = unsafe { CAlloc::realloc(p, old, new).unwrap() };
+    let shr = unsafe { CAlloc::resalloc(p, old, new).unwrap() };
     unsafe {
         for i in 0..new.size() {
             assert_eq!(*shr.as_ptr().add(i), 0xAB);
         }
-        CAlloc::dealloc(shr, new);
+        CAlloc::desalloc(shr, new);
     }
 }
 
@@ -120,7 +120,7 @@ fn test_alloc_dealloc_var_alignments() {
         for &align in &aligns {
             println!("sz: {}, align: {}", size, align);
             let layout = Layout::from_size_align(size, align).unwrap();
-            let ptr = CAlloc::alloc(layout).expect("alloc failed");
+            let ptr = CAlloc::salloc(layout).expect("alloc failed");
             unsafe {
                 // fill with a distinctive pattern per alignment
                 let pat = (align as u8).wrapping_mul(3).wrapping_add(1);
@@ -140,7 +140,7 @@ fn test_alloc_dealloc_var_alignments() {
                     align
                 );
 
-                CAlloc::dealloc(ptr, layout);
+                CAlloc::desalloc(ptr, layout);
             }
         }
     }
@@ -158,7 +158,7 @@ fn test_realloc_var_alignments_combinations() {
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();
 
-            let p = CAlloc::alloc(old).expect("alloc failed");
+            let p = CAlloc::salloc(old).expect("alloc failed");
             unsafe {
                 // fill original region with pattern unique to (old_align, new_align)
                 let pat = ((old_align + new_align) as u8).wrapping_mul(7);
@@ -166,7 +166,7 @@ fn test_realloc_var_alignments_combinations() {
             }
 
             // try grow (non-zeroing)
-            match unsafe { CAlloc::realloc(p, old, new) } {
+            match unsafe { CAlloc::resalloc(p, old, new) } {
                 Ok(gptr) => unsafe {
                     // preserved prefix
                     for i in 0..old.size() {
@@ -188,7 +188,7 @@ fn test_realloc_var_alignments_combinations() {
                         gptr.as_ptr(),
                         new_align
                     );
-                    CAlloc::dealloc(gptr, new);
+                    CAlloc::desalloc(gptr, new);
                 },
                 Err(_e) => unsafe {
                     // grow failed: original pointer should remain valid. Verify and free.
@@ -203,7 +203,7 @@ fn test_realloc_var_alignments_combinations() {
                             i
                         );
                     }
-                    CAlloc::dealloc(p, old);
+                    CAlloc::desalloc(p, old);
                 }
             }
         }
@@ -222,13 +222,13 @@ fn test_rezalloc_var_alignments_combinations() {
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();
 
-            let p = CAlloc::alloc(old).expect("alloc failed (zgrow prep)");
+            let p = CAlloc::salloc(old).expect("alloc failed (zgrow prep)");
             unsafe {
                 let pat = ((old_align + new_align) as u8).wrapping_add(11);
                 ptr::write_bytes(p.as_ptr(), pat, old.size());
             }
 
-            match unsafe { CAlloc::rezalloc(p, old, new) } {
+            match unsafe { CAlloc::reszalloc(p, old, new) } {
                 Ok(gptr) => unsafe {
                     // original region preserved
                     for i in 0..old.size() {
@@ -261,7 +261,7 @@ fn test_rezalloc_var_alignments_combinations() {
                         gptr.as_ptr(),
                         new_align
                     );
-                    CAlloc::dealloc(gptr, new);
+                    CAlloc::desalloc(gptr, new);
                 },
                 Err(_e) => unsafe {
                     // zgrow failed: original pointer should remain valid. Verify and free.
@@ -276,7 +276,7 @@ fn test_rezalloc_var_alignments_combinations() {
                             i
                         );
                     }
-                    CAlloc::dealloc(p, old);
+                    CAlloc::desalloc(p, old);
                 }
             }
         }
@@ -295,13 +295,13 @@ fn test_shrink_var_alignments_combinations() {
             let old = Layout::from_size_align(old_size, old_align).unwrap();
             let new = Layout::from_size_align(new_size, new_align).unwrap();
 
-            let p = CAlloc::alloc(old).expect("alloc failed");
+            let p = CAlloc::salloc(old).expect("alloc failed");
             unsafe {
                 let pat = ((old_align ^ new_align) as u8).wrapping_add(5);
                 ptr::write_bytes(p.as_ptr(), pat, old.size());
             }
 
-            match unsafe { CAlloc::realloc(p, old, new) } {
+            match unsafe { CAlloc::resalloc(p, old, new) } {
                 Ok(sptr) => unsafe {
                     // prefix preserved (up to new.size())
                     for i in 0..new.size() {
@@ -323,7 +323,7 @@ fn test_shrink_var_alignments_combinations() {
                         sptr.as_ptr(),
                         new_align
                     );
-                    CAlloc::dealloc(sptr, new);
+                    CAlloc::desalloc(sptr, new);
                 },
                 Err(_e) => unsafe {
                     // shrink failed: verify original still valid and free it
@@ -338,7 +338,7 @@ fn test_shrink_var_alignments_combinations() {
                             i
                         );
                     }
-                    CAlloc::dealloc(p, old);
+                    CAlloc::desalloc(p, old);
                 }
             }
         }

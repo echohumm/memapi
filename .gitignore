@@ -2,5 +2,6 @@ target
 rustc-ice*
 Cargo.lock
 TODO.md
+todo.md
 gather.py
 WIP_*

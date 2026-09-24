@@ -34,7 +34,7 @@ pub trait AllocTemp: AllocDescriptor {
     /// # Safety
     ///
     /// Safety preconditions are implementation defined.
-    unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn talloc<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
@@ -58,12 +58,12 @@ pub trait AllocTemp: AllocDescriptor {
     ///
     /// Safety preconditions are implementation defined.
     #[cfg_attr(miri, track_caller)]
-    unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn tzalloc<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
     ) -> Result<R, Self::Error> {
-        self.alloc_temp(layout, |ptr: NonNull<u8>| {
+        self.talloc(layout, |ptr: NonNull<u8>| {
             ptr::write_bytes(ptr.as_ptr(), 0, layout.size());
             with_mem(ptr)
         })
@@ -73,7 +73,7 @@ pub trait AllocTemp: AllocDescriptor {
 impl<A: BasicAlloc> AllocTemp for A {
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn alloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn talloc<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
@@ -83,7 +83,7 @@ impl<A: BasicAlloc> AllocTemp for A {
 
     #[cfg_attr(miri, track_caller)]
     #[inline]
-    unsafe fn zalloc_temp<R, F: FnOnce(NonNull<u8>) -> R>(
+    unsafe fn tzalloc<R, F: FnOnce(NonNull<u8>) -> R>(
         &self,
         layout: Layout,
         with_mem: F
