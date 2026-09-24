@@ -7,6 +7,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 
+## [0.12.2] - 2026-09-23
+
+### Changed
+
+* Renamed `AllocTemp::alloc_temp` to `talloc`, `zalloc_temp` to `tzalloc`
+* Renamed `ZstAlloc::alloc` to `salloc`, `zalloc` to `szalloc`, `ZstDealloc::dealloc` to `desalloc`, `ZstDealloc::try_dealloc` to `try_desalloc`, `ZstRealloc::resalloc` to `resalloc`
+* Renamed `ZstAllocTemp::alloc_temp` to `stalloc`, `zalloc_temp` to `stzalloc`
+
 ## [0.12.1] - 2026-08-30
 
 ### Changed
