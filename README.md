@@ -7,7 +7,7 @@
 A small, `no_std`/`no_alloc`-friendly allocation interface for raw buffers, with explicit layouts, split allocator
 traits, and structured errors.
 
-Version: 0.12.2
+Version: 0.12.3
 
 MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature flags](#feature-flags))
 
@@ -39,14 +39,14 @@ MSRV: 1.46.0 (some features require newer compilers or nightly; see [Feature fla
 
 ```toml
 [dependencies]
-memapi2 = "0.12.2"
+memapi2 = "0.12.3"
 ```
 
 If you want common optional features:
 
 ```toml
 [dependencies]
-memapi2 = { version = "0.12.2", features = ["full_std"] }
+memapi2 = { version = "0.12.3", features = ["full_std"] }
 ```
 
 ## Example

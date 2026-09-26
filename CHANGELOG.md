@@ -7,6 +7,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 [//]: # (methinks 1.0.0 soon? maybe im getting ahead of myself though)
 
+## [0.12.3] - 2026-09-26
+
+### Fixed
+
+* Clippy error on latest nightly due to `allocator_api`'s partial stabilization into `allocator_ext`
+
 ## [0.12.2] - 2026-09-23
 
 ### Changed
