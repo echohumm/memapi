@@ -10,9 +10,16 @@ fn rustc_cfg() {
 }
 
 #[::rustversion::nightly]
+#[::rustversion::before(1.100)]
 #[allow(dead_code)]
 const fn is_nightly() -> bool {
     true
+}
+#[::rustversion::nightly]
+#[::rustversion::since(1.100)]
+#[allow(dead_code)]
+const fn is_nightly() -> bool {
+    false
 }
 #[::rustversion::not(nightly)]
 #[allow(dead_code)]
